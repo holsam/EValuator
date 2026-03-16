@@ -424,7 +424,7 @@ def process_segmentation(seg_path: Path):
 def main():
     global MAX_DIAMETER_NM, MIN_DIAMETER_NM, VERBOSITY
     # ---------------------
-    # PRINT STARTUP MESSAGE
+    # Print startup message
     # ---------------------
     print(f"\nPOST-PROCESSING PIPELINE FOR EV SEGMENTATIONS")
     print(f"Full command: {' '.join(sys.argv)}")
@@ -440,7 +440,7 @@ def main():
     verbosity_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
     VERBOSITY = verbosity_levels[min(args.verbosity, len(verbosity_levels) - 1)]
     # ---------------------
-    # SET UP LOGGER CONFIGURATION
+    # Set up logger configuration
     # ---------------------
     logging.basicConfig(format='%(asctime)s %(levelname)-10s %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level = VERBOSITY)
     # ---------------------
@@ -451,7 +451,7 @@ def main():
     arg_errors = validate_args(args)
     if arg_errors: raise ValueError(arg_errors)
     # ---------------------
-    # RUN PIPELINE
+    # Run pipeline
     # ---------------------
     print(f"{len(seg_files)} segmentation files found") if not len(seg_files)==1 else print(f"1 segmentation file found")
     pipeline_results = []
@@ -474,7 +474,7 @@ def main():
         return
     pipeline_df = save_results_csv(pipeline_results, out_file)
     # ---------------------
-    # PRINT FINAL MESSAGE
+    # Print final message
     # ---------------------
     RUNTIME = (END_TIME - START_TIME)
     print(f"EV post-processing pipeline finished: {END_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
