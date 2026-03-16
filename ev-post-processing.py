@@ -67,11 +67,19 @@ def validate_input(args):
     if args.input.is_dir():
         seg_files = sorted(args.input.glob("*.mrc"))
         if not seg_files:
-            raise FileNotFoundError(f"No .mrc files in input: {args.input}.")
+            raise FileNotFoundError(f"No MRC files in input: {args.input}.")
     if args.input.is_file():
-        if not args.input.suffix == ".mrc":
-            raise ReferenceError(f"Input file {args.input} is not a .mrc file.")
+        if not args.input.suffix.lower() == ".mrc":
+            raise ReferenceError(f"Input file {args.input} is not a MRC file.")
         seg_files = [args.input]
+    for file in seg_files:
+        if not file.validate():
+            lg.error(f"{file} is not a valid MRC file.")
+            seg_files.remove(file)
+        else:
+            continue
+    if not seg_files:
+        lg.error(f"No valid MRC files in input.")
     return seg_files
 
 # =========================
