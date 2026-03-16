@@ -51,7 +51,6 @@ def parse_arguments():
     parser.add_argument("--min-diam", type=float, default=MIN_DIAMETER_NM, help=f"Minimum EV equivalent diameter in nm to use for filtering (default: {MIN_DIAMETER_NM})")
     parser.add_argument("--max-diam", type=float, default=MAX_DIAMETER_NM, help=f"Maximum EV equivalent diameter in nm to use for filtering (default: {MAX_DIAMETER_NM})")
     parser.add_argument("--fill-threshold", type=float, default=CLOSURE_FILL_THRESHOLD, help=f"Closure fill threshold to use for determining enclosed EVs (default: {CLOSURE_FILL_THRESHOLD})")
-    parser.add_argument("--pixel-size", type=float, default=0, help=f"Magnified pixel size in Ångstrom/pixel")
     parser.add_argument("-v", "--verbosity", action="count", default=VERBOSITY, help=f"Increase verbosity (-v: show info messages; -vv show detailed info messages)")
     args = parser.parse_args() 
     return args
