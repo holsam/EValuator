@@ -46,7 +46,7 @@ def parse_arguments():
     Initialise and set up parser to read arguments, then read supplied arguments and return. Possible arguments:
     '''
     parser = argparse.ArgumentParser(description="Post-processing pipeline of membrain-seg EV segmentations.")
-    parser.add_argument("-i", "--input", type=Path, help="Path to either a single segmented .mrc file, or a directory containing segmented .mrc files")
+    parser.add_argument("-i", "--input", type=Path, required=True, help="Path to either a single segmented .mrc file, or a directory containing segmented .mrc files")
     parser.add_argument("-o", "--output", type=Path, required=True, help="Path to output directory")
     parser.add_argument("--min-diam", type=float, default=MIN_DIAMETER_NM, help=f"Minimum EV equivalent diameter in nm to use for filtering (default: {MIN_DIAMETER_NM})")
     parser.add_argument("--max-diam", type=float, default=MAX_DIAMETER_NM, help=f"Maximum EV equivalent diameter in nm to use for filtering (default: {MAX_DIAMETER_NM})")
