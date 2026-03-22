@@ -3,15 +3,17 @@ name = "EValuator"
 version = "0.0.1"
 description = "A command line tool for automated morphological analysis and visualisation of extracellular vesicles (EVs) from cryo-electron tomography (cryo-ET) data."
 authors = [
-    { name = "Sam", email = "hol_sam@icloud.com" }
+    { name = "Samuel Holland", email = "hol_sam@icloud.com" }
 ]
 requires-python = ">=3.14"
 dependencies = [
     "datetime>=6.0",
+    "matplotlib>=3.10.8",
     "mrcfile>=1.5.4",
     "numpy>=2.4.3",
     "pandas>=3.0.1",
     "pathlib>=1.0.1",
+    "rich>=14.3.3",
     "scikit-image>=0.26.0",
     "scipy>=1.17.1",
     "tqdm>=4.67.3",
@@ -19,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-evaluator = "evaluator:main"
+evaluator = "evaluator.main:evaluator"
 
 [build-system]
 requires = ["uv_build>=0.10.11,<0.11.0"]
