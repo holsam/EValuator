@@ -113,6 +113,7 @@ def processSegmentation(seg_path: Path):
     lg.debug(f"{seg_path.name} - started processing segmentation file.")
     # Read segmentation data and voxel size information from file
     data, voxel_size_nm = evalutil.readMRCFile(seg_path)
+    data=data.astype(bool)
     lg.debug(f"{seg_path.name} - read data from file.")
     # Apply morphological closure to segmentation mask
     try:
@@ -186,7 +187,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     membrane_vol_nm3, equiv_diameter_nm = measureMembraneVolumeDiameter(component=component_properties, scale=scale)
     lg.debug(f"{filename} - component {component_label} - membrane volume and equivalent diameter measurements finished.")
     # Measurement 2: check if component is enclosed
-    enclosed, fill_ratio = checkEnclosed(component_mask=component_mask)
+    enclosed, fill_ratio = checkEnclosed(component_mask=component_mask, threshold=config['filter']['closure_fill_threshold'])
     lg.debug(f"{filename} - component {component_label} - enclosure check finished.")
     # Measurement 3: internal (lumen) volume
     lumen_vol_nm3 = measureLumenVolume(component_mask=component_mask, scale=scale)
