@@ -20,7 +20,7 @@ lg = logging.getLogger("__name__")
 # ====================
 # Import EValuator commands and utility functions
 # ====================
-from .utils import _init_evaluator
+from .utils import initEvaluator
 from .commands.analyse import evaluatorAnalyse
 from .commands.label import evaluatorLabel
 from .commands.license import evaluatorLicense
@@ -30,7 +30,7 @@ from .commands.visualise import evaluatorVisualise
 # ====================
 # Print top splash EValuator commands and utility functions
 # ====================
-_init_evaluator()
+initEvaluator()
 
 # ====================
 # Initialise typer as evaluator

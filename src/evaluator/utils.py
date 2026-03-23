@@ -18,17 +18,17 @@ from scipy import ndimage
 from .main import lg
 
 # ====================
-# Define function: _init_evaluator
+# Define function: initEvaluator
 # ====================
-def _init_evaluator():
+def initEvaluator():
     # Print top-level splash
     print(f"\n[bold]EValuator[/bold] :microscope-text:")
     print(f"A command line tool for automated morphological analysis and visualisation of extracellular vesicles (EVs) from cryo-electron tomography (cryo-ET) data.")
 
 # ====================
-# Define function: _validate_mrc_file
+# Define function: validateMRCFile
 # ====================
-def _validate_mrc_file(path: Path):
+def validateMRCFile(path: Path):
     '''
     Use mrcfile package's built-in validate function to confirm file can be read.
     '''
@@ -39,9 +39,9 @@ def _validate_mrc_file(path: Path):
         return True
 
 # ====================
-# Define function: _read_mrc_file
+# Define function: readMRCFile
 # ====================
-def _read_mrc_file(path: Path):
+def readMRCFile(path: Path):
     '''
     Read an MRC file and return the data array and voxel size in nanometres. If no voxel size is encoded in header, returns None instead.
     '''
@@ -57,9 +57,9 @@ def _read_mrc_file(path: Path):
 
 
 # ====================
-# Define function: _label_components
+# Define function: labelComponents
 # ====================
-def _label_components(binary_vol: numpy.ndarray):
+def labelComponents(binary_vol: numpy.ndarray):
     '''
     Labels connected components in binary volumes using full 3D (26) connectivity 
     '''
