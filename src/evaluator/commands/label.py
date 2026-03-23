@@ -232,20 +232,6 @@ def overlayBoth(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours: 
     overlayOutlined(ax, seg_slice, valid_labels, label_colours)
 
 # =========================
-# DEFINE FUNCTION: normaliseSlice
-# =========================
-def normaliseSlice(s: numpy.ndarray) -> numpy.ndarray:
-    '''
-    Normalises a 2D array to [0.0, 1.0] for greyscale display.
-    Returns a zero array if the slice is constant to avoiding division by zero error.
-    '''
-    s = s.astype(float)
-    mn, mx = s.min(), s.max()
-    if mx > mn:
-        return (s - mn) / (mx - mn)
-    return numpy.zeros_like(s)
-
-# =========================
 # DEFINE FUNCTION: buildLegendPatches
 # =========================
 def buildLegendPatches(valid_labels: set, label_colours: dict) -> list:
@@ -305,7 +291,7 @@ def renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, 
     for i, z in enumerate(slice_indices):
         ax = axes[i]
         ax.set_facecolor("black")
-        tomo_slice = normaliseSlice(tomo_data[z])
+        tomo_slice = evalutil.normaliseArray(tomo_data[z])
         seg_slice = seg_labelled[z]
         ax.imshow(tomo_slice, cmap="gray", interpolation="nearest", vmin=0, vmax=1)
         overlay_fn(ax, seg_slice, valid_labels, label_colours)
@@ -338,7 +324,7 @@ def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours,slice
         raise ValueError(f"Slice index {slice_idx} is out of range for tomogram with {n_z} Z-slices (0–{n_z - 1}).")
     fig, ax = plt.subplots(1, 1, figsize=(8, 8), facecolor="black")
     ax.set_facecolor("black")
-    tomo_slice = normaliseSlice(tomo_data[slice_idx])
+    tomo_slice = evalutil.normaliseArray(tomo_data[slice_idx])
     seg_slice = seg_labelled[slice_idx]
     ax.imshow(tomo_slice, cmap="gray", interpolation="nearest", vmin=0, vmax=1)
     overlay_fn(ax, seg_slice, valid_labels, label_colours)

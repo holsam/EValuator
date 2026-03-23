@@ -66,3 +66,21 @@ def labelComponents(binary_vol: numpy.ndarray):
     struc = ndimage.generate_binary_structure(3, 3)
     components, n_components = ndimage.label(binary_vol, structure=struc)
     return components, n_components
+
+# =========================
+# DEFINE FUNCTION: normaliseArray
+# =========================
+def normaliseArray(data: numpy.ndarray) -> numpy.ndarray:
+    '''
+    Linearly normalises a 2D array to [0.0, 1.0] for greyscale display. Clips to 1st/99th percentile to avoid outlier-driven contrast collapse. Returns a zero array if the slice is constant to avoiding division by zero error.
+    '''
+    # Convert to float
+    data = data.astype(float)
+    # Calculate 1st percentile
+    lo = numpy.percentile(data, 1)
+    # Calculate 99th percentile
+    hi = numpy.percentile(data, 99)
+    # Check if array is constant
+    if hi == lo:
+        return numpy.zeros_like(data)
+    return numpy.clip((data-lo)/(hi-lo), 0.0, 1.0)

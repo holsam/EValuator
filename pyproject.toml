@@ -1,6 +1,6 @@
 [project]
 name = "EValuator"
-version = "0.2.4"
+version = "0.2.5"
 description = "A command line tool for automated morphological analysis and visualisation of extracellular vesicles (EVs) from cryo-electron tomography (cryo-ET) data."
 authors = [
     { name = "Samuel Holland", email = "hol_sam@icloud.com" }
