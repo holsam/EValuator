@@ -8,6 +8,7 @@ EValuator: SEGMENTATION ANALYSIS PIPELINE
 # ====================
 import datetime, numpy, os, pandas, typer
 from pathlib import Path
+from rich import print
 from scipy import ndimage
 from skimage import measure, morphology
 from tqdm import tqdm
