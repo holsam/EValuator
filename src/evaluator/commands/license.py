@@ -1,4 +1,5 @@
 import typer
+from rich import print
 
 evaluatorLicense = typer.Typer(
     # Disable --install-completion and --show-completion options in terminal
@@ -13,5 +14,5 @@ def license():
     Print EValuator license to terminal and exit.
     '''
     with open('./LICENSE', 'r') as licensefile:
-        print(f"{licensefile.read()}")
+        print(f"\n{licensefile.read()}")
     typer.Exit(0)

@@ -1,4 +1,5 @@
 import tomllib, typer
+from rich import print
 
 evaluatorVersion = typer.Typer(
     # Disable --install-completion and --show-completion options in terminal
@@ -14,5 +15,5 @@ def version():
     '''
     with open('./src/evaluator/version.toml', 'rb') as versionfile:
        version = tomllib.load(versionfile)
-    print(f"Running EValuator version: {version['version']['version']}")
+    print(f"\nRunning EValuator version: v{version['version']['version']}\n")
     typer.Exit(0)
