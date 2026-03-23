@@ -107,16 +107,16 @@ def generateOutputFileStructure(out_dir: Path, command: str):
 # =========================
 # DEFINE FUNCTION: checkUniqueFileName
 # =========================
-def checkUniqueFileName(out_dir: Path, command: str, orig_name: Optional[str] = None, overlay_style: Optional[str] = None, fmt: Optional[str] = None):
+def checkUniqueFileName(out_dir: Path, command: str, orig_name: Optional[str] = None, overlay_style: Optional[str] = None, fmt: Optional[str] = None, vis_out: Optional[str] = None):
     naming_patterns = {
         "analyse": "evaluator-analyse_results",
-        "label":''.join([orig_name,"_overlay",overlay_style]),
-        "visualise":None,
+        "label":''.join([orig_name,"_overlay-",overlay_style]),
+        "visualise":''.join([orig_name,"_",vis_out])
     }
     out_fmt = {
         "analyse": ".csv",
         "label":''.join([".",fmt]),
-        "visualise":None,
+        "visualise":''.join([".",fmt])
     }
     # Create starting file name
     out_filepath = Path(out_dir, ''.join([naming_patterns[command]],out_fmt[command]))
