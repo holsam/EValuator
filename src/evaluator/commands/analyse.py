@@ -245,39 +245,32 @@ def analyseCheckInput(analyse_input:Path):
 # =========================
 # DEFINE FUNCTION: check_analyse_output
 # =========================
-def analyseCheckOutput(analyse_outdir:Path):
+def analyseCheckOutput(output:Path):
     '''
-    Given the entered output directory, take necessary action to determine name of output file.
+    Given the entered output directory, create necessary folders.
     N.B. typer handles some argument checking so will be a writeable directory if it exists already.
     '''
-    # If directory exists:
-    if analyse_outdir.exists():
-        # Set the counter for outfile to be zero
-        outfile_counter = 0
-        # If another analyse results file exists
-        if Path(analyse_outdir,f"evaluator-analyse_results.csv").exists():
-            # Increase outfile counter
-            outfile_counter+=1
-            # Then continuously check if more exist by incrementing outfile counter
-            while True:
-                if Path(analyse_outdir,f"evaluator-analyse_results-{outfile_counter}.csv").exists():
-                    outfile_counter+=1
-                else:
-                    break
-    # If directory doesn't exist
+    # Check if user entered existing evaluator analyse results directory
+    if not output.match("evaluator/results/analyse"):
+        # Make path to final output directory
+        analyse_outdir = Path(output, "evaluator", "results", "analyse")
+        # Create final output directory (including any parent directories as required)
+        analyse_outdir.mkdir(parents=True, exist_ok=True)
     else:
-        # Make the directory
-        os.mkdir(analyse_outdir)
-        # Set the counter for outfile to be zero
-        outfile_counter=0
-    if outfile_counter==0:
-       return(
-           Path(analyse_outdir,f"evaluator-analyse_results.csv")
-       )
+        analyse_outdir = output
+    # If another analyse results file exists
+    if Path(analyse_outdir,f"evaluator-analyse_results.csv").exists():
+        # Set up counter for outfile number suffix
+        outfile_counter = 1
+        # Then continuously check if more exist by incrementing outfile counter
+        while True:
+            if Path(analyse_outdir,f"evaluator-analyse_results-{outfile_counter}.csv").exists():
+                outfile_counter+=1
+            else:
+                break
     else:
-        return(
-            Path(analyse_outdir,f"evaluator-analyse_results-{outfile_counter}.csv")
-        )
+       return(Path(analyse_outdir,f"evaluator-analyse_results.csv"))
+    return(Path(analyse_outdir,f"evaluator-analyse_results-{outfile_counter}.csv"))
 
 # =========================
 # DEFINE FUNCTION: morphologicalClosure

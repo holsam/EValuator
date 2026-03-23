@@ -13,7 +13,7 @@ def version():
     '''
     Print current EValuator version to terminal and exit.
     '''
-    with open('./src/evaluator/version.toml', 'rb') as versionfile:
-       version = tomllib.load(versionfile)
-    print(f"\nRunning EValuator version: v{version['version']['version']}\n")
+    with open('pyproject.toml', 'rb') as f:
+       contents = tomllib.load(f)
+    print(f"\nRunning EValuator version: v{contents['project']['version']}\n")
     typer.Exit(0)
