@@ -85,4 +85,4 @@ Default image settings are as follows:
 <br>
 
 ---
-<p align="right"><a href="#evaluator---analyse">^ Back to top</a></p>
+<p align="right"><a href="#evaluator---label">^ Back to top</a></p>
