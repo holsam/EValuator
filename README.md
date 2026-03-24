@@ -1,5 +1,6 @@
 <div align="right">
 
+![Version][version-shield]
 [![Issues][issues-shield]][issues-url]
 [![project_license][license-shield]][license-url]
 
@@ -28,8 +29,8 @@ EValuator requires Python 3.14 or later, and uses [uv](https://docs.astral.sh/uv
 EValuator can be installed as a `uv` tool after cloning the repository as below. Once installed, it will be available in your terminal by using the `evaluator` command.
 ```sh
 # Install EValuator using uv
-git clone https://github.com/holsam/cryoet-ev-post-processing.git
-cd cryoet-ev-post-processing
+git clone https://github.com/holsam/EValuator.git
+cd EValuator
 uv tool install .
 # Use EValuator
 evaluator --help
@@ -81,8 +82,8 @@ Any contributions to this project are also very welcome! To contribute, please f
 
 To set up a development environment, with all dependencies installed into a local virtual environment:
 ```sh
-git clone https://github.com/holsam/cryoet-ev-post-processing.git
-cd cryoet-ev-post-processing
+git clone https://github.com/holsam/EValuator.git
+cd EValuator
 uv sync
 ```
 
@@ -98,7 +99,8 @@ This repository is distributed under the GPL-3.0 license. See [LICENSE][license-
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[issues-shield]: https://img.shields.io/github/issues/holsam/cryoet-ev-post-processing.svg?style=for-the-badge&color=red
-[issues-url]: https://github.com/holsam/cryoet-ev-post-processing/issues
-[license-shield]: https://img.shields.io/github/license/holsam/cryoet-ev-post-processing.svg?style=for-the-badge&color=lightgray
-[license-url]: https://github.com/holsam/cryoet-ev-post-processing/blob/main/LICENSE
+[version-shield]: https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/holsam/EValuator/refs/heads/main/pyproject.toml&query=$.project.version&style=for-the-badge&label=Current%20version&color=important
+[issues-shield]: https://img.shields.io/github/issues/holsam/EValuator.svg?style=for-the-badge&color=critical
+[issues-url]: https://github.com/holsam/EValuator/issues
+[license-shield]: https://img.shields.io/github/license/holsam/EValuator.svg?style=for-the-badge&color=informational
+[license-url]: https://github.com/holsam/EValuator/blob/main/LICENSE
