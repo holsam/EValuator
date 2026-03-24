@@ -1,6 +1,17 @@
+'''
+=======================================
+EValuator: PRINT LICENSE
+=======================================
+'''
+# ====================
+# Import external dependencies
+# ====================
 import typer
 from rich import print
 
+# ====================
+# Initialise typer as evaluatorLicense
+# ====================
 evaluatorLicense = typer.Typer(
     # Disable --install-completion and --show-completion options in terminal
     add_completion=False,
@@ -8,6 +19,9 @@ evaluatorLicense = typer.Typer(
     add_help_option=False
 )
 
+# ====================
+# Define command: license
+# ====================
 @evaluatorLicense.command(rich_help_panel="Utility Commands")
 def license():
     '''

@@ -1,6 +1,17 @@
+'''
+=======================================
+EValuator: PRINT VERSION
+=======================================
+'''
+# ====================
+# Import external dependencies
+# ====================
 import tomllib, typer
 from rich import print
 
+# ====================
+# Initialise typer as evaluatorVersion
+# ====================
 evaluatorVersion = typer.Typer(
     # Disable --install-completion and --show-completion options in terminal
     add_completion=False,
@@ -8,6 +19,9 @@ evaluatorVersion = typer.Typer(
     add_help_option=False
 )
 
+# ====================
+# Define command: version
+# ====================
 @evaluatorVersion.command(rich_help_panel="Utility Commands")
 def version():
     '''
