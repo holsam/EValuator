@@ -8,27 +8,15 @@ from platformdirs import user_config_dir
 from rich import print
 from typing import Annotated
 
-# ====================
-# Load default configuration from bundled config.toml
-# ====================
-with files('evaluator').joinpath('config.toml').open('rb') as configfile:
-    bundled_config = tomllib.load(configfile)
-
 # =========================
 # INITIALISE LOGGER
 # =========================
 lg = logging.getLogger("__name__")
 
 # ====================
-# Import EValuator commands and utility functions
+# Import EValuator utility functions
 # ====================
 from .utils import initEvaluator, loadDefaultConfig, userConfigPath
-from .commands.config import evaluatorConfig
-from .commands.analyse import evaluatorAnalyse
-from .commands.label import evaluatorLabel
-from .commands.license import evaluatorLicense
-from .commands.version import evaluatorVersion
-from .commands.visualise import evaluatorVisualise
 
 # ====================
 # Check if user configuration file exists and load appropriate config file
@@ -41,6 +29,15 @@ else:
     with files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
         config = loadDefaultConfig()
 
+# ====================
+# Import EValuator commands
+# ====================
+from .commands.config import evaluatorConfig
+from .commands.analyse import evaluatorAnalyse
+from .commands.label import evaluatorLabel
+from .commands.license import evaluatorLicense
+from .commands.version import evaluatorVersion
+from .commands.visualise import evaluatorVisualise
 
 # ====================
 # Print top splash EValuator commands and utility functions
@@ -65,7 +62,7 @@ evaluator = typer.Typer(
 evaluator.add_typer(evaluatorAnalyse)
 evaluator.add_typer(evaluatorLabel)
 evaluator.add_typer(evaluatorVisualise)
-evaluator.add_typer(evaluatorConfig)
+evaluator.add_typer(evaluatorConfig, name='config', help='Manage EValuator configuration files.', rich_help_panel='Utility Commands')
 evaluator.add_typer(evaluatorLicense)
 evaluator.add_typer(evaluatorVersion)
 

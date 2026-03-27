@@ -25,12 +25,26 @@ EValuator requires membrane segmentation masks in `.mrc` format as an input to t
 ## Installation
 EValuator requires Python 3.14 or later, and uses [uv](https://docs.astral.sh/uv/) as its package manager. If `uv` is not already installed, follow the [installation instructions](https://docs.astral.sh/uv/getting-started/installation/). 
 
-EValuator can be installed as a `uv` tool after cloning the repository as below. Once installed, it will be available in your terminal by using the `evaluator` command.
+The EValuator repository should be cloned as below, and then follow the instructions in either [Run using uvx](#run-using-uvx) or [Full installation](#full-installation).
 ```sh
-# Install EValuator using uv
-git clone https://github.com/holsam/cryoet-ev-post-processing.git
-cd cryoet-ev-post-processing
-uv tool install .
+# Clone EValuator repository
+git clone https://github.com/holsam/EValuator.git
+```
+
+### Run using uvx
+EValuator can now be run as below.
+```sh
+# Run EValuator using uvx
+uvx EValuator --help
+```
+Note that `uvx` must be prepended before any EValuator command, unless the instructions in [Full installation](#full-installation) are followed.
+
+### Full installation
+To fully install EValuator, run the following commands. Once installed, it wil be available in your terminal by using the `evaluator` command.
+```sh
+# Install 
+cd EValuator
+uv tool .
 # Use EValuator
 evaluator --help
 ```
@@ -49,8 +63,9 @@ Commands:
   visualise   Generate visualisations of tomogram data.
 
 Utility Commands:
-  version     Print current EValuator version to terminal and exit.
+  config      Manage EValuator configuration files.
   license     Print EValuator license to terminal and exit.
+  version     Print current EValuator version to terminal and exit.
 ```
 
 Use `evaluator COMMAND --help` for detailed usage information for each command or see the full documentation for each command, including all options and output file descriptions, in the [`docs/`](docs/) directory:
