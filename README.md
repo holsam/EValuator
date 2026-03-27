@@ -44,7 +44,7 @@ To fully install EValuator, run the following commands. Once installed, it wil b
 ```sh
 # Install 
 cd EValuator
-uv tool .
+uv tool install .
 # Use EValuator
 evaluator --help
 ```
