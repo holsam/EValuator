@@ -2,30 +2,45 @@
 # Import package dependencies
 # ====================
 import logging, tomllib, typer
-from typing import Annotated
+from importlib.resources import files
+from pathlib import Path
+from platformlibs import user_config_dir
 from rich import print
+from typing import Annotated
 
 # ====================
-# Load default configuration from config.toml
-# ==================== 
-with open('./src/evaluator/config.toml', 'rb') as configfile:
-    config = tomllib.load(configfile)
+# Load default configuration from bundled config.toml
+# ====================
+with files('evaluator').joinpath('config.toml').open('rb') as configfile:
+    bundled_config = tomllib.load(configfile)
 
 # =========================
 # INITIALISE LOGGER
 # =========================
 lg = logging.getLogger("__name__")
 
-
 # ====================
 # Import EValuator commands and utility functions
 # ====================
-from .utils import initEvaluator
+from .utils import initEvaluator, userConfigPath
+from .commands.config import evaluatorConfig
 from .commands.analyse import evaluatorAnalyse
 from .commands.label import evaluatorLabel
 from .commands.license import evaluatorLicense
 from .commands.version import evaluatorVersion
 from .commands.visualise import evaluatorVisualise
+
+# ====================
+# Check if user configuration file exists and load appropriate config file
+# ====================
+user_config_path = userConfigPath()
+if user_config_path.exists():
+    with user_config_path.open('rb') as userconfig:
+        config = tomllib.load(userconfig)
+else:
+    with files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
+        config = tomllib.load(defaultconfig)
+
 
 # ====================
 # Print top splash EValuator commands and utility functions
@@ -50,6 +65,7 @@ evaluator = typer.Typer(
 evaluator.add_typer(evaluatorAnalyse)
 evaluator.add_typer(evaluatorLabel)
 evaluator.add_typer(evaluatorVisualise)
+evaluator.add_typer(evaluatorConfig)
 evaluator.add_typer(evaluatorLicense)
 evaluator.add_typer(evaluatorVersion)
 

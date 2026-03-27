@@ -9,6 +9,7 @@ EValuator: UTILITY FUNCTIONS
 # ====================
 import logging, mrcfile, numpy, sys
 from pathlib import Path
+from platformlibs import user_config_dir
 from rich import print
 from scipy import ndimage
 from typing import Optional
@@ -132,3 +133,13 @@ def checkUniqueFileName(out_dir: Path, command: str, orig_name: Optional[str] = 
             else:
                 break
     return out_filepath
+
+
+# ====================
+# Define function: userConfigPath
+# ====================
+def userConfigPath() -> Path:
+    '''
+    Returns the file path <OS config directory>/evaluator/config.toml depending on the OS of running environment
+    '''
+    return Path(user_config_dir("evaluator"), "config.toml")
