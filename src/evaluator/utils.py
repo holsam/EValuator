@@ -7,9 +7,10 @@ EValuator: UTILITY FUNCTIONS
 # ====================
 # Import external dependencies
 # ====================
-import logging, mrcfile, numpy, sys
+import mrcfile, numpy, tomllib
+from importlib.resources import files as pkg_files
 from pathlib import Path
-from platformlibs import user_config_dir
+from platformdirs import user_config_dir
 from rich import print
 from scipy import ndimage
 from typing import Optional
@@ -145,3 +146,13 @@ def userConfigPath() -> Path:
         Windows     : %APPDATA%\\evaluator\\config.toml
     '''
     return Path(user_config_dir("evaluator"), "config.toml")
+
+# ====================
+# Define function: loadDefaultConfig
+# ====================
+def loadDefaultConfig() -> dict:
+    '''
+    Load the bundled default config.toml from the installed package.
+    '''    
+    with pkg_files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
+        return tomllib.load(defaultconfig)

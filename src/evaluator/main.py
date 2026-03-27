@@ -4,7 +4,7 @@
 import logging, tomllib, typer
 from importlib.resources import files
 from pathlib import Path
-from platformlibs import user_config_dir
+from platformdirs import user_config_dir
 from rich import print
 from typing import Annotated
 
@@ -22,7 +22,7 @@ lg = logging.getLogger("__name__")
 # ====================
 # Import EValuator commands and utility functions
 # ====================
-from .utils import initEvaluator, userConfigPath
+from .utils import initEvaluator, loadDefaultConfig, userConfigPath
 from .commands.config import evaluatorConfig
 from .commands.analyse import evaluatorAnalyse
 from .commands.label import evaluatorLabel
@@ -39,7 +39,7 @@ if user_config_path.exists():
         config = tomllib.load(userconfig)
 else:
     with files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
-        config = tomllib.load(defaultconfig)
+        config = loadDefaultConfig()
 
 
 # ====================
