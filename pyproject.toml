@@ -1,6 +1,6 @@
 [project]
 name = "EValuator"
-version = "0.3.4"
+version = "0.4.1"
 description = "A command line tool for automated morphological analysis and visualisation of extracellular vesicles (EVs) from cryo-electron tomography (cryo-ET) data."
 authors = [
     { name = "Samuel Holland", email = "hol_sam@icloud.com" }
@@ -13,9 +13,11 @@ dependencies = [
     "numpy>=2.4.3",
     "pandas>=3.0.1",
     "pathlib>=1.0.1",
+    "platformdirs>=4.9.4",
     "rich>=14.3.3",
     "scikit-image>=0.26.0",
     "scipy>=1.17.1",
+    "tomli-w>=1.2.0",
     "tqdm>=4.67.3",
     "typer>=0.24.1",
     "typing>=3.10.0.0",
@@ -27,3 +29,6 @@ evaluator = "evaluator.main:evaluator"
 [build-system]
 requires = ["uv_build>=0.10.11,<0.11.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+source-include = ['src/evaluator/config.toml','docs/**']

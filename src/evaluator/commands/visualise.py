@@ -74,7 +74,7 @@ def visualise(
 ):
     # Set help text for 'visualise' command using docstring
     '''
-    Description: generate visualisations of tomogram data.
+    Generate visualisations of tomography data.
     '''
     # Check input MRC file is valid
     lg.debug(f"visualise | Validating input MRC file...")

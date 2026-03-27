@@ -83,7 +83,7 @@ def label(
     ] = config['label']['n_slices'],
 ):
     '''
-    Description: labels a cryo-ET tomogram with EV segmentations as analysed using the analyse command.
+    Labels a cryo-ET tomogram with EV segmentations using ouptut of EValuator analyse.
     '''
     # Check input tomogram MRC file is valid
     lg.debug(f"label | Validating input tomogram file...")

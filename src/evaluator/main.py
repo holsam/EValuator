@@ -2,25 +2,37 @@
 # Import package dependencies
 # ====================
 import logging, tomllib, typer
-from typing import Annotated
+from importlib.resources import files
+from pathlib import Path
+from platformdirs import user_config_dir
 from rich import print
-
-# ====================
-# Load default configuration from config.toml
-# ==================== 
-with open('./src/evaluator/config.toml', 'rb') as configfile:
-    config = tomllib.load(configfile)
+from typing import Annotated
 
 # =========================
 # INITIALISE LOGGER
 # =========================
 lg = logging.getLogger("__name__")
 
+# ====================
+# Import EValuator utility functions
+# ====================
+from .utils import initEvaluator, loadDefaultConfig, userConfigPath
 
 # ====================
-# Import EValuator commands and utility functions
+# Check if user configuration file exists and load appropriate config file
 # ====================
-from .utils import initEvaluator
+user_config_path = userConfigPath()
+if user_config_path.exists():
+    with user_config_path.open('rb') as userconfig:
+        config = tomllib.load(userconfig)
+else:
+    with files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
+        config = loadDefaultConfig()
+
+# ====================
+# Import EValuator commands
+# ====================
+from .commands.config import evaluatorConfig
 from .commands.analyse import evaluatorAnalyse
 from .commands.label import evaluatorLabel
 from .commands.license import evaluatorLicense
@@ -50,6 +62,7 @@ evaluator = typer.Typer(
 evaluator.add_typer(evaluatorAnalyse)
 evaluator.add_typer(evaluatorLabel)
 evaluator.add_typer(evaluatorVisualise)
+evaluator.add_typer(evaluatorConfig, name='config', help='Manage EValuator configuration files.', rich_help_panel='Utility Commands')
 evaluator.add_typer(evaluatorLicense)
 evaluator.add_typer(evaluatorVersion)
 
