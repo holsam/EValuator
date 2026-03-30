@@ -7,8 +7,8 @@ EValuator: SEGMENTATION EV LABELLING
 # Import external dependencies
 # ====================
 import matplotlib, numpy,pandas, typer
-import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import matplotlib.patches as mpatch
 from pathlib import Path
 from skimage import measure
@@ -86,6 +86,10 @@ def label(
         bool,
         typer.Option('--export-mp4', help='Export a Z-stack MP4 (or GIF fallback) of the overlay alongside the static image.')
     ] = False,
+    export_seg: Annotated[
+        bool,
+        typer.Option("--export-seg", help="Export a filtered segmentation MRC containing only confirmed EV components.")
+    ] = False,
 ):
     '''
     Labels a cryo-ET tomogram with EV segmentations using ouptut of EValuator analyse.
@@ -148,7 +152,13 @@ def label(
         out_file_mov = evalutil.checkUniqueFileName(out_dir=out_dir, command="label", orig_name=tomogram.stem, overlay_style=style, fmt=fmt)
         lg.debug(f"label | Rendering and saving overlay movie...")
         renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, style, out_file_mov, segmentation.name)
-    
+    if export_seg:
+        lg.debug(f"label | Defining output file for filtered segmentation MRC...")
+        out_file_seg = evalutil.checkUniqueFileName(
+            out_dir=out_dir, command="label", orig_name=segmentation.stem,
+            overlay_style="filtered-seg", fmt="mrc")
+        lg.debug(f"label | Exporting filtered segmentation MRC...")
+        exportFilteredSeg(seg_labelled, valid_labels, voxel_size_nm, out_file_seg, segmentation.name)
 
 # =========================
 # DEFINE FUNCTION: getValidLabelsFromCSV
@@ -349,18 +359,22 @@ def renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, ove
     by overlay_style), 
     '''
     n_z = tomo_data.shape[0]
-    fig, ax = plt.subplots(figsize=(6, 6), facecolor="black")
+    fig, ax = plt.subplots(figsize=(6, 6.5), facecolor="black")
     ax.set_facecolor("black")
     ax.axis("off")
     # Initialise with first slice
     tomo_slice_0 = evalutil.normaliseArray(tomo_data[0])
     im = ax.imshow(tomo_slice_0, cmap="gray", interpolation="nearest", vmin=0, vmax=1)
-    z_text = ax.text(4, 4, "z=0", color="yellow", fontsize=8, va="top", ha="left")
+    z_text = ax.text(4, 4, "z=0", color="white", fontsize=8, va="top", ha="left")
     # Build legend once (labels present anywhere in the volume)
     patches = buildLegendPatches(valid_labels, label_colours)
     if patches:
-        ax.legend(handles=patches, loc="lower right", fontsize=7,
-                  framealpha=0.5, facecolor="black", labelcolor="white")
+        # ax.legend(handles=patches, loc="lower right", fontsize=7,
+        #           framealpha=0.5, facecolor="black", labelcolor="white")
+        fig.legend(handles=patches, loc="lower center", fontsize=7,
+           framealpha=0.5, facecolor="black", labelcolor="white",
+           bbox_to_anchor=(0.5, -0.02), ncol=min(len(patches), 10))
+        plt.tight_layout(pad=0.3)
     # Collect overlay artists so they can be cleared each frame
     overlay_artists = []
     def update(z):
@@ -398,3 +412,13 @@ def renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, ove
     plt.close(fig)
     lg.info(f"label | Finished rendering overlay movie.")
     print(f"Overlay movie saved to: {output_path}\n")
+
+def exportFilteredSeg(seg_labelled, valid_labels, voxel_size_nm, output_path, seg_name):
+    '''
+    Builds a binary MRC volume containing only the voxels belonging to
+    valid EV labels and writes it to output_path via evalutil.writeMRCFile.
+    '''
+    filtered = numpy.isin(seg_labelled, list(valid_labels)).astype(numpy.uint8)
+    evalutil.writeMRCFile(filtered, voxel_size_nm, output_path)
+    lg.info(f"label | Filtered segmentation MRC saved to: {output_path}")
+    print(f"Filtered segmentation MRC saved to: {output_path}\n")
