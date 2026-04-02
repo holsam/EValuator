@@ -33,13 +33,14 @@ def initEvaluator():
 # ====================
 def validateMRCFile(path: Path):
     '''
-    Use mrcfile package's built-in validate function to confirm file can be read.
+    Attempt to open MRC file in permissive mode.
+    Using this method instead of mrcfile.validate() as validate() is overly stringent with header issues - missing values etc will cause validate() to fail when the file is actually ok to use.
     '''
-    if not mrcfile.validate(path):
-        lg.warning(f"{path.name} is not a valid MRC file - skipping.")
-        return False
-    else:
+    try:
+        mrcfile.open(str(path), mode="r", permissive=True)
         return True
+    except Exception:
+        return False
 
 # ====================
 # Define function: readMRCFile
@@ -58,15 +59,14 @@ def readMRCFile(path: Path):
         voxel_size_nm = vox_a / 10.0
     return data, voxel_size_nm
 
-
 # ====================
 # Define function: labelComponents
 # ====================
 def labelComponents(binary_vol: numpy.ndarray):
     '''
-    Labels connected components in binary volumes using full 3D (26) connectivity 
+    Labels connected components in binary volumes using face-only 3D (6) connectivity 
     '''
-    struc = ndimage.generate_binary_structure(3, 3)
+    struc = ndimage.generate_binary_structure(3, 1)
     components, n_components = ndimage.label(binary_vol, structure=struc)
     return components, n_components
 
@@ -156,3 +156,17 @@ def loadDefaultConfig() -> dict:
     '''    
     with pkg_files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
         return tomllib.load(defaultconfig)
+
+# ====================
+# Define function: writeMRCFile
+# ====================
+def writeMRCFile(data: numpy.ndarray, voxel_size_nm: float | None, path: Path):
+    '''
+    Write a numpy array to an MRC file. If voxel_size_nm is provided,
+    encodes it in the header (converting nm back to Angstroms).
+    '''
+    with mrcfile.new(str(path), overwrite=True) as mrc:
+        mrc.set_data(data)
+        if voxel_size_nm is not None:
+            vox_a = voxel_size_nm * 10.0
+            mrc.voxel_size = vox_a

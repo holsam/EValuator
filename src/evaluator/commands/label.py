@@ -8,6 +8,7 @@ EValuator: SEGMENTATION EV LABELLING
 # ====================
 import matplotlib, numpy,pandas, typer
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import matplotlib.patches as mpatch
 from pathlib import Path
 from skimage import measure
@@ -81,6 +82,14 @@ def label(
         int,
         typer.Option("--n-slices", help="Number of evenly-spaced slices in the tiled panel.", min=0)
     ] = config['label']['n_slices'],
+    export_mp4: Annotated[
+        bool,
+        typer.Option('--export-mp4', help='Export a Z-stack MP4 (or GIF fallback) of the overlay alongside the static image.')
+    ] = False,
+    export_seg: Annotated[
+        bool,
+        typer.Option("--export-seg", help="Export a filtered segmentation MRC containing only confirmed EV components.")
+    ] = False,
 ):
     '''
     Labels a cryo-ET tomogram with EV segmentations using ouptut of EValuator analyse.
@@ -135,7 +144,21 @@ def label(
     else:
         lg.debug(f"label | Rendering and saving tiled image...")
         renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, style, out_file, segmentation.name)
-    
+    # Render mp4
+    if export_mp4:
+        lg.debug(f"label | Defining output file for overlay movie...")
+        writers = animation.writers.list()
+        fmt = "mp4" if "ffmpeg" in writers else "gif"
+        out_file_mov = evalutil.checkUniqueFileName(out_dir=out_dir, command="label", orig_name=tomogram.stem, overlay_style=style, fmt=fmt)
+        lg.debug(f"label | Rendering and saving overlay movie...")
+        renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, style, out_file_mov, segmentation.name)
+    if export_seg:
+        lg.debug(f"label | Defining output file for filtered segmentation MRC...")
+        out_file_seg = evalutil.checkUniqueFileName(
+            out_dir=out_dir, command="label", orig_name=segmentation.stem,
+            overlay_style="filtered-seg", fmt="mrc")
+        lg.debug(f"label | Exporting filtered segmentation MRC...")
+        exportFilteredSeg(seg_labelled, valid_labels, voxel_size_nm, out_file_seg, segmentation.name)
 
 # =========================
 # DEFINE FUNCTION: getValidLabelsFromCSV
@@ -310,7 +333,9 @@ def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours,slice
     tomo_slice = evalutil.normaliseArray(tomo_data[slice_idx])
     seg_slice = seg_labelled[slice_idx]
     ax.imshow(tomo_slice, cmap="gray", interpolation="nearest", vmin=0, vmax=1)
-    overlay_fn(ax, seg_slice, valid_labels, label_colours)
+    overlayBoth(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "both" else None
+    overlayFilled(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "filled" else None
+    overlayOutlined(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "outlined" else None
     ax.text(4, 4, f"z={slice_idx}", color="yellow", fontsize=8, va="top", ha="left")
     ax.axis("off")
     patches = buildLegendPatches(valid_labels, label_colours)
@@ -322,3 +347,78 @@ def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours,slice
     plt.close(fig)
     lg.info(f"label | Finished labelling tomogram.")
     print(f"Single-slice image (z={slice_idx}) saved to: {output_path}\n")
+
+# =========================
+# DEFINE FUNCTION: renderOverlayMovie
+# =========================
+def renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, overlay_fn: str, output_path: Path, seg_name: str):
+    '''
+    Renders a Z-stack movie scrolling through all XY slices with the EV
+    segmentation overlay. Each frame replicates the single-slice render style:
+    greyscale tomogram background, colour-coded EV overlay (style controlled
+    by overlay_style), 
+    '''
+    n_z = tomo_data.shape[0]
+    fig, ax = plt.subplots(figsize=(6, 6.5), facecolor="black")
+    ax.set_facecolor("black")
+    ax.axis("off")
+    # Initialise with first slice
+    tomo_slice_0 = evalutil.normaliseArray(tomo_data[0])
+    im = ax.imshow(tomo_slice_0, cmap="gray", interpolation="nearest", vmin=0, vmax=1)
+    z_text = ax.text(4, 4, "z=0", color="white", fontsize=8, va="top", ha="left")
+    # Build legend once (labels present anywhere in the volume)
+    patches = buildLegendPatches(valid_labels, label_colours)
+    if patches:
+        # ax.legend(handles=patches, loc="lower right", fontsize=7,
+        #           framealpha=0.5, facecolor="black", labelcolor="white")
+        fig.legend(handles=patches, loc="lower center", fontsize=7,
+           framealpha=0.5, facecolor="black", labelcolor="white",
+           bbox_to_anchor=(0.5, -0.02), ncol=min(len(patches), 10))
+        plt.tight_layout(pad=0.3)
+    # Collect overlay artists so they can be cleared each frame
+    overlay_artists = []
+    def update(z):
+        nonlocal overlay_artists
+        # Remove previous overlay artists
+        for artist in overlay_artists:
+            artist.remove()
+        overlay_artists = []
+        # Update tomogram background
+        im.set_data(evalutil.normaliseArray(tomo_data[z]))
+        z_text.set_text(f"z={z}")
+        # Draw overlay for this slice and record new artists
+        seg_slice = seg_labelled[z]
+        n_before = len(ax.images) + len(ax.lines) + len(ax.texts)
+        overlayBoth(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "both" else None
+        overlayFilled(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "filled" else None
+        overlayOutlined(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "outlined" else None
+        # Collect anything added by the overlay function
+        all_artists = ax.images[1:] + ax.lines[:] + ax.texts[2:]
+        overlay_artists = list(all_artists)
+        return [im, z_text] + overlay_artists
+    anim = animation.FuncAnimation(fig, update, frames=n_z, interval=1000.0 / config['visualisation']['fps'], blit=False)
+    if output_path.suffix == ".mp4":
+        try:
+            writer = animation.FFMpegWriter(fps=config['visualisation']['fps'], metadata={"title": output_path.stem}, bitrate=1800)
+            anim.save(str(output_path), writer=writer, dpi=150)
+        except Exception as e:
+            raise RuntimeError(f"Error writing '{output_path.name}' using FFMpeg: {e}.")
+    else:
+        try:
+            writer = animation.PillowWriter(fps=config['visualisation']['fps'])
+            anim.save(str(output_path), writer=writer, dpi=100)
+        except Exception as e:
+            raise RuntimeError(f"Error writing '{output_path.name}' using Pillow: {e}.")
+    plt.close(fig)
+    lg.info(f"label | Finished rendering overlay movie.")
+    print(f"Overlay movie saved to: {output_path}\n")
+
+def exportFilteredSeg(seg_labelled, valid_labels, voxel_size_nm, output_path, seg_name):
+    '''
+    Builds a binary MRC volume containing only the voxels belonging to
+    valid EV labels and writes it to output_path via evalutil.writeMRCFile.
+    '''
+    filtered = numpy.isin(seg_labelled, list(valid_labels)).astype(numpy.uint8)
+    evalutil.writeMRCFile(filtered, voxel_size_nm, output_path)
+    lg.info(f"label | Filtered segmentation MRC saved to: {output_path}")
+    print(f"Filtered segmentation MRC saved to: {output_path}\n")
