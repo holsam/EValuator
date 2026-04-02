@@ -8,6 +8,7 @@ debug = false
 closure_fill_threshold = 0.05
 max_diameter_nm = 500.0
 min_diameter_nm = 20.0
+membrane_thickness_nm = 7
 
 # Labelling defaults
 [label]

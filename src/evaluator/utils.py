@@ -64,9 +64,9 @@ def readMRCFile(path: Path):
 # ====================
 def labelComponents(binary_vol: numpy.ndarray):
     '''
-    Labels connected components in binary volumes using full 3D (26) connectivity 
+    Labels connected components in binary volumes using face-only 3D (6) connectivity 
     '''
-    struc = ndimage.generate_binary_structure(3, 3)
+    struc = ndimage.generate_binary_structure(3, 1)
     components, n_components = ndimage.label(binary_vol, structure=struc)
     return components, n_components
 

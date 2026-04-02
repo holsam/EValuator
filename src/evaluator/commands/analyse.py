@@ -11,6 +11,7 @@ from pathlib import Path
 from rich import print
 from scipy import ndimage
 from skimage import measure
+from skimage.morphology import ball
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from typing import Annotated
@@ -131,12 +132,6 @@ def processSegmentation(seg_path: Path):
     lg.debug(f"analyse | {seg_path.name} | Reading file... ")
     data, voxel_size_nm = evalutil.readMRCFile(seg_path)
     data=data.astype(bool)
-    # Apply morphological closure to segmentation mask
-    lg.debug(f"analyse | {seg_path.name} | Applying morphological closure... ")
-    try:
-        data = morphologicalClosure(data)
-    except:
-        lg.warning(f"analyse | {seg_path.name} | Error applying morphological closure.")
     # Label components and get number of components
     lg.debug(f"analyse | {seg_path.name} | Labelling components... ")
     components, n_components = evalutil.labelComponents(data)
@@ -151,9 +146,10 @@ def processSegmentation(seg_path: Path):
     component_list = measure.regionprops(components)
     # Calculate voxel size limits (based on whether vox->nm conversion is known)
     lg.debug(f"analyse | {seg_path.name} | Calculating voxel size limits...")
+    membrane_thickness_vox = config['filter']['membrane_thickness_nm'] / voxel_size_nm
     if voxel_size_nm is not None:
-        min_vox = (minimum_diameter / (2 * voxel_size_nm)) ** 3 * (4/3) * numpy.pi
-        max_vox = (maximum_diameter / (2 * voxel_size_nm)) ** 3 * (4/3) * numpy.pi
+        min_vox = shellVolume(minimum_diameter, voxel_size_nm, membrane_thickness_vox)
+        max_vox = shellVolume(maximum_diameter, voxel_size_nm, membrane_thickness_vox)
     else:
         min_vox = 0
         max_vox = numpy.inf
@@ -205,9 +201,11 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     # Measurement 1: membrane volume and equivalent diameter
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring membrane volume and equivalent diameter...")
     membrane_vol_nm3, equiv_diameter_nm = measureMembraneVolumeDiameter(component=component_properties, scale=scale)
+    # Apply morphological closure to remove small gaps in membrane
+    component_mask_closed = morphologicalClosure(component_mask)
     # Measurement 2: check if component is enclosed
     lg.debug(f"analyse | {filename} | Component {component_label} | Checking if component is enclosed...")
-    enclosed, fill_ratio = checkEnclosed(component_mask=component_mask, threshold=fill_threshold)
+    enclosed, fill_ratio = checkEnclosed(component_mask=component_mask_closed, threshold=fill_threshold)
     # Measurement 3: internal (lumen) volume
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring lumen volume...")
     lumen_vol_nm3 = measureLumenVolume(component_mask=component_mask, scale=scale)
@@ -267,7 +265,7 @@ def morphologicalClosure(binary_vol: numpy.ndarray):
     '''
     Applies a morphological closing operation (dilation followed by erosion). This removes small dark spots and connects small bright cracks (i.e. helps fill in EV membranes which may not be segmented perfectly).
     '''
-    binary_vol_closed=ndimage.binary_closing(binary_vol)
+    binary_vol_closed=ndimage.binary_closing(binary_vol, structure=ball(2))
     return binary_vol_closed
 
 # =========================
@@ -278,10 +276,14 @@ def checkEnclosed(component_mask: numpy.ndarray, threshold: float):
     Checks whether a membrane component forms an enclosed structure by filling in holes in the binary mask - if filled volumes are greater than original, there is an enclosed structure (i.e. EV).
     Threshold corresponds the ratio of (filled volume - original volume) / filled volume at which a shape is classified as 'enclosed'
     The fill ratio returned is the fraction of the filled volume which can be attributed to the enclosed interior
-    '''   
-    filled = ndimage.binary_fill_holes(component_mask)
+    '''
+    # Pad with a border of false voxels to prevent edge leakage
+    padded_mask = numpy.pad(component_mask, pad_width=1, mode='constant', constant_values=False)   
+    filled_mask = ndimage.binary_fill_holes(padded_mask)
+    # Remove padding before any measurements
+    filled_mask = filled_mask[1:-1, 1:-1, 1:-1]
     n_original = numpy.sum(component_mask)
-    n_filled = numpy.sum(filled)
+    n_filled = numpy.sum(filled_mask)
     if n_filled == 0:
         return False, 0.0
     fill_ratio = (n_filled - n_original) / n_filled
@@ -444,3 +446,11 @@ def printSummaryMessage(results, nfiles:int, startt:datetime.datetime, endt: dat
     print(f"- Number of enclosed EVs: {results['is_enclosed'].sum()} ({100*results['is_enclosed'].mean():.1f}%)")
     print(f"- Equivalent diameters: {results['equiv_diameter_nm'].mean():.1f} ± {results['equiv_diameter_nm'].std():.1f} nm (mean ± SD)")
     print(f"Results saved to: {out_path}\n")
+
+# =========================
+# DEFINE FUNCTION: shellVolume
+# =========================
+def shellVolume(diameter_nm, voxel_size_nm, thickness_vox):
+    r_outer = diameter_nm / (2 * voxel_size_nm)
+    r_inner = max(0, r_outer - thickness_vox)
+    return (4/3) * numpy.pi * (r_outer**3 - r_inner**3)
