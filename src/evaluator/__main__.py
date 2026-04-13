@@ -4,5 +4,5 @@ __main__.py
 Adds support for running via: python -m ...
 '''
 
-from .main import evaluator
+from evaluator.main import evaluator
 evaluator()

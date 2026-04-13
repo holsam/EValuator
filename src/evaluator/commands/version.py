@@ -1,13 +1,20 @@
 '''
-Commands: version
+=======================================
+EValuator: PRINT VERSION
+=======================================
 '''
-# -- Import external dependencies ----------------
+# ====================
+# Import external dependencies
+# ====================
 import tomllib, typer
+from importlib.resources import files as pkg_files
 from rich import print
 
-# -- Define printVersion command -----------------
+# ====================
+# Define command: version
+# ====================
 def printVersion():
-    with open('pyproject.toml', 'rb') as f:
+    with pkg_files('evaluator').joinpath('../../pyproject.toml').open('rb') as f:
         contents = tomllib.load(f)
     print(f"\nRunning EValuator version: v{contents['project']['version']}\n")
     typer.Exit(0)
