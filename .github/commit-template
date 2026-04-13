@@ -1,0 +1,17 @@
+# Title in format: <type>[optional scope]: <description>
+# <type>: feat (new feature/minor version bump); fix (bug fix/patch version bump); docs (documentation only); style (stylistic changes that don't affect meaning); refactor (code change not fixing bug or feature); perf (code change improving performance); test (add/correct tests); chore (other changes not modifying src/test files)
+# [scope]: noun describing a section of the codebase in parentheses (e.g., feat(cluster): or fix(fsx):)
+# <description>: summary, imperative, start upper case, don't end with a period
+# No more than 50 chars. #### 50 chars is here:  #
+
+# Remember blank line between title and body.
+
+# Body: Explain *what* and *why* (not *how*). Include task ID (issue number from SC or Jira).
+# Wrap at 72 chars. ################################## which is here:  #
+
+# Remember blank line between body and footer(s)
+
+# Footer(s)
+# Co-authored-by: name <user@users.noreply.github.com>
+# Include BREAKING CHANGE: in footer for major version bumps
+#
