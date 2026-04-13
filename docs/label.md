@@ -1,87 +1,70 @@
 # EValuator - label
 
 ## Overview
-The `label` command overlays EV segmentations onto slices of the corresponding cryo-ET tomogram and saves the result as an image. It is intended as a quick visual check that the `analyse` pipeline has correctly identified and measured the EVs in a given tomogram, and as a means of inspecting which components have been accepted or rejected.
+The `label` command assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. It is the first step in the EValuator workflow and should be run before [`analyse`](analyse.md).
 
-By default, `label` renders a tiled panel of evenly-spaced Z-slices spanning the full depth of the tomogram. A single Z-slice can instead be requested using `--slice`. The overlay style (filled regions, contour outlines, or both) can also be controlled.
+Labelling is performed using face-only (6-connectivity) 3D connected-component labelling, which is less prone to merging spatially adjacent but structurally separate components than the full 26-connectivity alternative.
+
+The output labelled MRC can be passed directly to `analyse` for morphological measurements, and to `visualise overlay` for visual inspection of the results.
+
 
 ## Usage
+
 ```
-Usage: evaluator label [OPTIONS] TOMOGRAM SEGMENTATION
+Usage: evaluator label [OPTIONS] SEGMENTATION
 
 Arguments:
-  TOMOGRAM      Path to the unsegmented tomogram as an MRC file.  [required]
-  SEGMENTATION  Path to the corresponding segmented tomogram as an MRC file.
-                [required]
+  SEGMENTATION  Path to a binary segmentation MRC file (e.g. output of
+                MemBrain-seg).  [required]
 
 Options:
-  -c, --csv PATH              Path to the corresponding EValuator analyse
-                              output CSV. Only EV components listed in this
-                              CSV (for the given segmentation filename) will be
-                              overlaid.  [required]
-  -o, --out-dir PATH          Path to output directory. Results will be written
-                              under '.../evaluator/results/label/'.
-                              [default: .]
-  -f, --out-format [png|jpg|tiff]
-                              File format to save the output image as.
-                              [default: png]
-  -s, --style [both|filled|outlined]
-                              Overlay style.  [default: both]
-  --slice INTEGER             Render a single Z-slice at this index instead of
-                              a tiled panel.  [≥0]
-  --n-slices INTEGER          Number of evenly-spaced slices in the tiled panel.
-                              [default: 9; ≥0]
-  -h, --help                  Show this message and exit.
+  -o, --out-dir PATH  Path to output directory. The labelled MRC will be
+                      written under '.../evaluator/results/label/'.
+                      [default: .]
+  -h, --help          Show this message and exit.
 ```
 
+Global verbosity options (`-v` / `-vv`) are set on the `evaluator` command itself, and should be included before the `label` subcommand:
+
+```sh
+evaluator -v label segmentation.mrc
+evaluator -vv label segmentation.mrc
+
+```
 ### Input
-`label` requires three inputs:
 
-- **`TOMOGRAM`**: the original greyscale cryo-ET tomogram (`.mrc`), used as the background image in all panels.
-- **`SEGMENTATION`**: the MemBrain-seg binary segmentation mask (`.mrc`) corresponding to the tomogram. This must have the same shape as the tomogram.
-- **`--csv`**: the `evaluator-analyse_results.csv` file produced by `evaluator analyse`. The CSV is used to determine which connected components in the segmentation should be considered EVs — only components whose `tomogram` field matches the segmentation filename and whose `label` value is present in the CSV are overlaid. Components that were filtered out during `analyse` are not shown.
-
-The tomogram and segmentation files must have identical dimensions. If they do not, `label` will exit with an error.
-
-### Options
-#### `--style`
-Controls the appearance of the overlay:
-| Style | Description |
-|---|---|
-| `both` | Semi-transparent filled regions and contour outlines, with component label numbers at centroids. This is the default. |
-| `filled` | Shows semi-transparent filled regions only, with label numbers at centroids. |
-| `outlined` | Contour outlines only (using `skimage.measure.find_contours`), with label numbers at contours. |
-
-
-Each EV component is assigned a unique colour from the `tab20` matplotlib colormap. Colours cycle if there are more than 20 components.
-
-#### `--n-slices`
-Controls how many Z-slices appear in the tiled panel. Slices are selected by `numpy.linspace` across the full Z range of the tomogram, so the panel gives an evenly-spaced overview of the full depth. Slices are arranged in a roughly square grid. The default of 9 slices fits a 3×3 grid. This option has no effect if `--slice` is used.
-
-#### `--slice`
-Renders a single Z-slice at the given index instead of the tiled panel. The index must be within the valid Z range of the tomogram (`0` to `n_z - 1`). If the index is out of range, `label` exits with an error.
+`label` requires a single binary segmentation MRC file as input. This is expected to be the output of [MemBrain-seg](https://github.com/teamtomo/membrain-seg), and should contain only two unique values (typically `0` and `1`). The file is read in permissive mode to accommodate minor header inconsistencies common in cryo-ET data.
 
 ## Output
-Image files are written in the output directory (default: current working directory) under `evaluator/results/label`, following the naming convention below:
+
+The labelled MRC is written in the output directory (default: current working directory) under `evaluator/results/label/`, following the naming convention below:
+
 ```sh
 # Output naming convention
-{tomogram filename}_overlay-{overlay style}.{image format}
+{input filename stem}_labelled.mrc
 
-# Example: labelling file tomo_denoised_1.mrc with options: -f png -s both
-Image saved to: evaluator/results/label/tomo_denoised_1_overlay-both.png
+# Example: labelling tomo_seg.mrc
+Labelled MRC saved to: evaluator/results/label/tomo_seg_labelled.mrc
 ```
-If a file with this name already exists, a numeric suffix is appended (`tomo_denoised_1_overlay-both-1.png`, and so on).
 
-### Tiled panel output
-The tiled panel shows each selected Z-slice as a greyscale background with the EV overlay applied. Each tile is annotated with its Z-index in the top-left corner. A shared legend listing each EV label and its assigned colour is placed below the panel.
-### Single-slice output
-The single-slice image shows the full XY extent of the tomogram at the selected Z-index, with the overlay and a legend in the lower-right corner.
-### Image settings
-Default image settings are as follows:
-- Image resolution: 300 dpi
-- Overlay fill opacity: 0.35
-- Outline (contour) line width: 1.0
-- Label font size: 6
+If a file with this name already exists, a numeric suffix is appended (`tomo_seg_labelled-1.mrc`, and so on).
+
+### Labelled MRC format
+
+The output MRC contains one integer value per voxel: `0` for background, and a unique positive integer for each connected membrane component. The voxel size from the input MRC header is preserved in the output header.
+
+The integer label assigned to each component in the labelled MRC corresponds directly to the `label` column in the `analyse` CSV output, and to the label values used by `visualise overlay`. This is only guaranteeed where the labelled MRC is used as the input to `analyse` and/or `visualise overlay`.
+
+### Terminal summary output
+
+Once `label` has completed, a short summary is printed to the terminal:
+
+```
+87 components labelled.
+Labelled MRC saved to: .../evaluator/results/label/tomo_seg_labelled.mrc
+```
+
+
 <br>
 
 ---

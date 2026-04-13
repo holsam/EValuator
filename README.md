@@ -10,18 +10,16 @@
 A command line tool for automated morphological analysis and visualisation of extracellular vesicles (EVs) from cryo-electron tomography (cryo-ET) data.
 
 ## Overview
-EValuator takes membrane segmentation masks produced by [MemBrain-seg](https://github.com/teamtomo/membrain-seg) and extracts quantitative morphological measurements for each EV identified in a tomogram. It was developed for the analysis of isolated EV preparations imaged by cryo-ET, but may be applicable to other membrane-bound structures of comparable scale (tens to hundreds of nm).
+EValuator is a cryo-ET post-processing tool, primarily designed for use in quantitative morphological analysis of EVs from binary segmentation masks produced by [MemBrain-seg](https://github.com/teamtomo/membrain-seg) from denoised, CTF-corrected cryo-ET tomograms. It was developed for the analysis of isolated EV preparations imaged by cryo-ET, but may be applicable to other membrane-bound structures of comparable scale (tens to hundreds of nm).
 
-EValuator provides three main commands:
+EValuator provides several commands:
 
-| Command | Description |
-|---|---|
-| [`analyse`](docs/analyse.md) | Run the morphological analysis pipeline on one or more segmentation files and write results to a CSV. |
-| [`label`](docs/label.md) | Overlay an EV segmentation onto the corresponding tomogram slices and save as an image. |
-| [`visualise`](docs/visualise.md) | Generate a Z-stack movie and/or an isometric 3D surface render of a tomogram or segmentation mask. |
+| Group | Command | Description |
+|---|---|---|
+| Component Identification| [`label`](docs/label.md) | Identified connected components from a tomogram and outputs a labelled MRC file for use with other EValuator commands.|
+| Component Analysis|  [`analyse`](docs/analyse.md) | Run a morphological analysis pipeline on one or more labelled segmentation files and write results to a CSV. |
+| Component Visualisation| [`visualise`](docs/visualise.md) | Generate various visualisations of tomograms and/or segmentation masks. |
 
-## Prerequisites
-EValuator requires membrane segmentation masks in `.mrc` format as an input to the commands `analyse` and `label`. These are produced by [MemBrain-seg](https://github.com/teamtomo/membrain-seg), which should be run separately on denoised and CTF-corrected tomograms prior to using EValuator. See the [MemBrain-seg documentation](https://membrain-seg.readthedocs.io) for installation and usage instructions.
 
 ## Installation
 EValuator requires Python 3.14 or later, and uses [uv](https://docs.astral.sh/uv/) as its package manager. If `uv` is not already installed, follow the [installation instructions](https://docs.astral.sh/uv/getting-started/installation/). 
@@ -57,37 +55,93 @@ Usage: evaluator [OPTIONS] COMMAND [ARGS]...
 Options:
   -v, --verbose   Show progress in terminal.
   -vv, --debug    Show debug messages in terminal (implies --verbose).
+  --help          Show this message and exit.
 
-Commands:
-  analyse     Run post-processing pipeline on MemBrain-seg EV segmentation files.
-  label       Label a cryo-ET tomogram with EV segmentations.
-  visualise   Generate visualisations of tomogram data.
+Component Identification:
+  label       Label connected components in a segmentation MRC
+
+Component Analysis:
+  analyse     Run morphological analysis pipeline on labelled MRC files
+
+Component Visualisation:
+  visualise   Generate visualisations from MRC data
 
 Utility Commands:
-  config      Manage EValuator configuration files.
-  license     Print EValuator license to terminal and exit.
-  version     Print current EValuator version to terminal and exit.
+  config      Manage EValuator configuration files
+  license     Print EValuator license
+  version     Print current EValuator version
 ```
 
 Use `evaluator COMMAND --help` for detailed usage information for each command or see the full documentation for each command, including all options and output file descriptions, in the [`docs/`](docs/) directory:
 - [`docs/analyse.md`](docs/analyse.md)
+- [`docs/config.md`](docs/config.md)
 - [`docs/label.md`](docs/label.md)
 - [`docs/visualise.md`](docs/visualise.md)
 
-### Quick start examples
-#### Analyse a directory of segmentation files:
-```sh
-evaluator analyse /path/to/segmentations/ -o /path/to/output/
+## Workflow
+EValuator is structured around a three-step workflow. Each step produces output that feeds into the next:
+
+```
+MemBrain-seg segmentation (.mrc)
+          │
+          ▼
+   evaluator label               →  labelled MRC  (<stem>_labelled.mrc)
+          │
+          ▼
+   evaluator analyse             →  morphology CSV  (evaluator-analyse_results.csv)
+          │
+          ▼
+   evaluator visualise overlay   →  overlay image  (<stem>_overlay-<style>.png)
 ```
 
-#### Label the corresponding tomogram slices:
+**Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse`.
+
+**Step 2: `analyse`**: runs the morphological analysis pipeline on a labelled MRC (or directory of labelled MRCs), filters components by size, and extracts quantitative measurements for each identified EV, writing the results to a CSV file.
+
+**Step 3: `visualise overlay`**: reads the labelled MRC and the `analyse` CSV and renders a colour-coded overlay of the identified EVs onto slices of the original greyscale tomogram, for visual inspection of pipeline results.
+
+In addition, the `visualise movie` and `visualise isoview` subcommands can be used independently at any stage to quickly inspect MRC data.
+
+## Quick start examples
 ```sh
-evaluator label tomogram.mrc segmentation.mrc -c evaluator-analyse_results.csv -o /path/to/output/
+# Step 1: label connected components in a MemBrain-seg segmentation mask
+evaluator label tomo_seg.mrc
+
+# Step 2: run the morphological analysis pipeline on the labelled MRC
+evaluator analyse evaluator/results/label/tomo_seg_labelled.mrc
+
+# Step 3: overlay identified EVs onto the original tomogram
+evaluator visualise overlay tomo.mrc evaluator/results/label/tomo_seg_labelled.mrc \
+    -c evaluator/results/analyse/evaluator-analyse_results.csv
+
+# Optionally: inspect raw MRC data
+evaluator visualise movie tomo.mrc
+evaluator visualise isoview tomo_seg.mrc
 ```
 
-#### Generate a Z-stack movie of a tomogram:
+To process a full directory of segmentations in batch:
+
 ```sh
-evaluator visualise tomogram.mrc -o /path/to/output/
+evaluator label /path/to/segmentations/
+# then run analyse on the labelled output directory:
+evaluator analyse evaluator/results/label/
+```
+
+Verbosity flags are set on the root `evaluator` command and apply to all subcommands:
+
+```sh
+evaluator -v analyse evaluator/results/label/     # progress messages
+evaluator -vv analyse evaluator/results/label/    # debug messages
+```
+
+## Configuration
+
+EValuator ships with a built-in default configuration file (`config.toml`). User-specific settings can be written to the OS configuration directory (e.g. `~/.config/evaluator/config.toml` on Linux/macOS) to override these defaults. See the [`config` documentation](docs/config.md) for full details.
+
+To get started with a user configuration file:
+
+```sh
+evaluator config init
 ```
 
 ## Getting Help & Contributing
