@@ -42,7 +42,7 @@ def generate_movie(input, output, fps):
     lg.debug(f"visualise movie | Defining output file for Z-stack movie...")
     out_file_mov = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=input.stem, vis_out="Zstack-movie", fmt=fmt)
     createMovie(data=mrc_data, out_path=out_file_mov, fps=fps, is_mask=is_mask, voxel_size_nm=voxel_size_nm)
-    printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_file_mov, out_file_iso=None)
+    printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_path_mov=out_file_mov, out_path_iso=None)
 
 def generate_isometric_view(input, output, downsample):
     '''
@@ -59,7 +59,7 @@ def generate_isometric_view(input, output, downsample):
     lg.debug(f"visualise isoview | Defining output file for isometric view...")
     out_file_iso = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=input.stem, vis_out="isometric-view", fmt="png")
     createIsometricView(data=mrc_data, out_path=out_file_iso, downsample=downsample, voxel_size_nm=voxel_size_nm)
-    printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_file_mov=None, out_file_iso=out_file_iso)
+    printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_path_mov=None, out_path_iso=out_file_iso)
 
 # ====================
 # Define subcommand: overlay

@@ -58,7 +58,7 @@ def label_components(
             counter += 1
     # Write labelled MRC
     lg.debug(f"label | Writing labelled MRC to {out_file.name}...")
-    mrcutil.writeMRCFile(labelled.astype(numpy.int32), voxel_size_nm, out_file)
+    mrcutil.writeMRCFile(labelled.astype(numpy.float32), voxel_size_nm, out_file)
     lg.info(f"label | Finished labelling.")
     print(f"\n{n_components} components labelled.")
     print(f"Labelled MRC saved to: {out_file}\n")
