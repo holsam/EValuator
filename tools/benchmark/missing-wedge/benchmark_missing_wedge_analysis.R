@@ -5,6 +5,7 @@ library(tidyverse)
 data <- read_csv(file='benchmark_missing_wedge_err.csv')
 # identify metadata columns
 metadata_cols <- c(
+  "nominal_diamter_nm"
   "true_diameter_nm",
   "replicate"
 )
@@ -18,8 +19,8 @@ data_tidy <- data %>%
     anisotropy,
     )) %>%
   rename(
-    "lumen_relative_error"="lumen volume_relative_error",
-    "lumen_error"="lumen volume_error",
+    "convex_hull_relative_error"="convex hull_relative_error",
+    "convex_hull_error"="convex hull_error",
     "xy_relative_error"="XY-projection diameter_relative_error",
     "xy_error"="XY-projection diameter_error",
     "closed_relative_error"="anisotropic closing_relative_error",

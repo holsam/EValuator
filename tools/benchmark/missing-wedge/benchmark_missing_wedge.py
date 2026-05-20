@@ -16,20 +16,19 @@ from rich import print
 # -- Import internal functions
 from evaluator.utils.missing_wedge import (
     anisotropic_closing_per_component,
-    fill_lumen,
     fit_sphere_least_squares,
-    lumen_diameter_from_volume,
+    hull_outer_diameter,
     orientation_quality_score,
     xy_z_diameter_metrics,
 )
 from evaluator.utils.synthetic import (
-    apply_fourier_missing_wedge,
+    apply_polar_gaps,
     generate_ev_shell,
 )
 
 # -- Define internal constants
-DIAMETERS = range(30,300,10)
-REPLICATES = 30
+DIAMETERS = range(40,200,40)
+REPLICATES = 3
 VOXEL_SIZE = 2.0
 TILT_RANGE = 60.0
 DIAMETER_JITTER = 6.0
@@ -61,6 +60,7 @@ def run_benchmark(
     '''
     # Seed random number generation
     rng = np.random.default_rng(seed)
+    gap_half_angle = 90.0 - tilt_range_deg
     rows = []
     for nominal_d in diameters_nm:
         for rep in range(n_replicates):
@@ -72,12 +72,11 @@ def run_benchmark(
             shell, truth = generate_ev_shell(diameter_nm=d, voxel_size_nm=voxel_size_nm, centre_offset_voxels=offset, axis_ratios=axes)
             true_diameter = truth['diameter_nm']
             # Apply fourier missing wedge degradation
-            degraded = apply_fourier_missing_wedge(shell, tilt_range_deg=tilt_range_deg)
+            degraded = apply_polar_gaps(shell, gap_half_angle_deg=gap_half_angle)
             # Baseline (no mitigation)
             baseline_d = shell_voxel_diameter(degraded, voxel_size_nm)
-            # Apply mitigation 1: anisotropic closing → shell-volume diameter
+            # Apply mitigation 1: anisotropic closing to improve connectedness
             closed = anisotropic_closing_per_component(degraded, z_radius=5, xy_radius=2)
-            closed_d = shell_voxel_diameter(closed, voxel_size_nm)
             # Apply mitigation 2: sphere fit on raw degraded shell
             points = np.argwhere(degraded) * voxel_size_nm
             if len(points) >= 50:
@@ -86,23 +85,21 @@ def run_benchmark(
             else:
                 fit_d = float('nan')
                 fit_rmse = float('nan')
-            # Apply mitigation 3: lumen-volume diameter (after closing + fill)
-            filled = fill_lumen(closed)
-            lumen_voxels = int(filled.sum() - closed.sum())
-            lumen_d = lumen_diameter_from_volume(lumen_voxels, voxel_size_nm)
+            # Apply mitigation 3: convex hull outer diameter
+            hull_d = hull_outer_diameter(closed, voxel_size_nm)
             # Apply mitigation 4: XY/Z diagnostic
             xyz = xy_z_diameter_metrics(degraded, voxel_size_nm)
             # Apply mitigation 5: orientation score
             orient = orientation_quality_score(degraded)
             # Add all results to DataFrame
             rows.append({
+                'nominal_diameter_nm': nominal_d,
                 'true_diameter_nm': true_diameter,
                 'replicate': rep,
                 'baseline_d_nm': baseline_d,
-                'closed_d_nm': closed_d,
                 'fit_d_nm': fit_d,
                 'fit_rmse_nm': fit_rmse,
-                'lumen_d_nm': lumen_d,
+                'hull_d_nm': hull_d,
                 'xy_d_nm': xyz['xy_diameter_nm'],
                 'z_extent_nm': xyz['z_extent_nm'],
                 'xy_z_ratio': xyz['xy_z_ratio'],
@@ -119,9 +116,8 @@ def summarise_errors(df: pd.DataFrame) -> pd.DataFrame:
     '''
     methods = {
         'baseline': 'baseline_d_nm',
-        'anisotropic closing': 'closed_d_nm',
         'sphere fit': 'fit_d_nm',
-        'lumen volume': 'lumen_d_nm',
+        'convex hull': 'hull_d_nm',
         'XY-projection diameter': 'xy_d_nm',
     }
     rows = []
@@ -140,9 +136,8 @@ def summarise_errors(df: pd.DataFrame) -> pd.DataFrame:
 def calculate_errors(df: pd.DataFrame) -> pd.DataFrame:
     methods = {
         'baseline': 'baseline_d_nm',
-        'anisotropic closing': 'closed_d_nm',
         'sphere fit': 'fit_d_nm',
-        'lumen volume': 'lumen_d_nm',
+        'convex hull': 'hull_d_nm',
         'XY-projection diameter': 'xy_d_nm',
     }
     err_df = df.copy()
@@ -153,37 +148,40 @@ def calculate_errors(df: pd.DataFrame) -> pd.DataFrame:
         err_df.insert(loc=len(df.columns), column=f'{name}_relative_error', value=rel)
     return err_df
 
-
-def print_header():
+def print_termini(terminus: str):
     terminal_width = os.get_terminal_size().columns
-    print(f'\n')
-    print(f'{"="*terminal_width}')
-    print(f'[bold]BENCHMARKING MISSING WEDGE[/bold]')
-    print(
-        f'Benchmarking parameters:\n'
-        f'\t- True diameters: {DIAMETERS}\n'
-        f'\t- Replicates per diameter: {REPLICATES}\n'
-        f'\t- Voxel size (nm): {VOXEL_SIZE}\n'
-        f'\t- Tilt range (°): {TILT_RANGE}\n'
-        f'\t- Diameter jitter: {DIAMETER_JITTER}\n'
-        f'\t- Shape jitter: {SHAPE_JITTER}\n'
-        f'\t- RNG seed: {SEED}\n'
-    )
+    if terminus == "start":
+        print(f'\n')
+        print(f'{"="*int((terminal_width-20)/2)}', 'BEGIN BENCHMARKING',f'{"="*int((terminal_width-20)/2)}')
+        print(
+            f'Benchmarking parameters:\n'
+            f'\t- True diameters: {DIAMETERS}\n'
+            f'\t- Replicates per diameter: {REPLICATES}\n'
+            f'\t- Voxel size (nm): {VOXEL_SIZE}\n'
+            f'\t- Tilt range (°): {TILT_RANGE}\n'
+            f'\t- Diameter jitter: {DIAMETER_JITTER}\n'
+            f'\t- Shape jitter: {SHAPE_JITTER}\n'
+            f'\t- RNG seed: {SEED}\n'
+        )
+    if terminus == "end":
+        print(f'{"="*int((terminal_width-18)/2)}', 'END BENCHMARKING',f'{"="*int((terminal_width-18)/2)}')
+        print(f'\n')
 
 # -- Entrypoint
 if __name__ == '__main__':
-    print_header()
+    print_termini('start')
     # Run benchmark
     df = run_benchmark()
     df_err = calculate_errors(df)
+    # Print results
     # Print results
     print(f'[bold]Per-EV results (head):[/bold]')
     print(df.head(10).to_string(index=False))
     print(f'[bold]Per-method error summary:[/bold]')
     print(summarise_errors(df).to_string(index=False))
-    print(f'\n\n')
     # Save result to disk
     df.to_csv('benchmark_missing_wedge_raw.csv', index=False)
     summarise_errors(df).to_csv('benchmark_missing_wedge_summary.csv', index=False)
     # df_err.to_csv('benchmark_missing_wedge_err.csv', index=False)
     df_err.to_csv('benchmark_missing_wedge_err.csv', index=False)
+    print_termini('end')
