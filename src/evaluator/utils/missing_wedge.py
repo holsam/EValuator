@@ -7,8 +7,9 @@ Functions for mitigating missing wedge directional bias in equivalent diameter c
 
 # -- Import external dependencies
 import numpy as np
-from scipy.ndimage import binary_closing, binary_fill_holes, find_objects, label
+from scipy.ndimage import binary_closing, binary_erosion, find_objects, label
 from skimage.draw import ellipsoid
+from skimage.morphology import convex_hull_image
 
 # ==========
 # MITIGATION 1: ANISOTROPIC PER-COMPONENT MORPHOLOGICAL CLOSING
@@ -90,21 +91,37 @@ def fit_ellipsoid_axis_aligned(
 
 
 # ==========
-# MITIGATION 3: LUMEN-VOLUME-BASED DIAMETER
+# MITIGATION 3: CONVEX HULL OUTER DIAMETER
 # ==========
-# -- fill_lumen: returns ndarray of interior of closed shell
-def fill_lumen(closed_shell: np.ndarray) -> np.ndarray:
+# -- hull_outer_diameter: returns float of equivalent diameter from convex hull of segmented shell voxels
+def hull_outer_diameter(shell_binary: np.ndarray, voxel_size_nm: float) -> float:
     '''
-    Fill the interior of a morphologically closed shell
+    Calculate equivalent outer diameter from the convex hull of segmented shell voxels
     '''
-    return binary_fill_holes(closed_shell)
+    if shell_binary.sum() < 4:
+        return float("nan")
+    hull = convex_hull_image(shell_binary)
+    volume_nm3 = hull.sum() * voxel_size_nm ** 3
+    radius_nm = (3 * volume_nm3 / (4 * np.pi)) ** (1 / 3)
+    return 2 * radius_nm
 
-# -- lumen_diameter_from_volume: returns float of equivalent outer diameter
-def lumen_diameter_from_volume(lumen_voxels: int, voxel_size_nm: float) -> float:
+# -- hull_lumen_diameter: returns float of lumen diameter from convex hull of segmented shell voxels (eroded by membrane thickness)
+def hull_lumen_diameter(
+    shell_binary: np.ndarray,
+    voxel_size_nm: float,
+    membrane_thickness_nm: float,
+) -> float:
     '''
-    Estimate equivalent outer diameter from lumen voxel count
+    Calculate lumen diameter from hull eroded by membrane thickness
     '''
-    volume_nm3 = lumen_voxels * (voxel_size_nm ** 3)
+    if shell_binary.sum() < 4:
+        return float("nan")
+    hull = convex_hull_image(shell_binary)
+    erosion_voxels = int(np.ceil(membrane_thickness_nm / voxel_size_nm))
+    lumen = binary_erosion(hull, iterations=erosion_voxels)
+    if lumen.sum() == 0:
+        return float("nan")
+    volume_nm3 = lumen.sum() * voxel_size_nm ** 3
     radius_nm = (3 * volume_nm3 / (4 * np.pi)) ** (1 / 3)
     return 2 * radius_nm
 
