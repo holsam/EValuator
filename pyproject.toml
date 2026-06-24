@@ -8,12 +8,15 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "datetime>=6.0",
+    "imageio>=2.37.3",
+    "imageio-ffmpeg>=0.6.0",
     "matplotlib>=3.10.8",
     "mrcfile>=1.5.4",
     "numpy>=2.4.3",
     "pandas>=3.0.1",
     "pathlib>=1.0.1",
     "platformdirs>=4.9.4",
+    "pyvista>=0.48.4",
     "rich>=14.3.3",
     "scikit-image>=0.26.0",
     "scipy>=1.17.1",
