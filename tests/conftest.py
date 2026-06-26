@@ -70,7 +70,7 @@ def labelled_path(seg_path, tmp_path_factory):
     """
     if LABELLED_PATH.exists():
         return LABELLED_PATH
-    from evaluator.commands.label import label_components
+    from evaluator.commands.label.label import label_components
     tmp = tmp_path_factory.mktemp("label_cache")
     label_components(seg_path, tmp)
     label_out = (

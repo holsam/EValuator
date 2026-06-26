@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-evaluator = "evaluator.main:evaluator"
+evaluator = "evaluator.cli:evaluator"
 
 [build-system]
 requires = ["uv_build<0.12"]

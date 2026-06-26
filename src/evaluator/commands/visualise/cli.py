@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 # Import EValuator utilities
 # ====================
 from evaluator.utils.settings import config, lg
-from evaluator.commands import visualise as visualiseFuncs
+from evaluator.commands.visualise import visualise as visualiseFuncs
 
 # ====================
 # Initialise typer as evaluatorVisualise

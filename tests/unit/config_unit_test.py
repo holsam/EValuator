@@ -7,7 +7,7 @@ directory via monkeypatch so that the user's real config file is never touched.
 import pytest, tomllib
 
 # -- Import internal dependencies ------
-from evaluator.commands.config import (
+from evaluator.commands.config.config import (
     config_init,
     config_verify,
     flattenToml,

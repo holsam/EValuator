@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 # -- Import internal dependencies ------
-from evaluator.commands.analyse import (
+from evaluator.commands.analyse.analyse import (
     checkEnclosed,
     computeSurfaceArea,
     deriveAxes,

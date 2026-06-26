@@ -2,7 +2,7 @@
 import pytest, tomllib, typer
 
 # -- Import internal dependencies ------
-from evaluator.commands.config import (
+from evaluator.commands.config.config import (
     config_exists,
     config_init,
     config_list,

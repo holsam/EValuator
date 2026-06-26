@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 
 # -- Import internal dependencies ------
-from evaluator.commands.analyse import run_pipeline
+from evaluator.commands.analyse.analyse import run_pipeline
 
 # -- Define constants ------------------
 N_EVS = 4

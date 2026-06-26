@@ -13,7 +13,7 @@ from typing import Annotated
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.commands import analyse as analyseFuncs
+from evaluator.commands.analyse import analyse as analyseFuncs
 from evaluator.utils.settings import config, lg
 
 # ====================
