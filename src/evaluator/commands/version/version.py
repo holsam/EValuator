@@ -6,13 +6,16 @@ EValuator: PRINT VERSION
 # ====================
 # Import external dependencies
 # ====================
-import typer
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from rich import print
 
 # ====================
 # Define command: version
 # ====================
 def printVersion():
-    print(f"\nRunning EValuator version: v{version('evaluator')}\n")
-    typer.Exit(0)
+    try:
+        v = version('evaluator')
+    except PackageNotFoundError:
+        v = '? (package not installed)'
+    print(f'Running EValuator version: [bold cyan]v{v}[/bold cyan]\n')
+    raise SystemExit(0)
