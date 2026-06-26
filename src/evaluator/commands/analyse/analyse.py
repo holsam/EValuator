@@ -28,7 +28,7 @@ from evaluator.commands.analyse.utils import filtering, geometry, io, measuremen
 # ====================
 # Define command: analyse
 # ====================
-def run_pipeline(
+def analyse(
     input,
     output,
     mindiam,

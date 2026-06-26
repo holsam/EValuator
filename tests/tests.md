@@ -25,7 +25,7 @@ The EValuator test suite uses [pytest](https://docs.pytest.org) and [pytest-cov]
 - **Unit tests:** fast, in-memory tests for individual functions. 
     - All use small numpy arrays constructed inline in fixtures, so no MRC files are read or written. 
     - These cover the analysis measurement functions, MRC utilities, path utilities, configuration management helpers, and display utilities.
-- **Integration tests:** tests that call top-level command functions (`label_components`, `run_pipeline`, `config_*`).
+- **Integration tests:** tests that call top-level command functions (`label_components`, `analyse`, `config_*`).
     - These are called against real MRC files on disk and assert on the content of the output files or directories, and so depend on the synthetic test MRC files described in [Test data](#test-data) below.
 - **CLI tests:** lightweight tests using `typer.testing.CliRunner` that verify argument parsing, option validation, and exit codes. 
     - These do not duplicate pipeline logic covered by integration tests.
@@ -48,7 +48,7 @@ tests/
     test_display.py                 # unit tests for utils/display.py
   integration/
     test_label.py                   # integration tests for label_components
-    test_analyse.py                 # integration tests for run_pipeline
+    test_analyse.py                 # integration tests for analyse
     test_config.py                  # integration tests for config subcommands
   cli/
     test_cli.py                     # CLI argument and exit code tests
@@ -467,7 +467,7 @@ Integration tests for `label_components` against the full 300 x 682 x 960 synthe
 
 
 ### integration/test_analyse.py
-Integration tests for `run_pipeline` against the labelled MRC from the session fixture. A module-scoped `analyse_csv` fixture runs the pipeline once and shares the output path.
+Integration tests for `analyse` against the labelled MRC from the session fixture. A module-scoped `analyse_csv` fixture runs the pipeline once and shares the output path.
 
 <details>
 <summary>Test Descriptions</summary>
@@ -518,7 +518,7 @@ Integration tests for `run_pipeline` against the labelled MRC from the session f
 
 | Test | What it checks |
 |---|---|
-| `test_binary_segmentation_input_accepted` | `run_pipeline` accepts a binary mask directly and detects all 4 EVs. |
+| `test_binary_segmentation_input_accepted` | `analyse` accepts a binary mask directly and detects all 4 EVs. |
 | `test_directory_input_processes_single_file` | Batch mode with a single-file directory produces the same results as single-file mode. |
 | `test_no_voxel_size_uses_vox_units` | An MRC without a voxel size header produces `measurement_units='vox'` and `voxel_size_nm=NaN`. |
 </details>

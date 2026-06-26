@@ -66,4 +66,4 @@ def analyse(
     '''
     Run post-processing pipeline on labelled EV segmentation files.
     '''
-    analyseFuncs.run_pipeline(input, output, mindiam, maxdiam, fillthreshold)
+    analyseFuncs.analyse(input, output, mindiam, maxdiam, fillthreshold)
