@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 from evaluator.utils.settings import config, lg
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
-from evaluator.utils import display as displayutil
+from evaluator.commands.visualise.utils import display as displayutil
 
 
 def generate_movie(input, output, fps):

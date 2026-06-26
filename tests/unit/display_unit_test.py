@@ -12,7 +12,7 @@ import pandas as pd
 from pathlib import Path
 
 # -- Import internal dependencies ------
-from evaluator.utils.display import (
+from evaluator.commands.visualise.utils.display import (
     assignLabelColours,
     getLabelCentroid2D,
     getValidLabelsFromCSV,

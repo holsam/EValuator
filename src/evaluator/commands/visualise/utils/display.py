@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 # ====================
 # Import internal dependencies
 # ====================
-from .settings import config, lg
+from ....utils.settings import config, lg
 
 # =========================
 # DEFINE FUNCTION: normaliseArray
