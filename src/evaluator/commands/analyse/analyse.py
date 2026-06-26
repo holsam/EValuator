@@ -111,8 +111,8 @@ def processSegmentation(seg_path: Path):
     lg.debug(f"analyse | {seg_path.name} | Calculating voxel size limits...")
     membrane_thickness_vox = config['filter']['membrane_thickness_nm'] / voxel_size_nm if voxel_size_nm else 1.0
     if voxel_size_nm is not None:
-        min_vox = shellVolume(minimum_diameter, voxel_size_nm, membrane_thickness_vox)
-        max_vox = shellVolume(maximum_diameter, voxel_size_nm, membrane_thickness_vox)
+        min_vox = geometry.shellVolume(minimum_diameter, voxel_size_nm, membrane_thickness_vox)
+        max_vox = geometry.shellVolume(maximum_diameter, voxel_size_nm, membrane_thickness_vox)
     else:
         min_vox = 0
         max_vox = numpy.inf
@@ -161,7 +161,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring surface area...")
     surface_area = computeSurfaceArea(component_mask, voxel_size_nm)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring major/minor axes diameters...")
-    major_axis_diameter, minor_axis_diameter = measureAxes(component=component_properties, equiv_diameter_nm=equiv_diameter_nm)
+    major_axis_diameter, minor_axis_diameter = geometry.measureAxes(component=component_properties, equiv_diameter_nm=equiv_diameter_nm)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring eccentricity and aspect ratio...")
     eccentricity, aspect_ratio = measureEccentricityAspectRatio(major_axis_diameter=major_axis_diameter, minor_axis_diameter=minor_axis_diameter)
     return {
@@ -217,20 +217,6 @@ def computeSurfaceArea(component_mask: numpy.ndarray, voxel_size_nm: float):
     return sa_vox
 
 # =========================
-# DEFINE FUNCTION: deriveAxes
-# =========================
-def deriveAxes(intertia_tensor, voxel_size_nm=None):
-    '''
-    Derive semi-axes (a ≥ b ≥ c) of the best-fit ellipsoid from inertia tensor eigenvalues.
-    eigvalsh returns eigenvalues in ascending order (I_a ≤ I_b ≤ I_c).
-    '''
-    eigvals = numpy.linalg.eigvalsh(intertia_tensor)
-    eigvals = numpy.clip(eigvals, 0, None)
-    with numpy.errstate(divide="ignore", invalid="ignore"):
-        inv_sqrt = numpy.where(eigvals > 0, 1.0 / numpy.sqrt(eigvals), 0.0)
-    return inv_sqrt
-
-# =========================
 # DEFINE FUNCTION: measureMembraneVolumeDiameter
 # =========================
 def measureMembraneVolumeDiameter(component, scale):
@@ -271,24 +257,6 @@ def measureLumenVolume(component_mask, scale):
     return lumen_vol_vox * (scale ** 3)
 
 # =========================
-# DEFINE FUNCTION: measureAxes
-# =========================
-def measureAxes(component, equiv_diameter_nm):
-    '''
-    Measure major and minor axes by approximating the EV as an ellipsoid.
-    Semi-axes are derived from inertia tensor eigenvalues and scaled to
-    real-world size using the equivalent diameter.
-    '''
-    inv_sqrt_axes = deriveAxes(intertia_tensor=component.inertia_tensor)
-    geomean_inv_sqrt = (inv_sqrt_axes[0] * inv_sqrt_axes[1] * inv_sqrt_axes[2]) ** (1 / 3)
-    if geomean_inv_sqrt > 0:
-        axis_scale = (equiv_diameter_nm / 2.0) / geomean_inv_sqrt
-    principal_semiaxis_a, principal_semiaxis_b, principal_semiaxis_c = inv_sqrt_axes * axis_scale
-    major_axis = 2 * principal_semiaxis_a
-    minor_axis = 2 * principal_semiaxis_c
-    return major_axis, minor_axis
-
-# =========================
 # DEFINE FUNCTION: measureEccentricityAspectRatio
 # =========================
 def measureEccentricityAspectRatio(major_axis_diameter, minor_axis_diameter):
@@ -327,15 +295,3 @@ def printSummaryMessage(results, nfiles: int, startt: datetime.datetime, endt: d
     print(f"- Number of enclosed EVs: {results['is_enclosed'].sum()} ({100 * results['is_enclosed'].mean():.1f}%)")
     print(f"- Equivalent diameters: {results['equiv_diameter_nm'].mean():.1f} ± {results['equiv_diameter_nm'].std():.1f} nm (mean ± SD)")
     print(f"Results saved to: {out_path}\n")
-
-# =========================
-# DEFINE FUNCTION: shellVolume
-# =========================
-def shellVolume(diameter_nm, voxel_size_nm, thickness_vox):
-    '''
-    Calculate the expected voxel count of a hollow spherical shell,
-    used for the voxel-count size filter.
-    '''
-    r_outer = diameter_nm / (2 * voxel_size_nm)
-    r_inner = max(0, r_outer - thickness_vox)
-    return (4 / 3) * numpy.pi * (r_outer ** 3 - r_inner ** 3)
