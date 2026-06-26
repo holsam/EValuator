@@ -19,7 +19,8 @@ def patched_config(tmp_path, monkeypatch):
     and returns that Path. The file does not exist initially.
     """
     config_path = tmp_path / "evaluator" / "config.toml"
-    monkeypatch.setattr("evaluator.commands.config.userConfigPath", lambda: config_path)
+    monkeypatch.setattr("evaluator.utils.settings.userConfigPath", lambda: config_path)
+    monkeypatch.setattr("evaluator.commands.config.config.userConfigPath", lambda: config_path)
     return config_path
 
 # -- Define config init test -----------

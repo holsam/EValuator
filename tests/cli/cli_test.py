@@ -4,7 +4,7 @@ import numpy as np
 from typer.testing import CliRunner
 
 # -- Import internal dependencies ------
-from evaluator.cli.cli import evaluator
+from evaluator.cli import evaluator
 
 # -- Initialise runner -----------------
 runner = CliRunner()
@@ -81,18 +81,21 @@ class TestConfigCLI:
         assert result.exit_code == 0
     def test_init_creates_file(self, tmp_path, monkeypatch):
         config_path = tmp_path / "evaluator" / "config.toml"
-        monkeypatch.setattr("evaluator.commands.config.userConfigPath", lambda: config_path)
+        monkeypatch.setattr("evaluator.utils.settings.userConfigPath", lambda: config_path)
+        monkeypatch.setattr("evaluator.commands.config.config.userConfigPath", lambda: config_path)
         result = runner.invoke(evaluator, ["config", "init"])
         assert result.exit_code == 0
         assert config_path.exists()
     def test_exists_returns_nonzero_when_no_file(self, tmp_path, monkeypatch):
         config_path = tmp_path / "evaluator" / "config.toml"
-        monkeypatch.setattr("evaluator.commands.config.userConfigPath", lambda: config_path)
+        monkeypatch.setattr("evaluator.utils.settings.userConfigPath", lambda: config_path)
+        monkeypatch.setattr("evaluator.commands.config.config.userConfigPath", lambda: config_path)
         result = runner.invoke(evaluator, ["config", "exists"])
         assert result.exit_code != 0
     def test_reset_force_exits_zero(self, tmp_path, monkeypatch):
         config_path = tmp_path / "evaluator" / "config.toml"
-        monkeypatch.setattr("evaluator.commands.config.userConfigPath", lambda: config_path)
+        monkeypatch.setattr("evaluator.utils.settings.userConfigPath", lambda: config_path)
+        monkeypatch.setattr("evaluator.commands.config.config.userConfigPath", lambda: config_path)
         runner.invoke(evaluator, ["config", "init"])
         result = runner.invoke(evaluator, ["config", "reset", "--force"])
         assert result.exit_code == 0

@@ -26,8 +26,8 @@ def config_path(tmp_path, monkeypatch):
     to return that path.
     """
     path = tmp_path / "evaluator" / "config.toml"
-    monkeypatch.setattr("evaluator.commands.config.userConfigPath", lambda: path)
-    monkeypatch.setattr("evaluator.utils.settings.userConfigPath",  lambda: path)
+    monkeypatch.setattr("evaluator.utils.settings.userConfigPath", lambda: path)
+    monkeypatch.setattr("evaluator.commands.config.config.userConfigPath", lambda: path)
     return path
 
 # -- Define flatten TOML test ----------
