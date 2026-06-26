@@ -12,7 +12,6 @@ import matplotlib.animation as animation
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from pathlib import Path
 from rich import print
-from scipy import ndimage
 from skimage import measure
 matplotlib.use("Agg")
 
@@ -22,7 +21,7 @@ matplotlib.use("Agg")
 from evaluator.utils.settings import config, lg
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
-from evaluator.utils import display as displayutil
+from evaluator.commands.visualise.utils import display as displayutil
 
 
 def generate_movie(input, output, fps):
@@ -202,18 +201,6 @@ def createMovie(data: numpy.ndarray, out_path: Path, fps: float, is_mask: bool, 
     else:
         saveGif(anim, out_path, fps)
     plt.close(fig)
-
-# =========================
-# DEFINE FUNCTION: rotateIsometric
-# =========================
-def rotateIsometric(vol: numpy.ndarray) -> numpy.ndarray:
-    '''
-    Rotate a 3D volume to produce an isometric viewing angle.
-    Applies 45° azimuthal rotation (around Z) then 35.264° elevation tilt (around Y).
-    '''
-    vol = ndimage.rotate(vol, 45.0, axes=(1, 2), reshape=True, order=1, cval=0.0)
-    vol = ndimage.rotate(vol, 35.264, axes=(0, 2), reshape=True, order=1, cval=0.0)
-    return vol
 
 # =========================
 # DEFINE FUNCTION: createIsometricView

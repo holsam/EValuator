@@ -2,8 +2,7 @@
 =======================================
 EValuator: APPLICATION ENTRY POINT
 =======================================
-Wires all command typers to the root evaluator typer and defines
-the top-level callback (--verbose / --debug flags).
+Wires all command typers to the root evaluator typer and defines the top-level callback (--verbose / --debug flags).
 '''
 
 # ====================
@@ -20,12 +19,12 @@ from evaluator.utils.settings import initEvaluator, lg
 # ====================
 # Import EValuator commands
 # ====================
-from evaluator.cli.config import evaluatorConfig
-from evaluator.cli.analyse import evaluatorAnalyse
-from evaluator.cli.label import evaluatorLabel
-from evaluator.cli.license import evaluatorLicense
-from evaluator.cli.version import evaluatorVersion
-from evaluator.cli.visualise import evaluatorVisualise
+from evaluator.commands.config.cli import evaluatorConfig
+from evaluator.commands.analyse.cli import evaluatorAnalyse
+from evaluator.commands.label.cli import evaluatorLabel
+from evaluator.commands.license.cli import evaluatorLicense
+from evaluator.commands.version.cli import evaluatorVersion
+from evaluator.commands.visualise.cli import evaluatorVisualise
 
 # ====================
 # Print startup splash

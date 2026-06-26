@@ -4,19 +4,10 @@ import numpy as np
 import pandas as pd
 
 # -- Import internal dependencies ------
-from evaluator.commands.analyse import (
-    checkEnclosed,
-    computeSurfaceArea,
-    deriveAxes,
-    measureAxes,
-    measureEccentricityAspectRatio,
-    measureLumenVolume,
-    measureMembraneVolumeDiameter,
-    morphologicalClosure,
-    morphologicalDilation,
-    saveResultsCSV,
-    shellVolume,
-)
+from evaluator.commands.analyse.utils.filtering import checkEnclosed, morphologicalDilation
+from evaluator.commands.analyse.utils.geometry import deriveAxes, measureAxes, shellVolume
+from evaluator.commands.analyse.utils.io import saveResultsCSV
+from evaluator.commands.analyse.utils.measurement import computeSurfaceArea, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter
 from tests.unit.conftest import R_INNER, R_OUTER, VOX_NM_SMALL
 
 # -- Define shell volume test ----------
@@ -47,31 +38,6 @@ class TestShellVolume:
         assert vol_small < vol_large
     def test_returns_positive(self):
         assert shellVolume(50.0, 0.536, 10.0) > 0
-
-# -- Define morphological closure test -
-class TestMorphologicalClosure:
-    def test_all_original_voxels_preserved(self, hollow_sphere_vol):
-        """Closing must not remove any pre-existing True voxels."""
-        closed = morphologicalClosure(hollow_sphere_vol)
-        assert np.all(closed[hollow_sphere_vol]), (
-            "morphologicalClosure removed voxels that were present in the original mask"
-        )
-    def test_returns_bool_array(self, hollow_sphere_vol):
-        closed = morphologicalClosure(hollow_sphere_vol)
-        assert closed.dtype == bool or closed.dtype == np.bool_
-    def test_same_shape(self, hollow_sphere_vol):
-        closed = morphologicalClosure(hollow_sphere_vol)
-        assert closed.shape == hollow_sphere_vol.shape
-    def test_closing_is_idempotent(self, hollow_sphere_vol):
-        """Closing applied twice must equal closing applied once"""
-        closed_once = morphologicalClosure(hollow_sphere_vol)
-        closed_twice = morphologicalClosure(closed_once)
-        assert np.array_equal(closed_once, closed_twice)
-    def test_closing_does_not_add_voxels_to_intact_shell(self, hollow_sphere_vol):
-        """Closing must not add voxels to an already clean shell."""
-        closed = morphologicalClosure(hollow_sphere_vol)
-        added = np.sum(closed) - np.sum(hollow_sphere_vol)
-        assert added == 0, f"Closing added {added} unexpected voxels to intact shell"
 
 # -- Define morphological dilation test
 class TestMorphologicalDilation:

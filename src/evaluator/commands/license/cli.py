@@ -12,7 +12,7 @@ from rich import print
 # ====================
 # Import internal dependencies
 # ====================
-import evaluator.commands.license as licenseFuncs
+import evaluator.commands.license.license as licenseFuncs
 
 # ====================
 # Initialise typer as evaluatorLicense

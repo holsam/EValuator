@@ -13,7 +13,7 @@ from typing import Annotated
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.commands import label as labelFuncs
+from evaluator.commands.label import label as labelFuncs
 
 # ====================
 # Initialise typer as evaluatorLabel

@@ -13,7 +13,7 @@ from rich import print
 # ====================
 # Import internal dependencies
 # ====================
-import evaluator.commands.version as versionFuncs
+import evaluator.commands.version.version as versionFuncs
 
 # ====================
 # Initialise typer as evaluatorVersion

@@ -13,7 +13,7 @@ from typing import Annotated
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.commands import analyse as analyseFuncs
+from evaluator.commands.analyse import analyse as analyseFuncs
 from evaluator.utils.settings import config, lg
 
 # ====================
@@ -66,4 +66,4 @@ def analyse(
     '''
     Run post-processing pipeline on labelled EV segmentation files.
     '''
-    analyseFuncs.run_pipeline(input, output, mindiam, maxdiam, fillthreshold)
+    analyseFuncs.analyse(input, output, mindiam, maxdiam, fillthreshold)

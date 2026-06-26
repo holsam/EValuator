@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 # -- Import internal dependencies ------
-from evaluator.commands.label import label_components
+from evaluator.commands.label.label import label_components
 from evaluator.utils.mrc import readMRCFile
 
 # -- Define constants ------

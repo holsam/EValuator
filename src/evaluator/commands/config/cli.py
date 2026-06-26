@@ -7,7 +7,7 @@ import typer
 from typing import Annotated
 
 # -- Import internal EValuator functions and variables
-import evaluator.commands.config as configFuncs
+import evaluator.commands.config.config as configFuncs
 
 # -- Initialiate Typer class for config command --
 evaluatorConfig = typer.Typer(

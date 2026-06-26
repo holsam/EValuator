@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 
 # -- Import internal dependencies ------
-from evaluator.commands.analyse import run_pipeline
+from evaluator.commands.analyse.analyse import analyse
 
 # -- Define constants ------------------
 N_EVS = 4
@@ -23,18 +23,18 @@ EXPECTED_COLUMNS = [
 @pytest.fixture(scope="module")
 def analyse_csv(labelled_path, tmp_path_factory):
     """
-    Run run_pipeline once on the cached labelled MRC and return the path to
+    Run analyse once on the cached labelled MRC and return the path to
     the output CSV. The pipeline is run with default diameter filter values.
     """
     out = tmp_path_factory.mktemp("analyse_output")
-    run_pipeline(
+    analyse(
         labelled_path, out,
         mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
     )
     csv_dir = out / "evaluator" / "results" / "analyse"
     csv_files = list(csv_dir.glob("*.csv"))
     assert len(csv_files) == 1, (
-        "run_pipeline did not produce exactly one CSV. "
+        "analyse did not produce exactly one CSV. "
         "Check that labelled_path contains labelled components within the diameter filter."
     )
     return csv_files[0]
@@ -123,7 +123,7 @@ class TestAnalyseFiltering:
         Filtering for diameters 1000-2000 nm must exclude all synthetic EVs
         (max outer diameter ~128 nm) and produce no CSV output.
         """
-        run_pipeline(
+        analyse(
             labelled_path, tmp_path,
             mindiam=1000.0, maxdiam=2000.0, fillthreshold=0.05,
         )
@@ -136,7 +136,7 @@ class TestAnalyseFiltering:
         classify all EVs as non-enclosed. They should still appear in the CSV
         but with is_enclosed=False.
         """
-        run_pipeline(
+        analyse(
             labelled_path, tmp_path,
             mindiam=20.0, maxdiam=500.0, fillthreshold=1.0,
         )
@@ -150,10 +150,10 @@ class TestAnalyseFiltering:
 class TestAnalyseInputTypes:
     def test_binary_segmentation_input_accepted(self, seg_path, tmp_path):
         """
-        run_pipeline must accept a binary segmentation mask directly and
+        analyse must accept a binary segmentation mask directly and
         produce the same number of EVs as with a pre-labelled input.
         """
-        run_pipeline(
+        analyse(
             seg_path, tmp_path,
             mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
         )
@@ -171,7 +171,7 @@ class TestAnalyseInputTypes:
         tmp_in = tmp_path_factory.mktemp("dir_input")
         tmp_out = tmp_path_factory.mktemp("dir_output")
         shutil.copy(labelled_path, tmp_in / labelled_path.name)
-        run_pipeline(
+        analyse(
             tmp_in, tmp_out,
             mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
         )
@@ -195,7 +195,7 @@ class TestAnalyseInputTypes:
             mrc.set_data(seg)
             # Deliberately leave voxel_size at 0.0 (default)
         out = tmp_path / "out"
-        run_pipeline(
+        analyse(
             mrc_path, out,
             mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
         )
