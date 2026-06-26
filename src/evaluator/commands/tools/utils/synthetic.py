@@ -5,10 +5,14 @@ EValuator: SYNTHETIC EV UTILITY FUNCTIONS
 Functions for generating synthetic EVs
 '''
 
+# ====================
 # Import external dependencies
+# ====================
 import numpy as np
 
+# ====================
 # generate_ev_shell: returns boolean array (Z,Y,X) and dictionary of true parameters
+# ====================
 def generate_ev_shell(
     diameter_nm: float,
     thickness_nm: float = 5.0,
@@ -42,8 +46,9 @@ def generate_ev_shell(
     }
     return shell, truth
 
-# apply_polar_gaps: returns boolean array derived from input shell with polar voxels removed
-# -- nb fast geometric proxy for missing-wedge polar caps, is deterministic for unit testing
+# ====================
+# apply_polar_gaps: returns boolean array derived from input shell with polar voxels removed (nb fast geometric proxy for missing-wedge polar caps, is deterministic for unit testing)
+# ====================
 def apply_polar_gaps(shell: np.ndarray, gap_half_angle_deg: float = 30.0) -> np.ndarray:
     '''
     Remove voxels whose radial normal is within ``gap_half_angle_deg`` of Z
@@ -63,7 +68,9 @@ def apply_polar_gaps(shell: np.ndarray, gap_half_angle_deg: float = 30.0) -> np.
     out[kept[:, 0], kept[:, 1], kept[:, 2]] = True
     return out
 
+# ====================
 # apply_fourier_missing_wedge: returns boolean array with Fourier-space degradation to mimic missing wedge (tilt_range_deg = tilt-series half-range (i.e ±60° tilt series has half-range 60°); threshold = re-binarisation threshold for inverse-FFT magnitude relative to maximum)
+# ====================
 def apply_fourier_missing_wedge(
     volume: np.ndarray,
     tilt_range_deg: float = 60.0,
