@@ -35,12 +35,6 @@ def run_pipeline(
     maxdiam,
     fillthreshold,
 ):
-    global minimum_diameter
-    minimum_diameter = mindiam
-    global maximum_diameter
-    maximum_diameter = maxdiam
-    global fill_threshold
-    fill_threshold = fillthreshold
     # Validate input file(s)
     lg.debug(f"analyse | Validating input file(s)...")
     seg_files = filtering.analyseCheckInput(input)
@@ -61,7 +55,7 @@ def run_pipeline(
     with logging_redirect_tqdm():
         for segfile in tqdm(seg_files, desc="Segmentation files processed"):
             try:
-                segfile_results = processSegmentation(segfile)
+                segfile_results = processSegmentation(segfile, mindiam, maxdiam, fillthreshold)
                 analyse_results.extend(segfile_results)
             except Exception as e:
                 lg.warning(f"Failed to process {segfile.name}: {e}")
@@ -80,7 +74,7 @@ def run_pipeline(
 # =========================
 # DEFINE FUNCTION: processSegmentation
 # =========================
-def processSegmentation(seg_path: Path):
+def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill_threshold):
     '''
     Process a given labelled segmentation file by calling the component processing
     function for each component.
@@ -126,7 +120,7 @@ def processSegmentation(seg_path: Path):
                 lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Extent {component.extent} outside filter (e<0.01) — skipping.")
                 continue
             lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Measuring component features...")
-            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name)
+            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold)
             if component_data is None:
                 lg.warning(f"analyse | {seg_path.name} | Component {component.label} | Component processing failed — skipping.")
                 continue
@@ -139,7 +133,7 @@ def processSegmentation(seg_path: Path):
 # =========================
 # DEFINE FUNCTION: processComponent
 # =========================
-def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename):
+def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold):
     '''
     For a given component, make all defined measurements and return as a dictionary.
     '''
