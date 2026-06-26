@@ -6,15 +6,12 @@ EValuator: SEGMENTATION ANALYSIS
 # ====================
 # Import external dependencies
 # ====================
-import datetime, numpy, pandas
+import datetime, numpy
 from pathlib import Path
 from rich import print
-from scipy import ndimage
 from skimage import measure
-from skimage.morphology import ball
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
-
 
 # ====================
 # Import shared EValuator utilities
@@ -180,14 +177,3 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
         "voxel_size_nm": round(scale, 4) if voxel_size_nm is not None else None,
         "measurement_units": scale_label,
     }
-
-# =========================
-# DEFINE FUNCTION: morphologicalClosure
-# =========================
-def morphologicalClosure(binary_vol: numpy.ndarray):
-    '''
-    Applies morphological closing (dilation then erosion) using a minimal 6-connectivity structuring element.
-    Removes small isolated protrusions while preserving the overall shell structure.
-    '''
-    struc = ndimage.generate_binary_structure(3, 1)
-    return ndimage.binary_closing(binary_vol, structure=struc, border_value=False)
