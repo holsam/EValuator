@@ -17,5 +17,5 @@ def printVersion():
         v = version('evaluator')
     except PackageNotFoundError:
         v = '? (package not installed)'
-    print(f'Running EValuator version: [bold cyan]v{v}[/bold cyan]\n')
+    print(f'\nRunning EValuator version: [bold cyan]v{v}[/bold cyan]\n')
     raise SystemExit(0)
