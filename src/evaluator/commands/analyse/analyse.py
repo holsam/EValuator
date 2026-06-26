@@ -1,12 +1,12 @@
 '''
 =======================================
-EValuator: SEGMENTATION ANALYSIS PIPELINE
+EValuator: SEGMENTATION ANALYSIS
 =======================================
 '''
 # ====================
 # Import external dependencies
 # ====================
-import datetime, numpy, pandas, typer
+import datetime, numpy, pandas
 from pathlib import Path
 from rich import print
 from scipy import ndimage
@@ -17,11 +17,16 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 
 
 # ====================
-# Import EValuator utilities
+# Import shared EValuator utilities
 # ====================
 from evaluator.utils.settings import config, lg
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
+
+# ====================
+# Import EValuator analyse utilities
+# ====================
+from evaluator.commands.analyse.utils import filtering, geometry, io, measurement
 
 # ====================
 # Define command: analyse
@@ -41,7 +46,7 @@ def run_pipeline(
     fill_threshold = fillthreshold
     # Validate input file(s)
     lg.debug(f"analyse | Validating input file(s)...")
-    seg_files = analyseCheckInput(input)
+    seg_files = filtering.analyseCheckInput(input)
     # Create output directory structure
     lg.debug(f"analyse | Creating output directory structure...")
     out_dir = pathutil.generateOutputFileStructure(output, "analyse")
@@ -148,9 +153,9 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     component_mask = createComponentMask(component=component_properties, labelled_vol=labelled_volumes, label_val=component_label)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring membrane volume and equivalent diameter...")
     membrane_vol_nm3, equiv_diameter_nm = measureMembraneVolumeDiameter(component=component_properties, scale=scale)
-    component_mask_dilated = morphologicalDilation(component_mask)
+    component_mask_dilated = filtering.morphologicalDilation(component_mask)
     lg.debug(f"analyse | {filename} | Component {component_label} | Checking if component is enclosed...")
-    enclosed, fill_ratio = checkEnclosed(component_mask=component_mask_dilated, threshold=fill_threshold)
+    enclosed, fill_ratio = filtering.checkEnclosed(component_mask=component_mask_dilated, threshold=fill_threshold)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring lumen volume...")
     lumen_vol_nm3 = measureLumenVolume(component_mask=component_mask, scale=scale)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring surface area...")
@@ -176,24 +181,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
         "measurement_units": scale_label,
     }
 
-# =========================
-# DEFINE FUNCTION: analyseCheckInput
-# =========================
-def analyseCheckInput(analyse_input: Path):
-    '''
-    Given the entered input, check which file(s) are valid MRC files to process.
-    '''
-    if analyse_input.is_file():
-        check_files = [analyse_input]
-    if analyse_input.is_dir():
-        check_files = sorted(analyse_input.glob("*.mrc"))
-    for file in list(check_files):
-        if not mrcutil.validateMRCFile(file):
-            lg.warning(f"{file} is not a valid MRC file and will not be processed.")
-            check_files.remove(file)
-    if not check_files:
-        lg.error(f"No valid MRC files found in input: {analyse_input}.")
-    return check_files
+
 
 # =========================
 # DEFINE FUNCTION: morphologicalClosure
@@ -206,35 +194,6 @@ def morphologicalClosure(binary_vol: numpy.ndarray):
     struc = ndimage.generate_binary_structure(3, 1)
     return ndimage.binary_closing(binary_vol, structure=struc, border_value=False)
 
-# =========================
-# DEFINE FUNCTION: morphologicalDilation
-# =========================
-def morphologicalDilation(binary_vol: numpy.ndarray):
-    '''
-    Applies morphological dilation to bridge small gaps in thin membrane shells. 
-    Use over morphologicalClosure to as erosion can remove gap-filling voxels added by dilation.
-    '''
-    return ndimage.binary_dilation(binary_vol, structure=ball(2))
-
-# =========================
-# DEFINE FUNCTION: checkEnclosed
-# =========================
-def checkEnclosed(component_mask: numpy.ndarray, threshold: float):
-    '''
-    Checks whether a membrane component forms an enclosed structure by filling holes.
-    Returns (is_enclosed, fill_ratio), where fill_ratio is the fraction of the filled
-    volume attributable to the enclosed interior.
-    '''
-    padded_mask = numpy.pad(component_mask, pad_width=1, mode='constant', constant_values=False)
-    filled_mask = ndimage.binary_fill_holes(padded_mask)
-    filled_mask = filled_mask[1:-1, 1:-1, 1:-1]
-    n_original = numpy.sum(component_mask)
-    n_filled = numpy.sum(filled_mask)
-    if n_filled == 0:
-        return False, 0.0
-    fill_ratio = (n_filled - n_original) / n_filled
-    closed = bool(fill_ratio > threshold)
-    return closed, float(fill_ratio)
 
 # =========================
 # DEFINE FUNCTION: computeSurfaceArea
