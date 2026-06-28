@@ -7,6 +7,8 @@ EValuator: CONFIGURATION UTILITIES
 # ====================
 # Import external dependencies
 # ====================
+from dataclasses import dataclass
+from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 # ====================
@@ -54,3 +56,32 @@ class Config(_Section):
     label: LabelConfig
     analyse: AnalyseConfig
     visualise: VisualiseConfig
+
+
+@dataclass(frozen=True)
+class ResolvedConfig:
+    evaluator_dir: Path
+    config_path: Path
+    existed: bool
+
+# ====================
+# Define configuration utility functions
+# ====================
+def resolve_config(path: Path) -> ResolvedConfig:
+    '''Resolve a given path to a configuration file location, based on precedence described within'''
+    path = Path(path).expanduser().resolve()
+    # 1: if path is to a file
+    if path.is_file():
+        return ResolvedConfig(evaluator_dir=path.parent, config_path=path, existed=True)
+    if path.is_dir():
+        # 2: if path is to evaluator directory containing config.toml
+        if Path(path, 'config.toml').exists():
+            return ResolvedConfig(evaluator_dir=path, config_path=Path(path, 'config.toml'), existed=True)
+        # 3: if path is to a directory containing evaluator/config.toml
+        if Path(path, 'evaluator/config.toml').exists():
+            return ResolvedConfig(evaluator_dir=Path(path, 'evaluator'), config_path=Path(path, 'evaluator/config.toml'), existed=True)
+    # 4: if path contains .toml suffix, create config path
+    if path.suffix == '.toml':
+        return ResolvedConfig(evaluator_dir=path.parent, config_path=path, existed=False)
+    # 5: if path is to non-existent directory or a directory without evaluator/config.toml, create evaluator/config.toml
+    return ResolvedConfig(evaluator_dir=Path(path, 'evaluator'), config_path=Path(path, 'evaluator/config.toml'), existed=False)
