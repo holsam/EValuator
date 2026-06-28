@@ -13,21 +13,12 @@ from pathlib import Path
 from typing import Optional
 
 # =========================
-# DEFINE FUNCTION: generateOutputFileStructure
+# DEFINE FUNCTION: generate_command_output_dir
 # =========================
-def generateOutputFileStructure(out_dir: Path, command: str) -> Path:
-    '''
-    Create and return the expected EValuator output directory structure for a given command.
-    If the supplied out_dir does not already end in the expected structure
-    (.../evaluator/results/<command>/), the structure is appended and created.
-    '''
-    exp_stru = ''.join(["evaluator/results/", command])
-    if not out_dir.match(exp_stru):
-        out_struc = Path(out_dir, exp_stru)
-        out_struc.mkdir(parents=True, exist_ok=True)
-        return out_struc
-    else:
-        return out_dir
+def generate_command_output_dir(output_dir: Path, command: str) -> Path:
+    out_dir = output_dir / 'evaluator' / command
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
 
 # =========================
 # DEFINE FUNCTION: checkUniqueFileName
