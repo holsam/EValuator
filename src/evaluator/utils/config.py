@@ -7,9 +7,11 @@ EValuator: CONFIGURATION UTILITIES
 # ====================
 # Import external dependencies
 # ====================
+import tomllib
 from dataclasses import dataclass
+from importlib.resources import files 
 from pathlib import Path
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # ====================
 # Define configuration classes
@@ -64,6 +66,21 @@ class ResolvedConfig:
     config_path: Path
     existed: bool
 
+
+class ConfigError(Exception):
+    '''Base class for EValuator configuration errors'''
+
+
+class ConfigNotFoundError(ConfigError):
+    '''Raised when an EValuator config is required but absent and autocreate is disabled'''
+
+# ====================
+# Define configuration utility helper functions
+# ====================
+def _default_text() -> str:
+    package, name = ('evaluator', 'config.toml')
+    return (files(package) / name).read_text(encoding='utf-8')
+
 # ====================
 # Define configuration utility functions
 # ====================
@@ -85,3 +102,29 @@ def resolve_config(path: Path) -> ResolvedConfig:
         return ResolvedConfig(evaluator_dir=path.parent, config_path=path, existed=False)
     # 5: if path is to non-existent directory or a directory without evaluator/config.toml, create evaluator/config.toml
     return ResolvedConfig(evaluator_dir=Path(path, 'evaluator'), config_path=Path(path, 'evaluator/config.toml'), existed=False)
+
+def create_default_config(target: Path) -> None:
+    '''Create target (and parents) from default configuration file'''
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_default_text(), encoding='utf-8')
+
+def read_config(config_path: Path) -> Config:
+    '''Read and validate a config file'''
+    try:
+        data = tomllib.loads(config_path.read_text(encoding='utf-8'))
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f'{config_path} is not valid TOML: {e}') from e
+    try:
+        return Config.model_validate(data)
+    except ValidationError as e:
+        raise ConfigError(f'{config_path} failed validation: {e}') from e
+
+def load_config(output: Path, *, autocreate: bool = True) -> tuple[Config, Path]:
+    '''Resolve, optionally create, then load the config for a pipeline run'''
+    resolved = resolve_config(output)
+    if not resolved.existed:
+        if not autocreate:
+            raise ConfigNotFoundError(f'No config found for {output} (expected {resolved.config_path})')
+        create_default_config(resolved.config_path)
+    config = read_config(resolved.config_path)
+    return config, resolved.evaluator_dir
