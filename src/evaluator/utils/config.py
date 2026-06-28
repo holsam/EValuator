@@ -7,7 +7,7 @@ EValuator: CONFIGURATION UTILITIES
 # ====================
 # Import external dependencies
 # ====================
-import tomllib
+import tomlkit, tomllib
 from dataclasses import dataclass
 from importlib.resources import files 
 from pathlib import Path
@@ -128,3 +128,11 @@ def load_config(output: Path, *, autocreate: bool = True) -> tuple[Config, Path]
         create_default_config(resolved.config_path)
     config = read_config(resolved.config_path)
     return config, resolved.evaluator_dir
+
+def write_params(params: BaseModel, out_dir: Path, filename: str = 'params.toml') -> Path:
+    '''Write the effective parameters used for a run to out_dir'''
+    out_dir.mkdir(parents=True, exist_ok=True)
+    data = params.model_dump(mode='json', exclude_none=True)
+    path = out_dir / filename
+    path.write_text(tomlkit.dumps(data), encoding='utf-8')
+    return path
