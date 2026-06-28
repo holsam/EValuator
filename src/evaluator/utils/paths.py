@@ -15,8 +15,8 @@ from typing import Optional
 # =========================
 # DEFINE FUNCTION: generate_command_output_dir
 # =========================
-def generate_command_output_dir(output_dir: Path, command: str) -> Path:
-    out_dir = output_dir / 'evaluator' / command
+def generate_command_output_dir(evaluator_dir: Path, command: str) -> Path:
+    out_dir = evaluator_dir / command
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 
