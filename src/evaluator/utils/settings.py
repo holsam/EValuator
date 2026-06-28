@@ -23,37 +23,6 @@ from rich import print
 lg = logging.getLogger("__name__")
 
 # ====================
-# Define function: userConfigPath
-# ====================
-def userConfigPath() -> Path:
-    '''
-    Returns the file path <OS config directory>/evaluator/config.toml depending on the OS of running environment:
-        Linux/macOS : ~/.config/evaluator/config.toml
-        Windows     : %APPDATA%\\evaluator\\config.toml
-    '''
-    return Path(user_config_dir("evaluator"), "config.toml")
-
-# ====================
-# Define function: loadDefaultConfig
-# ====================
-def loadDefaultConfig() -> dict:
-    '''
-    Load the bundled default config.toml from the installed package.
-    '''
-    with pkg_files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
-        return tomllib.load(defaultconfig)
-
-# ====================
-# Load config at module import time
-# ====================
-user_config_path = userConfigPath()
-if user_config_path.exists():
-    with user_config_path.open('rb') as _userconfig:
-        config = tomllib.load(_userconfig)
-else:
-    config = loadDefaultConfig()
-
-# ====================
 # Define function: initEvaluator
 # ====================
 def initEvaluator():
