@@ -1,11 +1,14 @@
+setwd("~/Documents/dev/projects/EValuator")
+
 library(tidyverse)
 
 # Data pre-processing -----------------------------------------------------
 # Open error data
-data <- read_csv(file='benchmark_missing_wedge_err.csv')
+data <- read_csv(file='benchmark_missing_wedge_err.csv') %>%
+  distinct()
 # identify metadata columns
 metadata_cols <- c(
-  "nominal_diamter_nm"
+  "nominal_diameter_nm",
   "true_diameter_nm",
   "replicate"
 )
@@ -19,15 +22,18 @@ data_tidy <- data %>%
     anisotropy,
     )) %>%
   rename(
+    "convex_hull_d_nm"="hull_d_nm",
     "convex_hull_relative_error"="convex hull_relative_error",
     "convex_hull_error"="convex hull_error",
     "xy_relative_error"="XY-projection diameter_relative_error",
     "xy_error"="XY-projection diameter_error",
-    "closed_relative_error"="anisotropic closing_relative_error",
-    "closed_error"="anisotropic closing_error",
+    # "closed_relative_error"="anisotropic closing_relative_error",
+    # "closed_error"="anisotropic closing_error",
     "fit_relative_error"="sphere fit_relative_error",
     "fit_error"="sphere fit_error",
-  )
+  ) %>%
+  filter(nominal_diameter_nm > 0)
+
 # pivot data to long format
 data_long <- data_tidy %>%
   pivot_longer(
@@ -57,7 +63,18 @@ data_long <- data_tidy %>%
     names_from = measure,
     values_from = value
   ) %>%
-  select(id, all_of(metadata_cols), mitigation, diameter, error, relative_error)
+  select(id, all_of(metadata_cols), mitigation, diameter, error, relative_error) %>%
+  mutate(
+    Mitigation = case_when(
+      str_detect(mitigation, "baseline") ~ "No mitigation applied",
+      str_detect(mitigation, "convex_hull") ~ "Calculated from convex hull",
+      str_detect(mitigation, "fit") ~ "Calculated from least-squares fit model",
+      str_detect(mitigation, "xy") ~ "Calculated from maximum x-y area",
+    )
+  )
+
+data_long$Mitigation <- as.factor(factor(data_long$Mitigation, levels=c("No mitigation applied", "Calculated from convex hull", "Calculated from least-squares fit model", "Calculated from maximum x-y area")))
+
 
 
 data_abs <- data_long %>%
@@ -72,8 +89,19 @@ data_abs <- data_long %>%
 data_long %>%
   filter(mitigation != "lumen") %>%
   filter(mitigation != "closed") %>%
-  ggplot(aes(x=true_diameter_nm, y=relative_error, shape=mitigation, col=mitigation)) +
+  ggplot(aes(x=true_diameter_nm, y=relative_error, shape=Mitigation, col=Mitigation)) +
   theme_bw() +
-  geom_point()+
+  geom_point(alpha=0.6)+
   geom_smooth(method=lm) +
-  scale_color_brewer()
+  labs(x="True Diameter (nm)", y="Relative error of calculated diameter")
+
+# Plot diameter vs true diameter
+data_long %>%
+  filter(mitigation != "lumen") %>%
+  filter(mitigation != "closed") %>%
+  ggplot(aes(x=true_diameter_nm, y=diameter/true_diameter_nm, shape=Mitigation, col=Mitigation)) +
+  theme_bw() +
+  geom_point(alpha=0.6)+
+  geom_smooth(method=lm) +
+  labs(x="True Diameter (nm)", y="Ratio of calculated diameter / true diameter")
+
