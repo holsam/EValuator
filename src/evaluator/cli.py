@@ -57,9 +57,7 @@ evaluator.add_typer(
     rich_help_panel='Component Visualisation')
 evaluator.add_typer(
     evaluatorConfig,
-    name='config',
-    help='Manage EValuator configuration files',
-    rich_help_panel='Utilities')
+)
 evaluator.add_typer(
     evaluatorLicense,
 )

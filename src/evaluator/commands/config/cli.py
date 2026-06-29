@@ -25,7 +25,7 @@ evaluatorConfig = typer.Typer(
 # ====================
 # Define config command
 # ====================
-@evaluatorConfig.command()
+@evaluatorConfig.command(rich_help_panel='Utilities')
 def config(
     path: Annotated[
         Path,
@@ -33,8 +33,8 @@ def config(
     ],
     stepwise: Annotated[
         bool,
-        typer.Option('-s', '--stepwise', is_flag=True, help='Edit values through stepwise terminal prompting instead of in editor')
-    ],
+        typer.Option('-s', '--stepwise', help='Edit values through stepwise terminal prompting instead of in editor')
+    ] = False,
 ):
     '''Create or edit an EValuator configuration file'''
     configFuncs.run_config(path, stepwise=stepwise)
