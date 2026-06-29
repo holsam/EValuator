@@ -27,11 +27,8 @@ def analyse_csv(labelled_path, tmp_path_factory):
     the output CSV. The pipeline is run with default diameter filter values.
     """
     out = tmp_path_factory.mktemp("analyse_output")
-    analyse(
-        labelled_path, out,
-        mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
-    )
-    csv_dir = out / "evaluator" / "results" / "analyse"
+    analyse(labelled_path, out)
+    csv_dir = out / "evaluator" / "analyse"
     csv_files = list(csv_dir.glob("*.csv"))
     assert len(csv_files) == 1, (
         "analyse did not produce exactly one CSV. "
@@ -47,7 +44,7 @@ class TestAnalyseOutputFile:
         df = pd.read_csv(analyse_csv)
         assert isinstance(df, pd.DataFrame)
     def test_output_directory_structure(self, analyse_csv):
-        assert "evaluator/results/analyse" in str(analyse_csv)
+        assert "evaluator/analyse" in str(analyse_csv)
 
 # -- Define CSV schema test ------------
 class TestAnalyseCSVSchema:
@@ -97,8 +94,7 @@ class TestAnalyseMeasurements:
         assert (df["major_axis_diameter"] >= df["minor_axis_diameter"]).all()
     def test_all_positive_morphology_columns(self, analyse_csv):
         df = pd.read_csv(analyse_csv)
-        for col in ["equiv_diameter_nm", "membrane_volume",
-                    "major_axis_diameter", "minor_axis_diameter"]:
+        for col in ["equiv_diameter_nm", "membrane_volume", "major_axis_diameter", "minor_axis_diameter"]:
             assert (df[col] > 0).all(), f"Non-positive value found in column '{col}'"
     def test_lumen_volume_positive_for_all_enclosed(self, analyse_csv):
         df = pd.read_csv(analyse_csv)
@@ -123,24 +119,19 @@ class TestAnalyseFiltering:
         Filtering for diameters 1000-2000 nm must exclude all synthetic EVs
         (max outer diameter ~128 nm) and produce no CSV output.
         """
-        analyse(
-            labelled_path, tmp_path,
-            mindiam=1000.0, maxdiam=2000.0, fillthreshold=0.05,
-        )
-        csv_dir = tmp_path / "evaluator" / "results" / "analyse"
+        analyse(labelled_path, tmp_path, minimum_diameter_nm=1000.0, maximum_diameter_nm=2000.0)
+        csv_dir = tmp_path / "evaluator" / "analyse"
         csvs = list(csv_dir.glob("*.csv")) if csv_dir.exists() else []
         assert len(csvs) == 0, "Expected no CSV when all EVs are filtered out"
+
     def test_high_fill_threshold_excludes_all_evs(self, labelled_path, tmp_path):
         """
         A fill threshold of 1.0 (nothing can satisfy fill_ratio > 1.0) must
         classify all EVs as non-enclosed. They should still appear in the CSV
         but with is_enclosed=False.
         """
-        analyse(
-            labelled_path, tmp_path,
-            mindiam=20.0, maxdiam=500.0, fillthreshold=1.0,
-        )
-        csv_dir = tmp_path / "evaluator" / "results" / "analyse"
+        analyse(labelled_path, tmp_path, fill_threshold=1.0)
+        csv_dir = tmp_path / "evaluator" / "analyse"
         csvs = list(csv_dir.glob("*.csv"))
         if csvs:
             df = pd.read_csv(csvs[0])
@@ -153,15 +144,13 @@ class TestAnalyseInputTypes:
         analyse must accept a binary segmentation mask directly and
         produce the same number of EVs as with a pre-labelled input.
         """
-        analyse(
-            seg_path, tmp_path,
-            mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
-        )
-        csv_dir = tmp_path / "evaluator" / "results" / "analyse"
+        analyse(seg_path, tmp_path)
+        csv_dir = tmp_path / "evaluator" / "analyse"
         csvs = list(csv_dir.glob("*.csv"))
         assert len(csvs) == 1
         df = pd.read_csv(csvs[0])
         assert len(df) == N_EVS
+
     def test_directory_input_processes_single_file(self, labelled_path, tmp_path_factory):
         """
         Passing a directory containing one labelled MRC must produce a CSV
@@ -171,15 +160,13 @@ class TestAnalyseInputTypes:
         tmp_in = tmp_path_factory.mktemp("dir_input")
         tmp_out = tmp_path_factory.mktemp("dir_output")
         shutil.copy(labelled_path, tmp_in / labelled_path.name)
-        analyse(
-            tmp_in, tmp_out,
-            mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
-        )
-        csv_dir = tmp_out / "evaluator" / "results" / "analyse"
+        analyse(tmp_in, tmp_out)
+        csv_dir = tmp_out / "evaluator" / "analyse"
         csvs = list(csv_dir.glob("*.csv"))
         assert len(csvs) == 1
         df = pd.read_csv(csvs[0])
         assert len(df) == N_EVS
+
     def test_no_voxel_size_uses_vox_units(self, tmp_path):
         """
         An MRC with no voxel size header must produce output with
@@ -195,11 +182,8 @@ class TestAnalyseInputTypes:
             mrc.set_data(seg)
             # Deliberately leave voxel_size at 0.0 (default)
         out = tmp_path / "out"
-        analyse(
-            mrc_path, out,
-            mindiam=20.0, maxdiam=500.0, fillthreshold=0.05,
-        )
-        csv_dir = out / "evaluator" / "results" / "analyse"
+        analyse(mrc_path, out)
+        csv_dir = out / "evaluator" / "analyse"
         csvs = list(csv_dir.glob("*.csv"))
         # Component is within the volume; no size filter applied (no voxel size)
         if csvs:
