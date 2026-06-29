@@ -6,14 +6,14 @@ EValuator: SEGMENTATION EV LABELLING
 # ====================
 # Import external dependencies
 # ====================
-import numpy, typer
+import numpy
 from pathlib import Path
-from typing import Annotated
 
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.utils.settings import config, lg
+from evaluator.utils import config as confutil
+from evaluator.utils.settings import lg
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
 
@@ -22,16 +22,17 @@ from evaluator.utils import paths as pathutil
 # ====================
 def label_components(
     segmentation,
-    output
-):
+    output,
+    **overrides,
+) -> None:
     '''
-    Label connected components in a binary segmentation MRC and write a labelled MRC.
-
-    Reads a binary segmentation (e.g. from MemBrain-seg), assigns a unique integer
-    label to each connected component using 6-connectivity, and saves the result as
-    an MRC file. The output can be passed directly to [bold]analyse[/bold] or
-    [bold]visualise overlay[/bold].
+    Label connected components in a binary segmentation MRC and write a labelled MRC
     '''
+    # Load configuration file
+    config, evaluator_dir = confutil.load_config(output)
+    # If CLI overrides provided:
+    updates = {k: v for k, v in overrides.items() if v is not None}
+    params = config.label.model_copy(update=updates)
     # Validate input MRC
     lg.debug(f"label | Validating input segmentation file...")
     if not mrcutil.validateMRCFile(segmentation):
@@ -46,7 +47,8 @@ def label_components(
     lg.info(f"label | {n_components} components identified.")
     # Build output path
     lg.debug(f"label | Creating output directory structure...")
-    out_dir = pathutil.generateOutputFileStructure(output, "label")
+    out_dir = pathutil.generate_command_output_dir(evaluator_dir, "label")
+    confutil.write_params(params, out_dir)
     out_file = Path(out_dir, f"{segmentation.stem}_labelled.mrc")
     # Resolve name conflicts
     if out_file.exists():

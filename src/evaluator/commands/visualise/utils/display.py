@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 # ====================
 # Import internal dependencies
 # ====================
-from evaluator.utils.settings import config, lg
+from evaluator.utils.settings import lg
 
 # =========================
 # DEFINE FUNCTION: normaliseArray
@@ -66,12 +66,12 @@ def getValidLabelsFromCSV(csv_path: Path, seg_filename: str) -> Optional[set]:
 # =========================
 # DEFINE FUNCTION: assignLabelColours
 # =========================
-def assignLabelColours(valid_labels: set) -> dict:
+def assignLabelColours(valid_labels: set, params) -> dict:
     '''
     Assigns a unique RGBA colour to each valid label using the configured colourmap.
     Colours cycle if there are more labels than colours in the map.
     '''
-    cmap = plt.get_cmap(config['mplstyle']['colourmap'])
+    cmap = plt.get_cmap(params.colourmap)
     n_colours = cmap.N if hasattr(cmap, "N") else 256
     sorted_labels = sorted(valid_labels)
     return {label: cmap(i % n_colours) for i, label in enumerate(sorted_labels)}
@@ -103,7 +103,7 @@ def buildLegendPatches(valid_labels: set, label_colours: dict) -> list:
 # =========================
 # DEFINE FUNCTION: overlayFilled
 # =========================
-def overlayFilled(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours: dict):
+def overlayFilled(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours: dict, params):
     '''
     Overlays semi-transparent filled regions for each valid label.
     '''
@@ -116,17 +116,17 @@ def overlayFilled(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours
         overlay[mask, 0] = colour[0]
         overlay[mask, 1] = colour[1]
         overlay[mask, 2] = colour[2]
-        overlay[mask, 3] = config['mplstyle']['alpha_fill']
+        overlay[mask, 3] = params.alpha_fill
     ax.imshow(overlay, interpolation="nearest")
     for label in valid_labels:
         centroid = getLabelCentroid2D(seg_slice, label)
         if centroid is not None:
-            ax.text(centroid[1], centroid[0], str(label), color="white", fontsize=config['mplstyle']['label_fontsize'], ha="center", va="center", fontweight="bold")
+            ax.text(centroid[1], centroid[0], str(label), color="white", fontsize=params.label_fontsize, ha="center", va="center", fontweight="bold")
 
 # =========================
 # DEFINE FUNCTION: overlayOutlined
 # =========================
-def overlayOutlined(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours: dict):
+def overlayOutlined(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours: dict, params):
     '''
     Overlays contour outlines for each valid label using skimage.measure.find_contours.
     '''
@@ -137,26 +137,26 @@ def overlayOutlined(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colou
         colour = label_colours[label]
         contours = measure.find_contours(mask, level=0.5)
         for contour in contours:
-            ax.plot(contour[:, 1], contour[:, 0], color=colour, linewidth=config['mplstyle']['contour_linewidth'], alpha=0.9)
+            ax.plot(contour[:, 1], contour[:, 0], color=colour, linewidth=params.contour_linewidth, alpha=0.9)
         centroid = getLabelCentroid2D(seg_slice, label)
         if centroid is not None:
-            ax.text(centroid[1], centroid[0], str(label), color=colour, fontsize=config['mplstyle']['label_fontsize'], ha="center", va="center", fontweight="bold")
+            ax.text(centroid[1], centroid[0], str(label), color=colour, fontsize=params.label_fontsize, ha="center", va="center", fontweight="bold")
 
 # =========================
 # DEFINE FUNCTION: overlayBoth
 # =========================
-def overlayBoth(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours: dict):
+def overlayBoth(ax, seg_slice: numpy.ndarray, valid_labels: set, label_colours: dict, params):
     '''
     Overlays both semi-transparent filled regions and contour outlines.
     Calls overlayFilled then overlayOutlined so annotations appear on top of fills.
     '''
-    overlayFilled(ax, seg_slice, valid_labels, label_colours)
-    overlayOutlined(ax, seg_slice, valid_labels, label_colours)
+    overlayFilled(ax, seg_slice, valid_labels, label_colours, params)
+    overlayOutlined(ax, seg_slice, valid_labels, label_colours, params)
 
 # =========================
 # DEFINE FUNCTION: renderTiled
 # =========================
-def renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, overlay_fn, output_path: Path, seg_name: str):
+def renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, overlay_fn, output_path: Path, seg_name: str, params):
     '''
     Renders a tiled panel of evenly-spaced Z-slices with segmentation overlay.
     Slices are selected by numpy.linspace across the full Z range, giving an
@@ -174,9 +174,9 @@ def renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, 
         tomo_slice = normaliseArray(tomo_data[z])
         seg_slice = seg_labelled[z]
         ax.imshow(tomo_slice, cmap="gray", interpolation="nearest", vmin=0, vmax=1)
-        overlayBoth(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "both" else None
-        overlayFilled(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "filled" else None
-        overlayOutlined(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "outlined" else None
+        overlayBoth(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "both" else None
+        overlayFilled(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "filled" else None
+        overlayOutlined(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "outlined" else None
         ax.text(4, 4, f"z={z}", color="yellow", fontsize=6, va="top", ha="left")
         ax.axis("off")
     for j in range(i + 1, len(axes)):
@@ -187,7 +187,7 @@ def renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, 
         fig.legend(handles=patches, loc="lower center", ncol=min(len(patches), 10), fontsize=6, framealpha=0.5, facecolor="black", labelcolor="white", bbox_to_anchor=(0.5, -0.02))
     fig.suptitle(seg_name, color="white", fontsize=9, y=1.005)
     plt.tight_layout(pad=0.3)
-    fig.savefig(output_path, dpi=config['mplstyle']['figure_dpi'], bbox_inches="tight", facecolor="black")
+    fig.savefig(output_path, dpi=params.figure_dpi, bbox_inches="tight", facecolor="black")
     plt.close(fig)
     lg.info(f"overlay | Finished rendering tiled overlay.")
     print(f"Tiled panel ({n_slices} slices) saved to: {output_path}\n")
@@ -195,7 +195,7 @@ def renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, 
 # =========================
 # DEFINE FUNCTION: renderSingleSlice
 # =========================
-def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours, slice_idx: int, overlay_fn, output_path: Path, seg_name: str):
+def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours, slice_idx: int, overlay_fn, output_path: Path, seg_name: str, params):
     '''
     Renders a single Z-slice with segmentation overlay.
     '''
@@ -207,9 +207,9 @@ def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours, slic
     tomo_slice = normaliseArray(tomo_data[slice_idx])
     seg_slice = seg_labelled[slice_idx]
     ax.imshow(tomo_slice, cmap="gray", interpolation="nearest", vmin=0, vmax=1)
-    overlayBoth(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "both" else None
-    overlayFilled(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "filled" else None
-    overlayOutlined(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "outlined" else None
+    overlayBoth(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "both" else None
+    overlayFilled(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "filled" else None
+    overlayOutlined(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "outlined" else None
     ax.text(4, 4, f"z={slice_idx}", color="yellow", fontsize=8, va="top", ha="left")
     ax.axis("off")
     patches = buildLegendPatches(valid_labels, label_colours)
@@ -217,7 +217,7 @@ def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours, slic
         ax.legend(handles=patches, loc="lower right", fontsize=7, framealpha=0.5, facecolor="black", labelcolor="white")
     ax.set_title(f"{seg_name}  |  z={slice_idx}", color="white", fontsize=9)
     plt.tight_layout(pad=0.3)
-    fig.savefig(output_path, dpi=config['mplstyle']['figure_dpi'], bbox_inches="tight", facecolor="black")
+    fig.savefig(output_path, dpi=params.figure_dpi, bbox_inches="tight", facecolor="black")
     plt.close(fig)
     lg.info(f"overlay | Finished rendering single slice overlay.")
     print(f"Single-slice image (z={slice_idx}) saved to: {output_path}\n")
@@ -225,7 +225,7 @@ def renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours, slic
 # =========================
 # DEFINE FUNCTION: renderOverlayMovie
 # =========================
-def renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, overlay_fn: str, output_path: Path, seg_name: str):
+def renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, overlay_fn: str, output_path: Path, seg_name: str, params):
     '''
     Renders a Z-stack movie scrolling through all XY slices with the EV
     segmentation overlay. Saved as MP4 if FFMpeg is available, else GIF.
@@ -252,22 +252,22 @@ def renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, ove
         im.set_data(normaliseArray(tomo_data[z]))
         z_text.set_text(f"z={z}")
         seg_slice = seg_labelled[z]
-        overlayBoth(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "both" else None
-        overlayFilled(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "filled" else None
-        overlayOutlined(ax, seg_slice, valid_labels, label_colours) if overlay_fn == "outlined" else None
+        overlayBoth(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "both" else None
+        overlayFilled(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "filled" else None
+        overlayOutlined(ax, seg_slice, valid_labels, label_colours, params) if overlay_fn == "outlined" else None
         all_artists = ax.images[1:] + ax.lines[:] + ax.texts[2:]
         overlay_artists = list(all_artists)
         return [im, z_text] + overlay_artists
-    anim = animation.FuncAnimation(fig, update, frames=n_z, interval=1000.0 / config['visualisation']['fps'], blit=False)
+    anim = animation.FuncAnimation(fig, update, frames=n_z, interval=1000.0 / params.fps, blit=False)
     if output_path.suffix == ".mp4":
         try:
-            writer = animation.FFMpegWriter(fps=config['visualisation']['fps'], metadata={"title": output_path.stem}, bitrate=1800)
+            writer = animation.FFMpegWriter(fps=params.fps, metadata={"title": output_path.stem}, bitrate=1800)
             anim.save(str(output_path), writer=writer, dpi=150)
         except Exception as e:
             raise RuntimeError(f"Error writing '{output_path.name}' using FFMpeg: {e}.")
     else:
         try:
-            writer = animation.PillowWriter(fps=config['visualisation']['fps'])
+            writer = animation.PillowWriter(fps=params.fps)
             anim.save(str(output_path), writer=writer, dpi=100)
         except Exception as e:
             raise RuntimeError(f"Error writing '{output_path.name}' using Pillow: {e}.")
