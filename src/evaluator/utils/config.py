@@ -33,8 +33,8 @@ class LabelConfig(_Section):
 
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
-    minimum_diameter: float = Field(..., description='Minimum component diameter (nm)')
-    maximum_diameter: float = Field(..., description='Maximum component diameter (nm)')
+    minimum_diameter_nm: float = Field(..., description='Minimum component diameter (nm)')
+    maximum_diameter_nm: float = Field(..., description='Maximum component diameter (nm)')
     fill_threshold: float = Field(..., description='Fill ratio threshold for labelling')
     membrane_thickness_nm: float = Field(..., description='Membrane thickness (nm)')
 

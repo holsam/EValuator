@@ -9,9 +9,9 @@ debug = false
 # Analyse command default configuration parameters
 [analyse]
 fill_threshold = 0.05
-max_diameter = 500.0
-min_diameter = 20.0
-membrane_thickness = 7
+maximum_diameter_nm = 500.0
+minimum_diameter_nm = 20.0
+membrane_thickness_nm = 7
 
 # Visualise command default configuration parameters
 [visualise]
