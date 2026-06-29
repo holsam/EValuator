@@ -135,14 +135,8 @@ evaluator -vv analyse evaluator/results/label/    # debug messages
 ```
 
 ## Configuration
+EValuator runs using options defined in a configuration file `.../evaluator/config.toml`, which can be created and edited using the `evaluator config` command. If command-line options are provided which conflict with the configuration file, EValuator will use the provided options and save these to a `.../evaluator/<command>/params.toml` file but will not edit the `.../evaluator/config.toml` file. See the [`config` documentation](docs/config.md) for full details.
 
-EValuator ships with a built-in default configuration file (`config.toml`). User-specific settings can be written to the OS configuration directory (e.g. `~/.config/evaluator/config.toml` on Linux/macOS) to override these defaults. See the [`config` documentation](docs/config.md) for full details.
-
-To get started with a user configuration file:
-
-```sh
-evaluator config init
-```
 
 ## Getting Help & Contributing
 If you come across any bugs/issues while using EValuator, or if you have a feature request, please open an issue [here][issues-url].

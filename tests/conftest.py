@@ -76,7 +76,6 @@ def labelled_path(seg_path, tmp_path_factory):
     label_out = (
         tmp
         / "evaluator"
-        / "results"
         / "label"
         / "test_segmentation_labelled.mrc"
     )

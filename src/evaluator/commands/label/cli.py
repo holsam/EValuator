@@ -8,7 +8,7 @@ EValuator: SEGMENTATION EV LABELLING
 # ====================
 import typer
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 # ====================
 # Import EValuator utilities
@@ -25,13 +25,13 @@ evaluatorLabel = typer.Typer(
 # ====================
 # Define command: label
 # ====================
-@evaluatorLabel.command(   help='Label connected components in a segmentation MRC',rich_help_panel='Component Identification')
+@evaluatorLabel.command(help='Label connected components in a segmentation MRC',rich_help_panel='Component Identification')
 def label(
     # Define segmentation argument: path to a binary segmentation MRC file
     segmentation: Annotated[
         Path,
         typer.Argument(
-            help="Path to binary segmentation MRC (e.g. MemBrain-seg output).",
+            help='Path to binary segmentation MRC (e.g. MemBrain-seg output)',
             exists=True,
             file_okay=True,
             dir_okay=False,
@@ -40,17 +40,20 @@ def label(
     ],
     # Define output option: output directory, defaults to current working directory
     output: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option(
-            "-o", "--out-dir",
-            help="Path to output directory. The labelled MRC will be written under '.../evaluator/results/label/'.",
+            '-o', '--out-dir',
+            help='Path to output directory, outputs will be written under ".../evaluator/label/"',
             file_okay=False,
             dir_okay=True,
             writable=True,
         )
-    ] = Path("."),
+    ] = Path('.'),
 ):
     '''
     Label connected components in a binary segmentation MRC and write a labelled MRC
     '''
-    labelFuncs.label_components(segmentation, output)
+    labelFuncs.label_components(
+        segmentation,
+        output,
+    )
