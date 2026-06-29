@@ -3,31 +3,36 @@ import pytest
 from pathlib import Path
 
 # -- Define internal dependencies ------
-from evaluator.utils.paths import checkUniqueFileName, generateOutputFileStructure
+from evaluator.utils.paths import checkUniqueFileName, generate_command_output_dir
 
 # -- Define output file structure generation test
-class TestGenerateOutputFileStructure:
+class TestGenerateCommandOutputDir:
     def test_creates_expected_subdirectory(self, tmp_path):
-        out = generateOutputFileStructure(tmp_path, "analyse")
+        evaluator_dir = tmp_path / "evaluator"
+        out = generate_command_output_dir(evaluator_dir, "analyse")
         assert out.exists() and out.is_dir()
-        assert out == tmp_path / "evaluator" / "results" / "analyse"
+        assert out == evaluator_dir / "analyse"
     def test_creates_label_subdirectory(self, tmp_path):
-        out = generateOutputFileStructure(tmp_path, "label")
-        assert out == tmp_path / "evaluator" / "results" / "label"
+        evaluator_dir = tmp_path / "evaluator"
+        out = generate_command_output_dir(evaluator_dir, "label")
+        assert out == evaluator_dir / "label"
         assert out.exists()
     def test_creates_visualise_subdirectory(self, tmp_path):
-        out = generateOutputFileStructure(tmp_path, "visualise")
-        assert out == tmp_path / "evaluator" / "results" / "visualise"
+        evaluator_dir = tmp_path / "evaluator"
+        out = generate_command_output_dir(evaluator_dir, "visualise")
+        assert out == evaluator_dir / "visualise"
         assert out.exists()
     def test_idempotent_on_existing_correct_path(self, tmp_path):
         """Calling twice on the same root must return the same path."""
-        out1 = generateOutputFileStructure(tmp_path, "analyse")
-        out2 = generateOutputFileStructure(tmp_path, "analyse")
+        evaluator_dir = tmp_path / "evaluator"
+        out1 = generate_command_output_dir(evaluator_dir, "analyse")
+        out2 = generate_command_output_dir(evaluator_dir, "analyse")
         assert out1 == out2
     def test_does_not_raise_if_directory_already_exists(self, tmp_path):
-        generateOutputFileStructure(tmp_path, "analyse")
+        evaluator_dir = tmp_path / "evaluator"
+        generate_command_output_dir(evaluator_dir, "analyse")
         # Must not raise FileExistsError on a second call
-        generateOutputFileStructure(tmp_path, "analyse")
+        generate_command_output_dir(evaluator_dir, "analyse")
 
 # -- Define unique output file name check test
 class TestCheckUniqueFileName:
