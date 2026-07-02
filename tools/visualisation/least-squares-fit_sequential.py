@@ -1,19 +1,7 @@
 '''
 EValuator visualisation: least-squares fit
 
-An animation that walks through EValuator's least squares modelling to reduce missing wedge bias:
-
-Stage         | Description
-intro         | reference vesicle
-acquire       | the reference ellipsoid tilts +/-60 deg over a detector below
-to_fourier    | specimen dissolves; Fourier sphere + missing-wedge cones grow in place; one central slice fills per tilt
-to_recon      | Fourier representation collapses into the real-space WBP blob (red polar caps)
-segment       | the blob fades to a ghost as the equatorial band points emerge from it
-fit           | the ghost clears; the green least-squares ellipsoid grows through the points
-compare_apart | points fade; the green fit and the reference slide apart, side by side
-overlay       | fit and reference slide back together and overlay (reference becomes a cage)
-to_home       | the fit fades; the reference returns to a solid at the home pose
-outro         | identical to intro for looping
+An animation that walks through EValuator's least squares modelling to reduce missing wedge bias.
 
 To adjust:
   - Beat lengths: the SEG list near the bottom of render_sequential().
@@ -69,7 +57,7 @@ CAPTIONS = {
 # ====================
 # Animation config
 # ====================
-N = 88     # volume edge length (voxels)
+N = 128     # volume edge length (voxels)
 DIAMETERS = (116.0, 65.0, 54.0)     # reference ellipsoid diameters (dx, dy, dz)
 TILT_MAX_DEG = 60.0
 TILT_STEP_DEG = 3.0
@@ -166,6 +154,20 @@ def membrane_band(mesh, tilt_max_deg):
     if not band.any():
         return None
     return mesh.extract_points(band, adjacent_cells=True)
+
+def bp_rays_mesh(angle_deg, semi_axes, n=11, length=2.2):
+    '''Parallel rays along the beam direction for one tilt, spanning the object.'''
+    a = np.deg2rad(angle_deg)
+    d = np.array([np.sin(a), 0.0, np.cos(a)])     # beam direction
+    perp = np.array([np.cos(a), 0.0, -np.sin(a)])     # across the beam, in x-z
+    R = max(semi_axes); L = length * R
+    pts, lines, idx = [], [], 0
+    for u in np.linspace(-1, 1, n):
+        c = perp * (u * R)
+        pts += [c - d * L, c + d * L]
+        lines += [2, idx, idx + 1]; idx += 2
+    poly = pv.PolyData(np.array(pts)); poly.lines = np.array(lines)
+    return poly
 
 # ====================
 # Helper functions (segmentation/model fitting)
@@ -318,7 +320,7 @@ def render_sequential(sep, captions):
     # static meshes reused every frame
     REF = pv.ParametricEllipsoid(*semi_axes)
     FITM = fit_to_mesh(fit_final)
-    DET = pv.Plane(center=(0, 0, z_det), direction=(0, 0, 1), i_size=det_size, j_size=det_size)
+    DET = pv.Plane(center=(0, 0, 0), direction=(0, 0, 1), i_size=det_size, j_size=det_size)
     DETC = pv.Plane(center=(0, 0, 0), direction=(0, 0, 1), i_size=2 * FOUR_R, j_size=2 * FOUR_R)
     AXIS = dashed_line((0, -1.7 * R, 0), (0, 1.7 * R, 0), n_dash=40)
     FS = pv.Sphere(radius=FOUR_R)
@@ -447,7 +449,7 @@ def render_sequential(sep, captions):
         a.orientation = orient
         dyn.append(a)
 
-    def add_detector(tilt, opacity=1.0):
+    def add_detector(tilt, pos=(0,0,z_det), opacity=1.0):
         if opacity <= 0.01:
             return
         proj = forward_project(ref_vol, tilt)
@@ -455,6 +457,7 @@ def render_sequential(sep, captions):
         img = img / img.max() if img.max() > 0 else img
         tex = pv.numpy_to_texture(np.stack([(img.T * 255).astype(np.uint8)] * 3, axis=-1))
         a = plotter.add_mesh(DET, texture=tex, opacity=opacity, show_edges=True, edge_color='#3a3f45', reset_camera=False)
+        a.position = pos
         dyn.append(a)
     
     def add_detector_sweep(pos, tilt, opacity):
@@ -475,6 +478,19 @@ def render_sequential(sep, captions):
         a = plotter.add_mesh(AXIS, color=C_AXIS, line_width=1.5, opacity=opacity, reset_camera=False)
         a.position = (0, 0, z)
         dyn.append(a)
+
+    def add_signal_points(pts, pos=(0, 0, 0), opacity=1.0):
+        if opacity <= 0.01 or len(pts) == 0:
+            return
+        show = pts if len(pts) <= 320 else pts[RNG.choice(len(pts), 320, replace=False)]
+        a = plotter.add_mesh(pv.PolyData(show), color='#9fc2ff', render_points_as_spheres=True,
+                             point_size=5, opacity=opacity, reset_camera=False)
+        a.position = pos; dyn.append(a)
+
+    def add_bp_rays(angle_deg, pos=(0, 0, 0), opacity=0.22):
+        a = plotter.add_mesh(bp_rays_mesh(angle_deg, semi_axes), color='#5fa8ff',
+                             line_width=1, opacity=opacity, reset_camera=False)
+        a.position = pos; dyn.append(a)
 
     def add_fourier(pos=(0, 0, 0), opacity=1.0, n_slices=None):
         if opacity <= 0.01:
@@ -545,28 +561,34 @@ def render_sequential(sep, captions):
 
         elif name == "to_fourier":
             # specimen recedes; the detector lifts to the Fourier side and becomes the focus
-            add_ref(pos=(0, 0, RISE * R), opacity=1.0 - s, orient=(0, TILT_MAX_DEG, 0))
-            det_pos = lerp3((0, 0, z_det), (SIDE * R, 0, 0), s)
-            add_detector_sweep(det_pos, tilt=0.0, opacity=1.0)   # flat, not yet tilting
+            ref_fade = 1.0 - ss(min(t / 0.5, 1.0))     # gone by the midpoint
+            add_ref(pos=(0, 0, RISE * R), opacity=ref_fade, orient=(0, TILT_MAX_DEG, 0))
+            add_axis(opacity=ref_fade, z=RISE * R)
+            move = ss(max((t - 0.5) / 0.5, 0.0))     # only moves in the second half
+            det_pos = lerp3((0, 0, z_det), (-SIDE * R, 0, 0), move)
+            add_detector(tilt=0.0, pos=det_pos, opacity=1.0)
 
         elif name == "detector_hold":
-            add_detector_sweep((SIDE * R, 0, 0), tilt=0.0, opacity=1.0)
+            add_detector_sweep(tilt=0.0, pos=(-SIDE * R, 0, 0), opacity=1.0)
 
         elif name == "build_fourier":
             k = int(s * (n_ang - 1))
-            sweep_tilt = -TILT_MAX_DEG + s * 2 * TILT_MAX_DEG
-            add_detector_sweep((SIDE * R, 0, 0), tilt=sweep_tilt, opacity=1.0 - 0.7 * s)
-            add_fourier(pos=(SIDE * R, 0, 0), opacity=s, n_slices=k + 1)
+            theta = -TILT_MAX_DEG + s * 2 * TILT_MAX_DEG
+            # the projected signal back-projects and accumulates; poles stay empty
+            add_detector(tilt=0.0, pos=(SIDE * R, 0, 0), opacity=0.5 * (1.0 - s))
+            add_bp_rays(theta, pos=(SIDE * R, 0, 0))
+            add_signal_points(band_list[k], pos=(SIDE * R, 0, 0))
+            # the reconstruction surface that results, with its red polar caps
             add_recon(k, opacity=0.7 * s, cap_opacity=0.95 * s, pos=(-SIDE * R, 0, 0))
 
         elif name == "fourier_recon_hold":
-            add_fourier(pos=(SIDE * R, 0, 0), opacity=1.0)
+            add_signal_points(band_list[-1], pos=(SIDE * R, 0, 0))
             add_recon(n_ang - 1, opacity=0.7, cap_opacity=0.95, pos=(-SIDE * R, 0, 0))
 
         elif name == "zoom_to_recon":
-            shift_x = SIDE * R * s     # one translation applied to BOTH
-            add_fourier(pos=(SIDE * R + shift_x, 0, 0), opacity=1.0 - s)     # slides out left, fades
-            add_recon(n_ang - 1, opacity=0.7, cap_opacity=0.95, pos=(-SIDE * R + shift_x, 0, 0))     # slides right
+            shift_x = SIDE * R * s
+            add_signal_points(band_list[-1], pos=(SIDE * R + shift_x, 0, 0), opacity=1.0 - s)
+            add_recon(n_ang - 1, opacity=0.7, cap_opacity=0.95, pos=(-SIDE * R + shift_x, 0, 0))
 
         elif name == "segment":
             # grey reconstruction and red caps fade out; the band is traced as a membrane
@@ -577,21 +599,24 @@ def render_sequential(sep, captions):
             add_band_wireframe(opacity=1.0)
 
         elif name == "fit":
-            add_band_wireframe(opacity=1.0 - s)     # band gives way to the sampled points
-            add_points(band_list[-1], opacity=s)     # points appear ONLY now
-            add_fit(opacity=0.55 * s, scale=1.0)
+            add_band_wireframe(opacity=0.8)     # segmentation stays
+            add_points(band_list[-1], opacity=s)
+            add_fit(opacity=0.55 * s, scale=1.0)     # ellipsoid grows through it
 
         elif name == "fit_hold":
+            add_band_wireframe(opacity=0.8)
             add_points(band_list[-1], opacity=1.0)
             add_fit(opacity=0.55, scale=1.0)
 
         elif name == "clear_points":
             add_fit(opacity=0.55, scale=1.0)
-            add_points(band_list[-1], opacity=1.0 - s)
+            add_band_wireframe(opacity=0.8 * (1.0 - s))
 
         elif name == "compare_apart":
-            add_fit(pos=(SEP * s, 0, 0), opacity=0.55)     # fit slides right, origin -> +SEP
-            add_ref(pos=(-SEP, 0, 0), opacity=0.55 * s)     # reference fades in at -SEP, not from the origin
+            drift = SEP * R * s
+            add_fit(pos=(drift, 0, 0), opacity=0.55)     # 0 -> +SEP
+            ref_in = ss(max((t - 0.2) / 0.8, 0.0))     # fades in after it enters
+            add_ref(pos=(-2 * SEP * R + drift, 0, 0), opacity=0.55 * ref_in)     # -2SEP -> -SEP
 
         elif name == "compare_hold":
             add_fit(pos=(SEP, 0, 0), opacity=0.55)
