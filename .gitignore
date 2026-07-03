@@ -17,5 +17,8 @@ wheels/
 .coverage
 test_*.mrc
 
+# Tools command output
+out/
+
 # Virtual environments
 .venv
