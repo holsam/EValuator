@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from importlib.resources import files 
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from typing import Literal
 
 # ====================
 # Define configuration classes
@@ -26,10 +27,20 @@ class LogConfig(_Section):
     debug: bool = Field(..., description='Run EValuator with debug messages (implies verbose)')
 
 
+class OutputConfig(_Section):
+    '''Global configuration parameters for output files'''
+    format: Literal['csv', 'json'] = 'json'
+
+
 class LabelConfig(_Section):
     '''Configuration parameters for `evaluator label` command'''
     pass
 
+
+class ModelConfig(_Section):
+    '''Configuration parameters for `evaluator model` command'''
+    rmse_relative_max: float = Field(..., description='Maximum relative RMSE for reliability check')
+    min_points: int = Field(..., description='Minimum surface points for a reliable fit')
 
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
@@ -55,6 +66,7 @@ class VisualiseConfig(_Section):
 class Config(_Section):
     '''Overall EValuator configuration'''
     log: LogConfig
+    output: OutputConfig = OutputConfig()
     label: LabelConfig
     analyse: AnalyseConfig
     visualise: VisualiseConfig
