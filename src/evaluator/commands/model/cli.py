@@ -26,7 +26,7 @@ evaluatorModel = typer.Typer(
 # ====================
 # Define command: model
 # ====================
-@evaluatorModel.command(help='Model labelled EVs using a least squares fit approach', rich_help_panel='Commands')
+@evaluatorModel.command(help='Model labelled EVs using a least squares fit approach', rich_help_panel='Component Modelling')
 def model(
     # Define segmentation argument: path to a binary segmentation MRC file
     input_file: Annotated[
