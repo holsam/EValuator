@@ -64,6 +64,28 @@ class TestLabelCLI:
         assert result.exit_code == 0
 
 
+class TestModelCLI:
+    '''Model command CLI tests'''
+    def test_help_exits_zero(self):
+        result = runner.invoke(evaluator, ["model", "--help"])
+        assert result.exit_code == 0
+    def test_missing_argument_exits_nonzero(self):
+        result = runner.invoke(evaluator, ["model"])
+        assert result.exit_code != 0
+    def test_nonexistent_file_exits_nonzero(self, tmp_path):
+        fake = tmp_path / "does_not_exist.mrc"
+        result = runner.invoke(evaluator, ["model", str(fake)])
+        assert result.exit_code != 0
+    def test_valid_labelled_mrc_exits_zero(self, labelled_path, tmp_path):
+        result = runner.invoke(evaluator, ["model", str(labelled_path), "-o", str(tmp_path)])
+        assert result.exit_code == 0
+    def test_output_files_created(self, labelled_path, tmp_path):
+        runner.invoke(evaluator, ["model", str(labelled_path), "-o", str(tmp_path)])
+        model_dir = tmp_path / "evaluator" / "model"
+        assert (model_dir / "model_fitted.mrc").exists()
+        assert (model_dir / "params.toml").exists()
+
+
 class TestAnalyseCLI:
     '''Analyse command CLI tests'''
     def test_help_exits_zero(self):
