@@ -13,7 +13,7 @@ import numpy as np
 # Import EValuator utilities
 # ====================
 from evaluator.utils import config as confutil
-from evaluator.utils import io as ioutil
+from evaluator.utils import io
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
 from evaluator.utils.settings import lg
@@ -33,7 +33,7 @@ def model_evs(
     **overrides,
 ) -> None:
     # Load configuration file
-    config, evaluator_dir = confutil.load_config(output)
+    config, evaluator_dir = confutil.load_config(output_dir)
     updates = {k: v for k, v in overrides.items() if v is not None}
     params = config.model.model_copy(update=updates)
     # Read labelled MRC file
@@ -45,13 +45,13 @@ def model_evs(
     # Fit each labelled vesicle
     lg.info(f"model | Fitting {len(labels)} labelled components..." )
     for label_id in labels:
-        points = np.argwhere(labelled == label_id).astype(float)
+        points = np.argwhere(labelled_data == label_id).astype(float)
         try:
             result = fit_vesicle(points, voxel_size_nm=voxel_size_nm)
         except ValueError as exc:
             lg.warning(f"model | Fit failed for label {int(label_id)}: {exc}")
             continue
-        result["source_file"] = str(input_mrc)
+        result["source_file"] = str(input_file)
         result["label_id"] = int(label_id)
         records.append(result)
     lg.info(f"model | {len(records)}/{len(labels)} component(s) fitted" )
@@ -61,13 +61,13 @@ def model_evs(
     lg.debug(f"model | Saving results file...")
     provenance = {
         "command": "model",
-        "source_file": str(input_mrc),
+        "source_file": str(input_file),
         "n_vesicles_fitted": len(records),
         "config": config.model_dump(),
     }
-    write_result = write_results(
+    write_result = io.write_results(
         records=records,
-        provenance=provenance,
+        parameters=provenance,
         output_path=out_dir / "model",
         output_format=config.output.format,
     )
@@ -75,7 +75,7 @@ def model_evs(
     # Build the fitted MRC file for visualisation
     lg.debug(f"model | Building fitted MRC file...")
     fitted_volume = build_fitted_mrc(
-        shape=labelled.shape,
+        shape=labelled_data.shape,
         fit_records=records,
         voxel_size_nm=voxel_size_nm,
     )
