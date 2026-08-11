@@ -17,6 +17,7 @@ EValuator provides several commands:
 | Group | Command | Description |
 |---|---|---|
 | Component Identification| [`label`](docs/label.md) | Identified connected components from a tomogram and outputs a labelled MRC file for use with other EValuator commands.|
+| Component Modelling | [`model`](docs/model.md) | Fits least-squares sphere/ellipsoid models to labelled EVs and gates each fit on reliability. |
 | Component Analysis|  [`analyse`](docs/analyse.md) | Run a morphological analysis pipeline on one or more labelled segmentation files and write results to a CSV. |
 | Component Visualisation| [`visualise`](docs/visualise.md) | Generate various visualisations of tomograms and/or segmentation masks. |
 
@@ -60,6 +61,9 @@ Options:
 Component Identification:
   label       Label connected components in a segmentation MRC
 
+Component Modelling:
+  model       Model labelled EVs using a least squares fit approach
+
 Component Analysis:
   analyse     Run morphological analysis pipeline on labelled MRC files
 
@@ -76,25 +80,29 @@ Use `evaluator COMMAND --help` for detailed usage information for each command o
 - [`docs/analyse.md`](docs/analyse.md)
 - [`docs/config.md`](docs/config.md)
 - [`docs/label.md`](docs/label.md)
+- [`docs/model.md`](docs/model.md)
 - [`docs/visualise.md`](docs/visualise.md)
 
 ## Workflow
 EValuator is structured around a three-step workflow. Each step produces output that feeds into the next:
 
 ```
-MemBrain-seg segmentation (.mrc)
-          │
-          ▼
-   evaluator label               →  labelled MRC  (<stem>_labelled.mrc)
-          │
-          ▼
-   evaluator analyse             →  morphology CSV  (evaluator-analyse_results.csv)
-          │
-          ▼
-   evaluator visualise overlay   →  overlay image  (<stem>_overlay-<style>.png)
+ MemBrain-seg segmentation (.mrc)
+           │
+           ▼
+    evaluator label                            →  labelled MRC  (<stem>_labelled.mrc)
+           │
+           ├──▶ evaluator analyse              →  morphology CSV (evaluator-analyse_results.csv)
+           │            │
+           │            ▼
+           │     evaluator visualise overlay   →  overlay image  (<stem>_overlay-<style>.png)
+           │
+           └──▶ evaluator model                →  fit results + fitted MRC (model_results.json/csv, model_fitted.mrc)
 ```
 
-**Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse`.
+**Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse` and `model`.
+
+**`model`**: fits a least-squares sphere and, where the data support it, an ellipsoid to each labelled EV, gates the fit on reliability (RMSE, point count, surface coverage), and writes the per-vesicle fit parameters plus a rasterised fitted MRC of the reliable vesicles for visual QC.
 
 **Step 2: `analyse`**: runs the morphological analysis pipeline on a labelled MRC (or directory of labelled MRCs), filters components by size, and extracts quantitative measurements for each identified EV, writing the results to a CSV file.
 
@@ -107,23 +115,26 @@ In addition, the `visualise movie` and `visualise isoview` subcommands can be us
 # Step 1: label connected components in a MemBrain-seg segmentation mask
 evaluator label tomo_seg.mrc
 
+# Fit least-squares models to the labelled EVs (in parallel with Step 2)
+evaluator model evaluator/label/tomo_seg_labelled.mrc
+
 # Step 2: run the morphological analysis pipeline on the labelled MRC
-evaluator analyse evaluator/results/label/tomo_seg_labelled.mrc
+evaluator analyse evaluator/label/tomo_seg_labelled.mrc
 
 # Step 3: overlay identified EVs onto the original tomogram
-evaluator visualise overlay tomo.mrc evaluator/results/label/tomo_seg_labelled.mrc \
-    -c evaluator/results/analyse/evaluator-analyse_results.csv
+evaluator visualise overlay tomo.mrc evaluator/label/tomo_seg_labelled.mrc \
+    -c evaluator/analyse/evaluator-analyse_results.csv
 
 # Optionally: inspect raw MRC data
 evaluator visualise movie tomo.mrc
 evaluator visualise isoview tomo_seg.mrc
 ```
 
-To process a full directory of segmentations in batch:
+To process a full directory of labelled segmentations in batch:
 
 ```sh
-evaluator label /path/to/segmentations/
-# then run analyse on the labelled output directory:
+
+# Run analyse on the labelled output directory:
 evaluator analyse evaluator/results/label/
 ```
 
