@@ -3,8 +3,17 @@
 verbose = false
 debug = false
 
+# Output format configuration default
+[output] 
+format = "json"
+
 # Label command default configuration parameters
 [label]
+
+# Model command default configuration parameters
+[model]
+rmse_relative_max = 0.15
+min_points = 20
 
 # Analyse command default configuration parameters
 [analyse]
