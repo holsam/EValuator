@@ -6,6 +6,10 @@ debug = false
 # Label command default configuration parameters
 [label]
 
+[model]
+rmse_relative_max = 0.15
+min_points = 20
+
 # Analyse command default configuration parameters
 [analyse]
 fill_threshold = 0.05

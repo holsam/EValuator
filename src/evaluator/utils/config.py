@@ -39,8 +39,8 @@ class LabelConfig(_Section):
 
 class ModelConfig(_Section):
     '''Configuration parameters for `evaluator model` command'''
-    rmse_relative_max: float = Field(..., description='Maximum relative RMSE for reliability check')
-    min_points: int = Field(..., description='Minimum surface points for a reliable fit')
+    rmse_relative_max: float = Field(0.15, description='Maximum relative RMSE for reliability check')
+    min_points: int = Field(20, description='Minimum surface points for a reliable fit')
 
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
@@ -68,6 +68,7 @@ class Config(_Section):
     log: LogConfig
     output: OutputConfig = OutputConfig()
     label: LabelConfig
+    model: ModelConfig = ModelConfig()
     analyse: AnalyseConfig
     visualise: VisualiseConfig
 
