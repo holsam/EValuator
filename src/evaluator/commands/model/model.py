@@ -47,7 +47,12 @@ def model_evs(
     for label_id in labels:
         points = np.argwhere(labelled_data == label_id).astype(float)
         try:
-            result = fit_vesicle(points, voxel_size_nm=voxel_size_nm)
+            result = fit_vesicle(
+                points,
+                voxel_size_nm=voxel_size_nm,
+                rmse_relative_max=params.rmse_relative_max,
+                min_points=params.min_points,
+            )
         except ValueError as exc:
             lg.warning(f"model | Fit failed for label {int(label_id)}: {exc}")
             continue
@@ -68,7 +73,7 @@ def model_evs(
     write_result = io.write_results(
         records=records,
         parameters=provenance,
-        output_path=out_dir / "model",
+        output_path=out_dir / "model_results",
         output_format=config.output.format,
     )
 

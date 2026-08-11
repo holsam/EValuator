@@ -117,11 +117,13 @@ def _assess_reliability(
     centre: np.ndarray,
     radius_or_mean_radius: float,
     rmse: float,
+    rmse_relative_max: float = _MAX_RELATIVE_RMSE,
+    min_points: int = _MIN_POINT_COUNT,
 ) -> dict:
     n = len(points)
     relative_rmse = rmse / radius_or_mean_radius if radius_or_mean_radius > 0 else np.inf
-    rmse_ok = relative_rmse < _MAX_RELATIVE_RMSE
-    count_ok = n >= _MIN_POINT_COUNT
+    rmse_ok = relative_rmse < rmse_relative_max
+    count_ok = n >= min_points
     # Latitude span: angle from z-axis for each point relative to centre
     vecs = points - centre
     norms = np.linalg.norm(vecs, axis=1)
@@ -162,6 +164,8 @@ def fit_vesicle(
     voxel_size_nm: float = DEFAULT_VOXEL_SIZE_NM,
     mode: Literal['report_both', 'bic'] = 'report_both',
     beam_axis_tol_deg: float = _DEFAULT_BEAM_AXIS_TOL_DEG,
+    rmse_relative_max: float = _MAX_RELATIVE_RMSE,
+    min_points: int = _MIN_POINT_COUNT,
 ) -> dict:
     pts = np.asarray(points, dtype=float)
     if pts.ndim != 2 or pts.shape[1] != 3:
@@ -236,7 +240,7 @@ def fit_vesicle(
         out_radii = ell_radii_nm
         out_orientation = ell_evecs
         out_rmse = ell_rmse_nm
-        reliability = _assess_reliability(pts, ell_centre, float(np.mean(ell_radii)), ell_rmse_vox)
+        reliability = _assess_reliability(pts, ell_centre, float(np.mean(ell_radii)), ell_rmse_vox, rmse_relative_max=rmse_relative_max, min_points=min_points)
         beam_axis_out = beam_info
     else:
         out_centre = sph_centre_nm
@@ -244,7 +248,7 @@ def fit_vesicle(
         out_radii = None
         out_orientation = None
         out_rmse = sph_rmse_nm
-        reliability = _assess_reliability(pts, sph_centre, sph_radius, sph_rmse_vox)
+        reliability = _assess_reliability(pts, sph_centre, sph_radius, sph_rmse_vox, rmse_relative_max=rmse_relative_max, min_points=min_points)
         beam_axis_out = None
     # Create output dictionary
     return {
