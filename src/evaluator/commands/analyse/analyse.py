@@ -7,6 +7,7 @@ EValuator: SEGMENTATION ANALYSIS
 # Import external dependencies
 # ====================
 import datetime, numpy
+from functools import partial
 from pathlib import Path
 from rich import print
 from skimage import measure
@@ -16,10 +17,12 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 # ====================
 # Import shared EValuator utilities
 # ====================
+
+from evaluator.utils import batch as batchutil
 from evaluator.utils import config as confutil
-from evaluator.utils.settings import lg
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
+from evaluator.utils.settings import lg
 
 # ====================
 # Import EValuator analyse utilities
@@ -43,7 +46,7 @@ def analyse(
     params = config.analyse.model_copy(update=updates)
     # Validate input file(s)
     lg.debug(f"analyse | Validating input file(s)...")
-    seg_files = filtering.analyseCheckInput(input)
+    seg_files = batchutil.resolve_mrc_inputs(input)
     # Create output directory structure
     lg.debug(f"analyse | Creating output directory structure...")
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "analyse")
@@ -57,16 +60,16 @@ def analyse(
     START_TIME = datetime.datetime.now()
     print(f"\nEV post-processing pipeline started: {START_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
     # Run pipeline
-    analyse_results = []
     lg.debug(f"analyse | Starting pipeline...")
-    with logging_redirect_tqdm():
-        for segfile in tqdm(seg_files, desc="Segmentation files processed"):
-            try:
-                segfile_results = processSegmentation(segfile, params.minimum_diameter_nm, params.maximum_diameter_nm, params.fill_threshold, params.membrane_thickness_nm)
-                analyse_results.extend(segfile_results)
-            except Exception as e:
-                lg.warning(f"Failed to process {segfile.name}: {e}")
-                continue
+    worker = partial(
+        processSegmentation,
+        minimum_diameter=params.minimum_diameter_nm,
+        maximum_diameter=params.maximum_diameter_nm,
+        fill_threshold=params.fill_threshold,
+        membrane_thickness=params.membrane_thickness_nm,
+    )
+    per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed")
+    analyse_results = [row for file_results in per_file_results for row in file_results]
     END_TIME = datetime.datetime.now()
     print(f"EV analysis pipeline finished: {END_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
     if not analyse_results:
