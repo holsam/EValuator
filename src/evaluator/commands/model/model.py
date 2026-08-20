@@ -34,7 +34,7 @@ def model_batch(input_path, output_dir, max_workers=None, **overrides) -> None:
     Resolve input_path (file or directory) to labelled MRC files and model each in parallel
     '''
     mrc_files = batchutil.resolve_mrc_inputs(input_path)
-    config, _ = confutil.load_config(output)
+    config, _ = confutil.load_config(output_dir)
     max_workers = max_workers if max_workers is not None else config.label.max_workers
     worker = partial(model_evs, output_dir=output_dir, **overrides)
     batchutil.run_batch(mrc_files, worker=worker, desc="Labelled files processed", max_workers=max_workers)
