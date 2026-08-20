@@ -8,10 +8,12 @@ EValuator: EV MODELLING FROM LABELLED SEGMENTATION
 # Import external dependencies
 # ====================
 import numpy as np
+from functools import partial
 
 # ====================
 # Import EValuator utilities
 # ====================
+from evaluator.utils import batch as batchutil
 from evaluator.utils import config as confutil
 from evaluator.utils import io
 from evaluator.utils import mrc as mrcutil
@@ -26,6 +28,17 @@ from evaluator.commands.model.utils.reconstruction import build_fitted_mrc
 
 # ====================
 # model_evs: orchestration logic for model command
+# ====================
+def model_batch(input_path, output_dir, **overrides) -> None:
+    '''
+    Resolve input_path (file or directory) to labelled MRC files and model each in parallel
+    '''
+    mrc_files = batchutil.resolve_mrc_inputs(input_path)
+    worker = partial(model_evs, output_dir=output_dir, **overrides)
+    batchutil.run_batch(mrc_files, worker=worker, desc="Labelled files processed")
+
+# ====================
+# model_evs: orchestration logic for individual MRC file
 # ====================
 def model_evs(
     input_file,
