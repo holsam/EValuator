@@ -57,21 +57,30 @@ def analyse(
     ] = None,
     fill_threshold: Annotated[
         Optional[float],
-        typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run')
+        typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run', min=0, max=1)
     ] = None,
     membrane_thickness_nm: Annotated[
         Optional[float],
         typer.Option('--membrane-thickness', help='Override configuration membrane thickness parameter for this run')
     ] = None,
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Run post-processing pipeline on labelled EV segmentation files.
     '''
+    # Validate diameter arguments
+    if minimum_diameter_nm >= maximum_diameter_nm:
+        raise typer.BadParameter(f'Diameters are not compatible.')
+
     analyseFuncs.analyse(
         input,
         output,
-        minimum_diameter_nm,
-        maximum_diameter_nm,
-        fill_threshold,
-        membrane_thickness_nm,
+        minimum_diameter_nm=minimum_diameter_nm,
+        maximum_diameter_nm=maximum_diameter_nm,
+        fill_threshold=fill_threshold,
+        membrane_thickness_nm=membrane_thickness_nm,
+        max_workers=jobs,
     )

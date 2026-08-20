@@ -31,10 +31,10 @@ def label(
     segmentation: Annotated[
         Path,
         typer.Argument(
-            help='Path to binary segmentation MRC (e.g. MemBrain-seg output)',
+            help='Path to either a single binary segmentation MRC (e.g. MemBrain-seg output) or a directory of segmentation MRC files',
             exists=True,
             file_okay=True,
-            dir_okay=False,
+            dir_okay=True,
             readable=True,
         )
     ],
@@ -49,11 +49,16 @@ def label(
             writable=True,
         )
     ] = Path('.'),
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Label connected components in a binary segmentation MRC and write a labelled MRC
     '''
-    labelFuncs.label_components(
+    labelFuncs.label_batch(
         segmentation,
         output,
+        max_workers=jobs,
     )

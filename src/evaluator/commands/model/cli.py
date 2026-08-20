@@ -9,7 +9,7 @@ EValuator: EV MODELLING FROM LABELLED SEGMENTATION
 # ====================
 import typer
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 # ====================
 # Import command functions
@@ -32,10 +32,10 @@ def model(
     input_file: Annotated[
         Path,
         typer.Argument(
-            help='Path to labelled segmentation MRC (i.e. EValuator label output)',
+            help='Path to either a single labelled segmentation MRC (i.e. EValuator label output) or a directory of labelled MRC files',
             exists=True,
             file_okay=True,
-            dir_okay=False,
+            dir_okay=True,
             readable=True,
         )
     ],
@@ -50,8 +50,12 @@ def model(
             writable=True,
         )
     ] = Path('.'),
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
-    From a labelled MRC containing connected components, use a least squares fit model to reconstruct EVs for analysis
+    Use a least squares fit model to reconstruct EVs from labelled MRC files
     '''
-    modelFuncs.model_evs(input_file, output)
+    modelFuncs.model_batch(input_file, output, max_workers=jobs)
