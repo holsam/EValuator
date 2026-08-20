@@ -57,7 +57,7 @@ def analyse(
     ] = None,
     fill_threshold: Annotated[
         Optional[float],
-        typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run')
+        typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run', min=0, max=1)
     ] = None,
     membrane_thickness_nm: Annotated[
         Optional[float],
@@ -71,6 +71,10 @@ def analyse(
     '''
     Run post-processing pipeline on labelled EV segmentation files.
     '''
+    # Validate diameter arguments
+    if minimum_diameter_nm >= maximum_diameter_nm:
+        raise typer.BadParameter(f'Diameters are not compatible.')
+
     analyseFuncs.analyse(
         input,
         output,
