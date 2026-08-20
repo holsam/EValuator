@@ -9,6 +9,7 @@ EValuator: TOMOGRAM VISUALISER
 import matplotlib, numpy
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from functools import partial
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from pathlib import Path
 from rich import print
@@ -18,6 +19,7 @@ matplotlib.use("Agg")
 # ====================
 # Import EValuator utilities
 # ====================
+from evaluator.utils import batch as batchutil
 from evaluator.utils import config as confutil
 from evaluator.utils.settings import lg
 from evaluator.utils import mrc as mrcutil
@@ -27,7 +29,7 @@ from evaluator.commands.visualise.utils import display as displayutil
 
 def generate_movie(input, output, **overrides):
     '''
-    Generate a Z-stack movie from an MRC file
+    Generate a Z-stack movie from an MRC file or directory of MRC files
     '''
     # Load configuration file
     lg.debug(f"visualise movie | Loading configuration file...")
@@ -36,22 +38,20 @@ def generate_movie(input, output, **overrides):
     lg.debug(f"visualise movie | Setting run parameters...")
     updates = {k: v for k, v in overrides.items() if v is not None}
     params = config.visualise.model_copy(update=updates)
-    # Validate input file
-    lg.debug(f"visualise movie | Validating input MRC file...")
-    if not mrcutil.validateMRCFile(input):
-        raise ValueError(f"{input.name} is not a valid MRC file and will not be processed.")
-    lg.debug(f"visualise movie | Reading input MRC file...")
-    mrc_data, voxel_size_nm = mrcutil.readMRCFile(input)
-    # Create output directory structure
-    lg.debug(f"visualise movie | Creating output directory structure...")
+    # Validate input files
+    lg.debug(f"visualise movie | Resolving input MRC file(s)...")
+    mrc_files = batchutil.resolve_mrc_inputs(input)
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "visualise")
     confutil.write_params(params, out_dir)
-    # Movie generation
+    worker = partial(_movie_worker, out_dir=out_dir, params=params)
+    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed")
+
+def _movie_worker(mrc_path: Path, out_dir: Path, params) -> None:
+    mrc_data, voxel_size_nm = mrcutil.readMRCFile(mrc_path)
     is_mask = isMask(mrc_data)
     writers = animation.writers.list()
     fmt = "mp4" if "ffmpeg" in writers else "gif"
-    lg.debug(f"visualise movie | Defining output file for Z-stack movie...")
-    out_file_mov = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=input.stem, vis_out="Zstack-movie", fmt=fmt)
+    out_file_mov = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=mrc_path.stem, vis_out="Zstack-movie", fmt=fmt)
     createMovie(data=mrc_data, out_path=out_file_mov, fps=params.fps, is_mask=is_mask, voxel_size_nm=voxel_size_nm)
     printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_path_mov=out_file_mov, out_path_iso=None)
 
@@ -66,20 +66,19 @@ def generate_isometric_view(input, output, **overrides):
     lg.debug(f"visualise isoview | Setting run parameters...")
     updates = {k: v for k, v in overrides.items() if v is not None}
     params = config.visualise.model_copy(update=updates)
-    # Validate input file
-    lg.debug(f"visualise isoview | Validating input MRC file...")
-    if not mrcutil.validateMRCFile(input):
-        raise ValueError(f"{input.name} is not a valid MRC file and will not be processed.")
-    lg.debug(f"visualise isoview | Reading input MRC file...")
-    mrc_data, voxel_size_nm = mrcutil.readMRCFile(input)
-    # Create output directory structure
-    lg.debug(f"visualise isoview | Creating output directory structure...")
+    # Validate input files
+    lg.debug(f"visualise isoview | Resolving input MRC file(s)...")
+    mrc_files = batchutil.resolve_mrc_inputs(input)
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "visualise")
     confutil.write_params(params, out_dir)
-    # Isometric view generation
+    worker = partial(_isoview_worker, out_dir=out_dir, params=params)
+    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed")
+
+
+def _isoview_worker(mrc_path: Path, out_dir: Path, params) -> None:
+    mrc_data, voxel_size_nm = mrcutil.readMRCFile(mrc_path)
     is_mask = isMask(mrc_data)
-    lg.debug(f"visualise isoview | Defining output file for isometric view...")
-    out_file_iso = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=input.stem, vis_out="isometric-view", fmt="png")
+    out_file_iso = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=mrc_path.stem, vis_out="isometric-view", fmt="png")
     createIsometricView(data=mrc_data, out_path=out_file_iso, downsample=params.downsample, voxel_size_nm=voxel_size_nm)
     printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_path_mov=None, out_path_iso=out_file_iso)
 
