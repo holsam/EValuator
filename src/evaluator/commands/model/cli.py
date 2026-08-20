@@ -50,8 +50,12 @@ def model(
             writable=True,
         )
     ] = Path('.'),
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Use a least squares fit model to reconstruct EVs from labelled MRC files
     '''
-    modelFuncs.model_batch(input_file, output)
+    modelFuncs.model_batch(input_file, output, max_workers=jobs)

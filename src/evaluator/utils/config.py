@@ -34,13 +34,14 @@ class OutputConfig(_Section):
 
 class LabelConfig(_Section):
     '''Configuration parameters for `evaluator label` command'''
-    pass
+    max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 
 class ModelConfig(_Section):
     '''Configuration parameters for `evaluator model` command'''
     rmse_relative_max: float = Field(0.15, description='Maximum relative RMSE for reliability check')
     min_points: int = Field(20, description='Minimum surface points for a reliable fit')
+    max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
@@ -48,6 +49,7 @@ class AnalyseConfig(_Section):
     maximum_diameter_nm: float = Field(..., description='Maximum component diameter (nm)')
     fill_threshold: float = Field(..., description='Fill ratio threshold for labelling')
     membrane_thickness_nm: float = Field(..., description='Membrane thickness (nm)')
+    max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 
 class VisualiseConfig(_Section):
@@ -61,6 +63,7 @@ class VisualiseConfig(_Section):
     contour_linewidth: float = Field(..., description='Line width for contour overlays (px)')
     label_fontsize: int = Field(..., description='Font size for component text annotations')
     figure_dpi: int = Field(..., description='Output image resolution (dpi)')
+    max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 
 class Config(_Section):

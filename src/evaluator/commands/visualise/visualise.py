@@ -44,7 +44,7 @@ def generate_movie(input, output, **overrides):
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "visualise")
     confutil.write_params(params, out_dir)
     worker = partial(_movie_worker, out_dir=out_dir, params=params)
-    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed")
+    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed", max_workers=params.max_workers)
 
 def _movie_worker(mrc_path: Path, out_dir: Path, params) -> None:
     mrc_data, voxel_size_nm = mrcutil.readMRCFile(mrc_path)
@@ -72,7 +72,7 @@ def generate_isometric_view(input, output, **overrides):
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "visualise")
     confutil.write_params(params, out_dir)
     worker = partial(_isoview_worker, out_dir=out_dir, params=params)
-    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed")
+    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed", max_workers=params.max_workers)
 
 
 def _isoview_worker(mrc_path: Path, out_dir: Path, params) -> None:

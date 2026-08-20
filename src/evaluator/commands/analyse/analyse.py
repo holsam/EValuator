@@ -68,7 +68,7 @@ def analyse(
         fill_threshold=params.fill_threshold,
         membrane_thickness=params.membrane_thickness_nm,
     )
-    per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed")
+    per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed", max_workers=params.max_workers)
     analyse_results = [row for file_results in per_file_results for row in file_results]
     END_TIME = datetime.datetime.now()
     print(f"EV analysis pipeline finished: {END_TIME.strftime('%Y-%m-%d %H:%M:%S')}")

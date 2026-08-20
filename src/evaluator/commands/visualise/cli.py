@@ -56,11 +56,15 @@ def visualise(
         Optional[int],
         typer.Option("--downsample", help="Downsampling factor for isometric render.", min=1)
     ] = None,
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Generate an isometric surface render from an MRC file
     '''
-    visualiseFuncs.generate_isometric_view(input, output, downsample=downsample)
+    visualiseFuncs.generate_isometric_view(input, output, downsample=downsample, max_workers=jobs)
 
 # ====================
 # Define subcommand: movie
@@ -94,11 +98,15 @@ def movie(
         Optional[int],
         typer.Option("--fps", help="Frame rate for Z-stack movie.", min=0)
     ] = None,
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Generate a Z-stack movie from an MRC file
     '''
-    visualiseFuncs.generate_movie(input, output, fps=fps)
+    visualiseFuncs.generate_movie(input, output, fps=fps, max_workers=jobs)
 
 
 

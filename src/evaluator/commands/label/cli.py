@@ -49,6 +49,10 @@ def label(
             writable=True,
         )
     ] = Path('.'),
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Label connected components in a binary segmentation MRC and write a labelled MRC
@@ -56,4 +60,5 @@ def label(
     labelFuncs.label_batch(
         segmentation,
         output,
+        max_workers=jobs,
     )
