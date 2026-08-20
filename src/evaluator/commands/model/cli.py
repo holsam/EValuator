@@ -9,7 +9,7 @@ EValuator: EV MODELLING FROM LABELLED SEGMENTATION
 # ====================
 import typer
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 # ====================
 # Import command functions
