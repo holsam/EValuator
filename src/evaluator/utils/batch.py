@@ -53,7 +53,7 @@ def run_batch(
     '''
     Run worker over files in parallel, skipping (and logging) files if worker raises (returns successful results in file order)
     '''
-    if max_workers if not None and max_workers <= 0:
+    if max_workers is not None and max_workers <= 0:
         max_workers = None
     results: dict[Path, T] = {}
     with ProcessPoolExecutor(max_workers=max_workers) as pool, logging_redirect_tqdm():
