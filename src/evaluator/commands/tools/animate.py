@@ -23,7 +23,7 @@ evaluatorAnimate = typer.Typer(
 @evaluatorAnimate.command('model')
 def animate_model():
     '''
-    
+    Create an animation of the geometric principles underlying the model command. [bold yellow]\\[NOT IMPLEMENTED][/]
     '''
-    print('Not yet implemented.')
-    raise NotImplementedError()
+    print('\nevaluator tools animate model: not implemented.\n')
+    
