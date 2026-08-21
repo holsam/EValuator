@@ -19,6 +19,7 @@ EValuator provides several commands:
 | Component Identification| [`label`](docs/label.md) | Identified connected components from a tomogram and outputs a labelled MRC file for use with other EValuator commands.|
 | Component Modelling | [`model`](docs/model.md) | Fits least-squares sphere/ellipsoid models to labelled EVs and gates each fit on reliability. |
 | Component Analysis|  [`analyse`](docs/analyse.md) | Run a morphological analysis pipeline on one or more labelled segmentation files and write results to a CSV. |
+| Component Analysis|  [`plot`](docs/plot.md) | Generate plots and summary tables from `analyse` and/or `model` output. |
 | Component Visualisation| [`visualise`](docs/visualise.md) | Generate various visualisations of tomograms and/or segmentation masks. |
 
 
@@ -66,6 +67,7 @@ Component Modelling:
 
 Component Analysis:
   analyse     Run morphological analysis pipeline on labelled MRC files
+  plot        Generate plots from evaluator analyse and/or model output
 
 Component Visualisation:
   visualise   Generate visualisations from MRC data
@@ -81,6 +83,7 @@ Use `evaluator COMMAND --help` for detailed usage information for each command o
 - [`docs/config.md`](docs/config.md)
 - [`docs/label.md`](docs/label.md)
 - [`docs/model.md`](docs/model.md)
+- [`docs/plot.md`](docs/plot.md)
 - [`docs/visualise.md`](docs/visualise.md)
 
 ## Workflow
@@ -90,14 +93,16 @@ EValuator is structured around a three-step workflow. Each step produces output 
  MemBrain-seg segmentation (.mrc)
            │
            ▼
-    evaluator label                            →  labelled MRC  (<stem>_labelled.mrc)
+    evaluator label                                 →  labelled MRC  (<stem>_labelled.mrc)
            │
-           ├──▶ evaluator analyse              →  morphology CSV (evaluator-analyse_results.csv)
-           │            │
-           │            ▼
-           │     evaluator visualise overlay   →  overlay image  (<stem>_overlay-<style>.png)
-           │
-           └──▶ evaluator model                →  fit results + fitted MRC (model_results.json/csv, model_fitted.mrc)
+           ├──▶ evaluator analyse                   →  morphology CSV (evaluator-analyse_results.csv)
+           │            │   │
+           │            │   └──▶ evaluator plot     →  plots + summary tables (evaluator/plot/)
+           │            ▼        ▲
+           │            evaluator visualise overlay →  overlay image (<stem>_overlay-<style>.png)
+           │                     │       
+           │                     │
+           └──▶ evaluator model  ┘                  →  fit results + fitted MRC (model_results.json/csv, model_fitted.mrc)
 ```
 
 **Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse` and `model`.
@@ -109,6 +114,19 @@ EValuator is structured around a three-step workflow. Each step produces output 
 **Step 3: `visualise overlay`**: reads the labelled MRC and the `analyse` CSV and renders a colour-coded overlay of the identified EVs onto slices of the original greyscale tomogram, for visual inspection of pipeline results.
 
 In addition, the `visualise movie` and `visualise isoview` subcommands can be used independently at any stage to quickly inspect MRC data.
+
+**Optional: `plot`**: generates plots and summary tables from `analyse` and/or `model` output.
+
+### Batch processing
+`label`, `model`, `analyse`, `visualise movie`, and `visualise isoview` all accept individual MRC files or a directory containing multiple MRC files. In the latter case, each valid MRC file is processed independently across worker processes, skipping invalid files (logged to terminal). The number of parallel jobs can be controlled via:
+1. `-j`/`--jobs` on the command line (highest priority)
+2. `max_workers` under the relevant section (`[label]`, `[model]`, `[analyse]`, `[visualise]`) of `config.toml`
+3. If unset or `0`, all available CPU cores are used
+
+```sh
+# Cap analysis at 4 worker processes for this run only
+evaluator analyse evaluator/results/label/ -j 4
+```
 
 ## Quick start examples
 ```sh
@@ -125,17 +143,12 @@ evaluator analyse evaluator/label/tomo_seg_labelled.mrc
 evaluator visualise overlay tomo.mrc evaluator/label/tomo_seg_labelled.mrc \
     -c evaluator/analyse/evaluator-analyse_results.csv
 
+# Optionally: generate summary plots from analyse (and/or model) output
+evaluator plot --analyse evaluator/results/analyse/evaluator-analyse_results.csv --all
+
 # Optionally: inspect raw MRC data
 evaluator visualise movie tomo.mrc
 evaluator visualise isoview tomo_seg.mrc
-```
-
-To process a full directory of labelled segmentations in batch:
-
-```sh
-
-# Run analyse on the labelled output directory:
-evaluator analyse evaluator/results/label/
 ```
 
 Verbosity flags are set on the root `evaluator` command and apply to all subcommands:
