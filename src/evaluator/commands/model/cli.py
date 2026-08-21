@@ -1,8 +1,9 @@
 '''
 =======================================
-EValuator: SEGMENTATION EV LABELLING
+EValuator: EV MODELLING FROM LABELLED SEGMENTATION
 =======================================
 '''
+
 # ====================
 # Import external dependencies
 # ====================
@@ -11,27 +12,27 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 # ====================
-# Import EValuator utilities
+# Import command functions
 # ====================
-from evaluator.commands.label import label as labelFuncs
+from evaluator.commands.model import model as modelFuncs
 
 # ====================
-# Initialise typer as evaluatorLabel
+# Initialise typer as evaluatorModel
 # ====================
-evaluatorLabel = typer.Typer(
+evaluatorModel = typer.Typer(
     add_completion=False,
 )
 
 # ====================
-# Define command: label
+# Define command: model
 # ====================
-@evaluatorLabel.command(help='Label connected components in a segmentation MRC',rich_help_panel='Component Identification')
-def label(
+@evaluatorModel.command(help='Model labelled EVs using a least squares fit approach', rich_help_panel='Component Modelling')
+def model(
     # Define segmentation argument: path to a binary segmentation MRC file
-    segmentation: Annotated[
+    input_file: Annotated[
         Path,
         typer.Argument(
-            help='Path to either a single binary segmentation MRC (e.g. MemBrain-seg output) or a directory of segmentation MRC files',
+            help='Path to either a single labelled segmentation MRC (i.e. EValuator label output) or a directory of labelled MRC files',
             exists=True,
             file_okay=True,
             dir_okay=True,
@@ -40,10 +41,10 @@ def label(
     ],
     # Define output option: output directory, defaults to current working directory
     output: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option(
-            '-o', '--out-dir',
-            help='Path to output directory, outputs will be written under ".../evaluator/label/"',
+            "-o", "--out-dir",
+            help="Path to output directory (results will be written under '.../evaluator/model/')",
             file_okay=False,
             dir_okay=True,
             writable=True,
@@ -55,10 +56,6 @@ def label(
     ] = None,
 ):
     '''
-    Label connected components in a binary segmentation MRC and write a labelled MRC
+    Use a least squares fit model to reconstruct EVs from labelled MRC files
     '''
-    labelFuncs.label_batch(
-        segmentation,
-        output,
-        max_workers=jobs,
-    )
+    modelFuncs.model_batch(input_file, output, max_workers=jobs)

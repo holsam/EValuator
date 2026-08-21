@@ -23,6 +23,8 @@ from evaluator.commands.config.cli import evaluatorConfig
 from evaluator.commands.analyse.cli import evaluatorAnalyse
 from evaluator.commands.label.cli import evaluatorLabel
 from evaluator.commands.license.cli import evaluatorLicense
+from evaluator.commands.model.cli import evaluatorModel
+from evaluator.commands.plot.cli import evaluatorPlot
 from evaluator.commands.tools.cli import evaluatorTools
 from evaluator.commands.version.cli import evaluatorVersion
 from evaluator.commands.visualise.cli import evaluatorVisualise
@@ -49,7 +51,13 @@ evaluator.add_typer(
     evaluatorLabel,
 )
 evaluator.add_typer(
+    evaluatorModel,
+)
+evaluator.add_typer(
     evaluatorAnalyse,
+)
+evaluator.add_typer(
+    evaluatorPlot,
 )
 evaluator.add_typer(
     evaluatorVisualise,
@@ -58,9 +66,7 @@ evaluator.add_typer(
     rich_help_panel='Component Visualisation')
 evaluator.add_typer(
     evaluatorConfig,
-    name='config',
-    help='Manage EValuator configuration files',
-    rich_help_panel='Utilities')
+)
 evaluator.add_typer(
     evaluatorLicense,
 )

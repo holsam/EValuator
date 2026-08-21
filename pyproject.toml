@@ -14,10 +14,12 @@ dependencies = [
     "pandas>=3.0.1",
     "pathlib>=1.0.1",
     "platformdirs>=4.9.4",
+    "pydantic>=2.13.4",
     "rich>=14.3.3",
     "scikit-image>=0.26.0",
     "scipy>=1.17.1",
     "tomli-w>=1.2.0",
+    "tomlkit>=0.15.0",
     "tqdm>=4.67.3",
     "typer>=0.24.1",
     "typing>=3.10.0.0",
@@ -38,11 +40,13 @@ include = [
     "LICENSE",   # Include the LICENSE file
     "README.md", # Include README or other files
     "src/evaluator/config.toml",
+    "src/evaluator/commands/plot/r/**",
     "docs/*",
 ]
 
 [dependency-groups]
 dev = [
+    "openpyxl>=3.1.5",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
 ]

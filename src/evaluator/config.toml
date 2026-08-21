@@ -1,29 +1,44 @@
-# Global defaults
-[global]
+# Global logging defaults
+[log]
 verbose = false
 debug = false
 
-# Membrane filtering defaults
-[filter]
-closure_fill_threshold = 0.05
-max_diameter_nm = 500.0
-min_diameter_nm = 20.0
-membrane_thickness_nm = 7
+# Output format configuration default
+[output] 
+format = "json"
 
-# Labelling defaults
+# Label command default configuration parameters
 [label]
+max_workers = 0
+
+# Model command default configuration parameters
+[model]
+rmse_relative_max = 0.15
+min_points = 20
+max_workers = 0
+
+# Analyse command default configuration parameters
+[analyse]
+fill_threshold = 0.05
+maximum_diameter_nm = 500.0
+minimum_diameter_nm = 20.0
+membrane_thickness_nm = 7
+max_workers = 0
+
+# Plot command default configuration parameters
+[plot]
+default_sections = ["distributions", "qc", "scatter"]
+fill_ratio_flag_threshold = 0.05
+
+# Visualise command default configuration parameters
+[visualise]
 overlay_style = "both"          # style of overlay to use (valid options: both, filled, contours)
 n_slices = 9                    # default number of slices in tiled panel
-
-# Matplotlib style defaults
-[mplstyle]
+fps = 45
+downsample = 2
 colourmap = "tab20"             # matplotlib colormap used to assign colours to component labels
 alpha_fill = 0.35               # opacity of filled overlay regions
 contour_linewidth = 1.0         # line width for contour overlays
 label_fontsize = 6              # font size for component label text annotations
 figure_dpi = 300                # output image resolution in dots per inch
-
-# Visualisation defaults
-[visualisation]
-fps = 45
-downsample = 2
+max_workers = 0

@@ -1,138 +1,145 @@
 # EValuator - config
 
 ## Overview
-The `config` command manages EValuator's configuration files. EValuator ships with a bundled default configuration file (`config.toml`) which controls default values for filtering thresholds, visualisation settings, and plot styles. A user-specific configuration file can be created in the OS configuration directory to override any of these defaults without modifying the package itself.
+The `config` command creates and edits EValuator's configuration file. The file is stored inside the output directory alongside results, so each project can have its own settings and the configuration that produced a given set of outputs is always co-located with them.
 
-The user configuration file is stored at the following path depending on the operating system:
-| OS | Path |
-|---|---|
-| Linux / macOS | `~/.config/evaluator/config.toml` |
-| Windows | `%APPDATA%\evaluator\config.toml` |
+The configuration file is located at `evaluator/config.toml` where `evaluator/` is the output directory that EValuator writes into. Results for each command sit in subdirectories of the same tree:
+```
+evaluator/
+  config.toml
+  label/
+  repair/
+  analyse/
+  visualise/
+```
 
-Running `evaluator config` without a subcommand reports whether a user configuration file exists, and shows its current settings if so.
+EValuator ships with built-in default values for all settings. If no `config.toml` exists when a pipeline command runs, one is created automatically from those defaults and a notice is printed. The `config` command is provided for explicitly creating or editing the configuration file directly.
 
 ## Usage
 
 ```
-Usage: evaluator config [COMMAND]
+Usage: evaluator config [OPTIONS] PATH
 
-Config Commands:
-  init    Create a user config file populated with default settings.
-  exists  Report whether a user config file exists.
-  list    Print current config values against EValuator defaults.
-  verify  Check all expected keys are present in the user config file.
-  reset   Overwrite the user config file with EValuator default values.
+Arguments:
+  PATH               Path to directory or configuration file path
+
+Options:
+  -s, --stepwise     Edit values through stepwise terminal prompting instead of in editor
+  --help             Show this message and exit.
 ```
 
-## Subcommands
+## Path resolution
 
-### `init`
+`evaluator config` accepts any of the following as `PATH` and resolves it to a config file in a consistent way:
 
-Creates a user configuration file at the OS configuration directory, populated with EValuator's built-in default values. This is the recommended starting point for customising EValuator's behaviour.
+`PATH` | Configuration resolution
+-- | --
+An existing `.toml` file | `PATH` is edited directly
+An `evaluator/` directory | `<PATH>/config.toml` within the passed directory is edited
+A directory containing `evaluator/config.toml` | `<PATH>/evaluator/config.toml` is edited
+A directory with no `evaluator` directory or `config.toml` | `<PATH>/evaluator/config.toml` is created from defaults, with a prompt to edit
+
+Resolution stops at the first matching rule, so pointing at a directory that is already an `evaluator/` directory will never nest a second `evaluator/` inside it.
+
+## Behaviour
+
+**Existing config found.** The file opens immediately in `$EDITOR` (or using interactive prompts with `-s`/`--stepwise`).
+
+**No config found.** The file is created from built-in defaults, and a prompt asks:
+```
+Edit it now? [Y/n]:
+```
+Answering yes opens the editor. Answering no leaves the configuration file in place with default values.
+
+**Automatic creation during pipeline runs.** If an EValuator command (e.g. `label`, `analyse`) is run in a directory with no `config.toml`, one is created silently from defaults and the pipeline continues.
+
+## Editing modes
+
+### Open in `$EDITOR` (default)
 
 ```sh
-evaluator config init
+evaluator config
+evaluator config path/to/project
 ```
 
-If a user configuration file already exists, `init` will not overwrite it. Run `evaluator config reset` instead to restore defaults.
+Opens the config file in whatever editor is set in the `$EDITOR` environment variable (the same behaviour as `git config --edit`). Save and close the file to apply changes. If the saved file fails validation, a warning is printed but no exception is raised.
 
----
-
-### `exists`
-
-Reports whether a user configuration file is present at the expected path, and prints that path.
+### Stepwise in terminal (with `-s`/`--stepwise`)
 
 ```sh
-evaluator config exists
+evaluator config -s
+evaluator config -s path/to/project
 ```
 
-Exits with a non-zero code if no user configuration file is found.
+Walks through each setting one by one, printing the current value as the default. Press Enter to keep a value or type a new one. Comments and file layout are preserved. Array-type settings are skipped and must be edited in the file directly. Changes are validated before being written. If any value fails validation, the session is aborted and the original file is left unchanged.
 
----
-
-### `list`
-
-Prints a table of all current configuration values, comparing them against the EValuator built-in defaults. Keys whose user-set value differs from the default are highlighted.
+## CLI overrides
+Every pipeline command accepts flags that override individual config values for a single run without modifying `config.toml`. For example:
 
 ```sh
-evaluator config list
+evaluator analyse labelled_segmentation.mrc --min-diameter 50 --fill-threshold 0.8
 ```
 
-If no user configuration file exists, the table reflects the built-in defaults.
+The effective values used for each run are recorded in `evaluator/<command>/params.toml` alongside the results for reference.
 
----
-
-### `verify`
-
-Checks that all expected configuration keys are present in the user configuration file, and that no unexpected keys are present, by comparing against the bundled default configuration. Useful after manually editing `config.toml` or after upgrading EValuator.
-
-```sh
-evaluator config verify
-```
-
-Exits with a non-zero code if any missing or unexpected keys are found, listing them in the terminal output. Run `evaluator config reset` to restore a valid configuration.
-
----
-
-### `reset`
-
-Overwrites the user configuration file with EValuator's built-in default values. Includes a confirmation prompt by default; use `--force` to skip this.
-
-```sh
-evaluator config reset
-evaluator config reset --force
-```
-
-**Options:**
-
-| Option | Description |
-|---|---|
-| `--force` | Skip the confirmation prompt and overwrite immediately. |
-
----
 
 ## Configuration file reference
-
-The default `config.toml` is shown below, with all available keys and their default values.
+The default `config.toml` is shown below with all available keys and their default values. Each section corresponds to the command or feature that uses those settings.
 
 ```toml
-# Global defaults
-[global]
+# Global logging defaults
+[log]
 verbose = false
 debug = false
 
-# Membrane filtering defaults
-[filter]
-closure_fill_threshold = 0.05
-max_diameter_nm = 500.0
-min_diameter_nm = 20.0
+# Label command default configuration parameters
+[label]
+
+# Analyse command default configuration parameters
+[analyse]
+fill_threshold = 0.05
+maximum_diameter_nm = 500.0
+minimum_diameter_nm = 20.0
 membrane_thickness_nm = 7
 
-# Labelling defaults
-[label]
-overlay_style = "both"    # valid options: both, filled, outlined
-n_slices = 9              # default number of slices in tiled overlay panel
-
-# Matplotlib style defaults
-[mplstyle]
-colourmap = "tab20"       # matplotlib colourmap for component label colours
-alpha_fill = 0.35         # opacity of filled overlay regions
-contour_linewidth = 1.0   # line width for contour overlays
-label_fontsize = 6        # font size for component label text annotations
-figure_dpi = 300          # output image resolution in dots per inch
-
-# Visualisation defaults
-[visualisation]
+# Visualise command default configuration parameters
+[visualise]
+overlay_style = "both"          # style of overlay to use (valid options: both, filled, contours)
+n_slices = 9                    # default number of slices in tiled panel
 fps = 45
 downsample = 2
+colourmap = "tab20"             # matplotlib colormap used to assign colours to component labels
+alpha_fill = 0.35               # opacity of filled overlay regions
+contour_linewidth = 1.0         # line width for contour overlays
+label_fontsize = 6              # font size for component label text annotations
+figure_dpi = 300                # output image resolution in dots per inch
 ```
 
-Each `[section]` corresponds to the part of EValuator that uses those settings:
+Section reference:
 
-- **`[filter]`**: default values for `analyse` filtering options (`--min-diam`, `--max-diam`, `--fill-threshold`) and the membrane thickness assumption used to convert diameter limits to voxel-count limits.
-- **`[label]`**: default values for the `visualise overlay` tiled panel options.
-- **`[mplstyle]`**: controls the appearance of all matplotlib-generated outputs (overlay images, Z-stack movies).
-- **`[visualisation]`**: default frame rate for Z-stack movies and downsampling factor for isometric renders.
+- **`[log]`**: verbosity and debug output, applied across all commands.
+- **`[label]`**: default values for `label` command (empty)
+- **`[analyse]`**: — default values for `analyse` filtering options (`--min-diam`, `--max-diam`, `--fill-threshold`) and the membrane thickness assumption used to convert diameter limits to voxel-count limits.
+- **`[label]`**: default values for `visualise` commands: overlay styles, panel tiling, appearance of all matplotlib-generated outputs (overlay images, Z-stack movies), frame rate for Z-stack movies and downsampling factor for isometric renders.
+
+Unknown keys in any section are rejected at load time, and EValuator will raise a `ConfigError` naming the unknown key. `evaluator config` can then be run to reopen the file and correct it.
+
+
+## Examples
+
+```sh
+# Set up config for a new project in the current directory
+evaluator config
+
+# Set up config for a project in a specific directory
+evaluator config ~/data/experiment_01
+
+# Edit an existing config interactively
+evaluator config -i ~/data/experiment_01
+
+# Point directly at a config file
+evaluator config ~/data/experiment_01/evaluator/config.toml
+```
 
 <br>
 

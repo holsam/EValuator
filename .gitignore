@@ -1,5 +1,6 @@
-# Local development environment files
+# Local development environment files & outputs
 .local
+out
 
 # MacOS files
 .DS_Store

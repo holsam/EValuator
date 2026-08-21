@@ -8,13 +8,12 @@ EValuator: SEGMENTATION ANALYSIS PIPELINE
 # ====================
 import typer
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 # ====================
 # Import EValuator utilities
 # ====================
 from evaluator.commands.analyse import analyse as analyseFuncs
-from evaluator.utils.settings import config, lg
 
 # ====================
 # Initialise typer as evaluatorAnalyse
@@ -29,41 +28,59 @@ def analyse(
     input: Annotated[
         Path,
         typer.Argument(
-            help="Path to either a single labelled MRC file (output of [bold]label[/bold]) or a directory of labelled MRC files.",
+            help="Path to either a single labelled MRC file (output of [bold]label[/bold]) or a directory of labelled MRC files",
             exists=True,
             file_okay=True,
-            dir_okay=True,
+            dir_okay=False,
             readable=True,
         )
     ],
     # Define output option: output directory, defaults to current working directory
     output: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option(
             "-o", "--out-dir",
-            help="Path to output directory. Output files will be written under '.../evaluator/results/analyse/'.",
+            help='Path to output directory, outputs will be written under ".../evaluator/analyse/"',
             file_okay=False,
             dir_okay=True,
             writable=True,
         )
     ] = Path("."),
-    # Define mindiam option: minimum EV equivalent diameter filter
-    mindiam: Annotated[
-        float,
-        typer.Option("--min-diam", help="Minimum EV equivalent diameter in nm to use for filtering.", min=0)
-    ] = config['filter']['min_diameter_nm'],
-    # Define maxdiam option: maximum EV equivalent diameter filter
-    maxdiam: Annotated[
-        float,
-        typer.Option("--max-diam", help="Maximum EV equivalent diameter in nm to use for filtering.", min=0)
-    ] = config['filter']['max_diameter_nm'],
-    # Define fillthreshold option: closure fill threshold for enclosure detection
-    fillthreshold: Annotated[
-        float,
-        typer.Option("--fill-threshold", help="Closure fill threshold to use for determining enclosed EVs.", min=0.0, max=1.0)
-    ] = config['filter']['closure_fill_threshold'],
+    # Define optional configuration overrides
+    minimum_diameter_nm: Annotated[
+        Optional[float],
+        typer.Option('--min-diameter', help='Override configuration minimum diameter parameter for this run')
+    ] = None,
+    maximum_diameter_nm: Annotated[
+        Optional[float],
+        typer.Option('--max-diameter', help='Override configuration maximum diameter parameter for this run')
+    ] = None,
+    fill_threshold: Annotated[
+        Optional[float],
+        typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run', min=0, max=1)
+    ] = None,
+    membrane_thickness_nm: Annotated[
+        Optional[float],
+        typer.Option('--membrane-thickness', help='Override configuration membrane thickness parameter for this run')
+    ] = None,
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Run post-processing pipeline on labelled EV segmentation files.
     '''
-    analyseFuncs.analyse(input, output, mindiam, maxdiam, fillthreshold)
+    # Validate diameter arguments
+    if minimum_diameter_nm >= maximum_diameter_nm:
+        raise typer.BadParameter(f'Diameters are not compatible.')
+
+    analyseFuncs.analyse(
+        input,
+        output,
+        minimum_diameter_nm=minimum_diameter_nm,
+        maximum_diameter_nm=maximum_diameter_nm,
+        fill_threshold=fill_threshold,
+        membrane_thickness_nm=membrane_thickness_nm,
+        max_workers=jobs,
+    )

@@ -8,13 +8,12 @@ EValuator: TOMOGRAM VISUALISER
 # ====================
 import matplotlib, typer
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional
 matplotlib.use("Agg")
 
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.utils.settings import config, lg
 from evaluator.commands.visualise import visualise as visualiseFuncs
 
 # ====================
@@ -54,14 +53,18 @@ def visualise(
     ] = Path("."),
     # Define downsample option: downsampling factor for isometric render
     downsample: Annotated[
-        int,
+        Optional[int],
         typer.Option("--downsample", help="Downsampling factor for isometric render.", min=1)
-    ] = config['visualisation']['downsample'],
+    ] = None,
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Generate an isometric surface render from an MRC file
     '''
-    visualiseFuncs.generate_isometric_view(input, output, downsample)
+    visualiseFuncs.generate_isometric_view(input, output, downsample=downsample, max_workers=jobs)
 
 # ====================
 # Define subcommand: movie
@@ -92,14 +95,18 @@ def movie(
     ] = Path("."),
     # Define fps option: frame rate for Z-stack movie
     fps: Annotated[
-        int,
+        Optional[int],
         typer.Option("--fps", help="Frame rate for Z-stack movie.", min=0)
-    ] = config['visualisation']['fps'],
+    ] = None,
+    jobs: Annotated[
+        Optional[int],
+        typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
+    ] = None,
 ):
     '''
     Generate a Z-stack movie from an MRC file
     '''
-    visualiseFuncs.generate_movie(input, output, fps)
+    visualiseFuncs.generate_movie(input, output, fps=fps, max_workers=jobs)
 
 
 
@@ -155,28 +162,29 @@ def overlay(
         Literal["png", "jpg", "tiff"],
         typer.Option("-f", "--out-format", help="File format for output image.")
     ] = "png",
-    # Define style option: overlay rendering style
-    style: Annotated[
-        Literal["both", "filled", "outlined"],
-        typer.Option("-s", "--style", help="Overlay style for labelled output image.")
-    ] = "both",
     # Define slice option: render a single Z-slice instead of a tiled panel
     slice: Annotated[
-        int | None,
+        Optional[int],
         typer.Option("--slice", help="Render a single Z-slice at this index instead of a tiled panel.", min=0)
     ] = None,
-    # Define n_slices option: number of tiles in the panel
-    n_slices: Annotated[
-        int,
-        typer.Option("--n-slices", help="Number of evenly-spaced slices in the tiled panel.", min=0)
-    ] = config['label']['n_slices'],
     # Define export_mp4 option: export a Z-stack overlay movie
     export_mp4: Annotated[
         bool,
         typer.Option("--export-mp4", help="Export a Z-stack MP4 (or GIF fallback) overlay movie alongside the static image.")
     ] = False,
+    # CLI overrides
+    # Define style option: overlay rendering style
+    overlay_style: Annotated[
+        Optional[Literal["both", "filled", "outlined"]],
+        typer.Option("-s", "--style", help="Overlay style for labelled output image.")
+    ] = None,
+    # Define n_slices option: number of tiles in the panel
+    n_slices: Annotated[
+        Optional[int],
+        typer.Option("--n-slices", help="Number of evenly-spaced slices in the tiled panel.", min=0)
+    ] = None,
 ):
     '''
     Overlay labelled EV components onto a tomogram and save as an image
     '''
-    visualiseFuncs.overlay(tomogram, labelled, csv, output, out_format, style, slice, n_slices, export_mp4)
+    visualiseFuncs.overlay(tomogram, labelled, csv, output, out_format, slice, export_mp4, overlay_style=overlay_style, n_slices=n_slices)

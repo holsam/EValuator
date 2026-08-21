@@ -7,6 +7,7 @@ EValuator: SEGMENTATION ANALYSIS
 # Import external dependencies
 # ====================
 import datetime, numpy
+from functools import partial
 from pathlib import Path
 from rich import print
 from skimage import measure
@@ -16,9 +17,12 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 # ====================
 # Import shared EValuator utilities
 # ====================
-from evaluator.utils.settings import config, lg
+
+from evaluator.utils import batch as batchutil
+from evaluator.utils import config as confutil
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
+from evaluator.utils.settings import lg
 
 # ====================
 # Import EValuator analyse utilities
@@ -31,16 +35,22 @@ from evaluator.commands.analyse.utils import filtering, geometry, io, measuremen
 def analyse(
     input,
     output,
-    mindiam,
-    maxdiam,
-    fillthreshold,
+    **overrides,
 ):
+    # Load configuration file
+    lg.debug(f"analyse | Loading configuration file...")
+    config, evaluator_dir = confutil.load_config(output)
+    # If CLI overrides provided:
+    lg.debug(f"analyse | Setting run parameters...")
+    updates = {k: v for k, v in overrides.items() if v is not None}
+    params = config.analyse.model_copy(update=updates)
     # Validate input file(s)
     lg.debug(f"analyse | Validating input file(s)...")
-    seg_files = filtering.analyseCheckInput(input)
+    seg_files = batchutil.resolve_mrc_inputs(input)
     # Create output directory structure
     lg.debug(f"analyse | Creating output directory structure...")
-    out_dir = pathutil.generateOutputFileStructure(output, "analyse")
+    out_dir = pathutil.generate_command_output_dir(evaluator_dir, "analyse")
+    confutil.write_params(params, out_dir)
     # Define output file path
     lg.debug(f"analyse | Defining output file...")
     out_file = pathutil.checkUniqueFileName(out_dir, "analyse")
@@ -50,16 +60,16 @@ def analyse(
     START_TIME = datetime.datetime.now()
     print(f"\nEV post-processing pipeline started: {START_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
     # Run pipeline
-    analyse_results = []
     lg.debug(f"analyse | Starting pipeline...")
-    with logging_redirect_tqdm():
-        for segfile in tqdm(seg_files, desc="Segmentation files processed"):
-            try:
-                segfile_results = processSegmentation(segfile, mindiam, maxdiam, fillthreshold)
-                analyse_results.extend(segfile_results)
-            except Exception as e:
-                lg.warning(f"Failed to process {segfile.name}: {e}")
-                continue
+    worker = partial(
+        processSegmentation,
+        minimum_diameter=params.minimum_diameter_nm,
+        maximum_diameter=params.maximum_diameter_nm,
+        fill_threshold=params.fill_threshold,
+        membrane_thickness=params.membrane_thickness_nm,
+    )
+    per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed", max_workers=params.max_workers)
+    analyse_results = [row for file_results in per_file_results for row in file_results]
     END_TIME = datetime.datetime.now()
     print(f"EV analysis pipeline finished: {END_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
     if not analyse_results:
@@ -74,7 +84,7 @@ def analyse(
 # =========================
 # DEFINE FUNCTION: processSegmentation
 # =========================
-def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill_threshold):
+def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill_threshold, membrane_thickness):
     '''
     Process a given labelled segmentation file by calling the component processing
     function for each component.
@@ -100,7 +110,7 @@ def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill
     lg.debug(f"analyse | {seg_path.name} | Measuring component properties...")
     component_list = measure.regionprops(components)
     lg.debug(f"analyse | {seg_path.name} | Calculating voxel size limits...")
-    membrane_thickness_vox = config['filter']['membrane_thickness_nm'] / voxel_size_nm if voxel_size_nm else 1.0
+    membrane_thickness_vox = membrane_thickness / voxel_size_nm if voxel_size_nm else 1.0
     if voxel_size_nm is not None:
         min_vox = geometry.shellVolume(minimum_diameter, voxel_size_nm, membrane_thickness_vox)
         max_vox = geometry.shellVolume(maximum_diameter, voxel_size_nm, membrane_thickness_vox)

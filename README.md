@@ -17,7 +17,9 @@ EValuator provides several commands:
 | Group | Command | Description |
 |---|---|---|
 | Component Identification| [`label`](docs/label.md) | Identified connected components from a tomogram and outputs a labelled MRC file for use with other EValuator commands.|
+| Component Modelling | [`model`](docs/model.md) | Fits least-squares sphere/ellipsoid models to labelled EVs and gates each fit on reliability. |
 | Component Analysis|  [`analyse`](docs/analyse.md) | Run a morphological analysis pipeline on one or more labelled segmentation files and write results to a CSV. |
+| Component Analysis|  [`plot`](docs/plot.md) | Generate plots and summary tables from `analyse` and/or `model` output. |
 | Component Visualisation| [`visualise`](docs/visualise.md) | Generate various visualisations of tomograms and/or segmentation masks. |
 
 
@@ -60,8 +62,12 @@ Options:
 Component Identification:
   label       Label connected components in a segmentation MRC
 
+Component Modelling:
+  model       Model labelled EVs using a least squares fit approach
+
 Component Analysis:
   analyse     Run morphological analysis pipeline on labelled MRC files
+  plot        Generate plots from evaluator analyse and/or model output
 
 Component Visualisation:
   visualise   Generate visualisations from MRC data
@@ -76,25 +82,32 @@ Use `evaluator COMMAND --help` for detailed usage information for each command o
 - [`docs/analyse.md`](docs/analyse.md)
 - [`docs/config.md`](docs/config.md)
 - [`docs/label.md`](docs/label.md)
+- [`docs/model.md`](docs/model.md)
+- [`docs/plot.md`](docs/plot.md)
 - [`docs/visualise.md`](docs/visualise.md)
 
 ## Workflow
 EValuator is structured around a three-step workflow. Each step produces output that feeds into the next:
 
 ```
-MemBrain-seg segmentation (.mrc)
-          │
-          ▼
-   evaluator label               →  labelled MRC  (<stem>_labelled.mrc)
-          │
-          ▼
-   evaluator analyse             →  morphology CSV  (evaluator-analyse_results.csv)
-          │
-          ▼
-   evaluator visualise overlay   →  overlay image  (<stem>_overlay-<style>.png)
+ MemBrain-seg segmentation (.mrc)
+           │
+           ▼
+    evaluator label                                 →  labelled MRC  (<stem>_labelled.mrc)
+           │
+           ├──▶ evaluator analyse                   →  morphology CSV (evaluator-analyse_results.csv)
+           │            │   │
+           │            │   └──▶ evaluator plot     →  plots + summary tables (evaluator/plot/)
+           │            ▼        ▲
+           │            evaluator visualise overlay →  overlay image (<stem>_overlay-<style>.png)
+           │                     │       
+           │                     │
+           └──▶ evaluator model  ┘                  →  fit results + fitted MRC (model_results.json/csv, model_fitted.mrc)
 ```
 
-**Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse`.
+**Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse` and `model`.
+
+**`model`**: fits a least-squares sphere and, where the data support it, an ellipsoid to each labelled EV, gates the fit on reliability (RMSE, point count, surface coverage), and writes the per-vesicle fit parameters plus a rasterised fitted MRC of the reliable vesicles for visual QC.
 
 **Step 2: `analyse`**: runs the morphological analysis pipeline on a labelled MRC (or directory of labelled MRCs), filters components by size, and extracts quantitative measurements for each identified EV, writing the results to a CSV file.
 
@@ -102,29 +115,40 @@ MemBrain-seg segmentation (.mrc)
 
 In addition, the `visualise movie` and `visualise isoview` subcommands can be used independently at any stage to quickly inspect MRC data.
 
+**Optional: `plot`**: generates plots and summary tables from `analyse` and/or `model` output.
+
+### Batch processing
+`label`, `model`, `analyse`, `visualise movie`, and `visualise isoview` all accept individual MRC files or a directory containing multiple MRC files. In the latter case, each valid MRC file is processed independently across worker processes, skipping invalid files (logged to terminal). The number of parallel jobs can be controlled via:
+1. `-j`/`--jobs` on the command line (highest priority)
+2. `max_workers` under the relevant section (`[label]`, `[model]`, `[analyse]`, `[visualise]`) of `config.toml`
+3. If unset or `0`, all available CPU cores are used
+
+```sh
+# Cap analysis at 4 worker processes for this run only
+evaluator analyse evaluator/results/label/ -j 4
+```
+
 ## Quick start examples
 ```sh
 # Step 1: label connected components in a MemBrain-seg segmentation mask
 evaluator label tomo_seg.mrc
 
+# Fit least-squares models to the labelled EVs (in parallel with Step 2)
+evaluator model evaluator/label/tomo_seg_labelled.mrc
+
 # Step 2: run the morphological analysis pipeline on the labelled MRC
-evaluator analyse evaluator/results/label/tomo_seg_labelled.mrc
+evaluator analyse evaluator/label/tomo_seg_labelled.mrc
 
 # Step 3: overlay identified EVs onto the original tomogram
-evaluator visualise overlay tomo.mrc evaluator/results/label/tomo_seg_labelled.mrc \
-    -c evaluator/results/analyse/evaluator-analyse_results.csv
+evaluator visualise overlay tomo.mrc evaluator/label/tomo_seg_labelled.mrc \
+    -c evaluator/analyse/evaluator-analyse_results.csv
+
+# Optionally: generate summary plots from analyse (and/or model) output
+evaluator plot --analyse evaluator/results/analyse/evaluator-analyse_results.csv --all
 
 # Optionally: inspect raw MRC data
 evaluator visualise movie tomo.mrc
 evaluator visualise isoview tomo_seg.mrc
-```
-
-To process a full directory of segmentations in batch:
-
-```sh
-evaluator label /path/to/segmentations/
-# then run analyse on the labelled output directory:
-evaluator analyse evaluator/results/label/
 ```
 
 Verbosity flags are set on the root `evaluator` command and apply to all subcommands:
@@ -135,14 +159,8 @@ evaluator -vv analyse evaluator/results/label/    # debug messages
 ```
 
 ## Configuration
+EValuator runs using options defined in a configuration file `.../evaluator/config.toml`, which can be created and edited using the `evaluator config` command. If command-line options are provided which conflict with the configuration file, EValuator will use the provided options and save these to a `.../evaluator/<command>/params.toml` file but will not edit the `.../evaluator/config.toml` file. See the [`config` documentation](docs/config.md) for full details.
 
-EValuator ships with a built-in default configuration file (`config.toml`). User-specific settings can be written to the OS configuration directory (e.g. `~/.config/evaluator/config.toml` on Linux/macOS) to override these defaults. See the [`config` documentation](docs/config.md) for full details.
-
-To get started with a user configuration file:
-
-```sh
-evaluator config init
-```
 
 ## Getting Help & Contributing
 If you come across any bugs/issues while using EValuator, or if you have a feature request, please open an issue [here][issues-url].
