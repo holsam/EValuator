@@ -51,6 +51,12 @@ class AnalyseConfig(_Section):
     membrane_thickness_nm: float = Field(..., description='Membrane thickness (nm)')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
+class PlotConfig(_Section):
+    '''Configuration parameters for `evaluator plot` command'''
+    default_sections: list[Literal['distributions', 'qc', 'scatter', 'concordance', 'compare']] = Field(
+        default_factory=lambda: ['distributions', 'qc', 'scatter'], description='Sections run when --section/--all are not given',
+    )
+    fill_ratio_flag_threshold: float = Field(0.05, description='closure_fill_ratio below this is flagged in qc plots')
 
 class VisualiseConfig(_Section):
     '''Configuration parameters for `evaluator visualise` command'''
@@ -73,6 +79,7 @@ class Config(_Section):
     label: LabelConfig
     model: ModelConfig = ModelConfig()
     analyse: AnalyseConfig
+    plot: PlotConfig = PlotConfig()
     visualise: VisualiseConfig
 
 
