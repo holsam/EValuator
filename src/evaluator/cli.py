@@ -55,7 +55,7 @@ evaluator.add_typer(
 evaluator.add_typer(
     evaluatorAnalyse,
 )
-evaluator.add_type(
+evaluator.add_typer(
     evaluatorPlot,
 )
 evaluator.add_typer(
