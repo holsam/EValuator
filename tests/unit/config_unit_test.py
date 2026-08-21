@@ -19,6 +19,7 @@ from evaluator.utils.config import (
     ConfigNotFoundError,
     create_default_config,
     AnalyseConfig,
+    PlotConfig,
     load_config,
     read_config,
     resolve_config,
@@ -460,3 +461,26 @@ class TestEditConfigStepwise:
             with pytest.raises(Exception):
                 edit_config(cfg, stepwise=True)
         assert not candidate.exists()
+
+class TestPlotConfig:
+    def test_default_construction(self):
+        cfg = PlotConfig()
+        assert cfg.default_sections == ['distributions', 'qc', 'scatter']
+        assert cfg.fill_ratio_flag_threshold == 0.05
+
+    def test_extra_key_forbidden(self):
+        with pytest.raises(ValidationError):
+            PlotConfig(unknown_key=True)
+
+    def test_invalid_section_name_rejected(self):
+        with pytest.raises(ValidationError):
+            PlotConfig(default_sections=['not_a_real_section'])
+
+    def test_packaged_config_toml_has_plot_section(self):
+        '''config.toml's [plot] section round-trips through Config.model_validate'''
+        from importlib.resources import files
+        import tomllib
+        data = tomllib.loads((files('evaluator') / 'config.toml').read_text(encoding='utf-8'))
+        config = Config.model_validate(data)
+        assert config.plot.default_sections == ['distributions', 'qc', 'scatter']
+    

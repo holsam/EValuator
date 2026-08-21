@@ -25,6 +25,11 @@ minimum_diameter_nm = 20.0
 membrane_thickness_nm = 7
 max_workers = 0
 
+# Plot command default configuration parameters
+[plot]
+default_sections = ["distributions", "qc", "scatter"]
+fill_ratio_flag_threshold = 0.05
+
 # Visualise command default configuration parameters
 [visualise]
 overlay_style = "both"          # style of overlay to use (valid options: both, filled, contours)

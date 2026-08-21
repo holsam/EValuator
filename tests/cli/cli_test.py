@@ -107,6 +107,33 @@ class TestAnalyseCLI:
         )
         assert result.exit_code != 0
 
+class TestPlotCLI:
+    '''Plot command CLI tests'''
+    def test_help_exits_zero(self):
+        result = runner.invoke(evaluator, ['plot', '--help'])
+        assert result.exit_code == 0
+    def test_no_input_exits_nonzero(self):
+        result = runner.invoke(evaluator, ['plot'])
+        assert result.exit_code != 0
+    def test_nonexistent_analyse_file_exits_nonzero(self, tmp_path):
+        fake = tmp_path / 'does_not_exist.csv'
+        result = runner.invoke(evaluator, ['plot', '--analyse', str(fake)])
+        assert result.exit_code != 0
+    def test_nonexistent_model_file_exits_nonzero(self, tmp_path):
+        fake = tmp_path / 'does_not_exist.json'
+        result = runner.invoke(evaluator, ['plot', '--model', str(fake)])
+        assert result.exit_code != 0
+    def test_valid_analyse_only_dispatches(self, tmp_path):
+        analyse = tmp_path / 'analyse.csv'
+        analyse.write_text(
+            'tomogram,label,equiv_diameter_nm,major_axis_diameter,minor_axis_diameter,'
+            'aspect_ratio,eccentricity,membrane_volume,lumen_volume,surface_area,'
+            'is_enclosed,closure_fill_ratio\ntomo1.mrc,1,80.0,90.0,70.0,1.28,0.5,50000,30000,20000,True,0.4\n'
+        )
+        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
+             patch('evaluator.commands.plot.plot.dispatch'):
+            result = runner.invoke(evaluator, ['plot', '--analyse', str(analyse), '-o', str(tmp_path), '--section', 'qc'])
+        assert result.exit_code == 0
 
 class TestVisualiseCLI:
     '''Visualise command CLI tests'''
