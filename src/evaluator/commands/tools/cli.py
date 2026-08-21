@@ -14,6 +14,7 @@ import typer
 # ====================
 from evaluator.commands.tools.animate import evaluatorAnimate
 from evaluator.commands.tools.benchmark import evaluatorBenchmark
+from evaluator.commands.tools.r_deps import evaluatorRDeps
 
 # ====================
 # Initialise typer as evaluatorTools
@@ -35,4 +36,9 @@ evaluatorTools.add_typer(
     evaluatorBenchmark,
     name='benchmark',
     help='Run EValuator benchmarks'
+)
+evaluatorTools.add_typer(
+    evaluatorRDeps,
+    name='r-deps',
+    help='Manage EValuator\'s R dependencies'
 )
