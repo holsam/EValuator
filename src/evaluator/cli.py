@@ -24,6 +24,7 @@ from evaluator.commands.analyse.cli import evaluatorAnalyse
 from evaluator.commands.label.cli import evaluatorLabel
 from evaluator.commands.license.cli import evaluatorLicense
 from evaluator.commands.model.cli import evaluatorModel
+from evaluator.commands.plot.cli import evaluatorPlot
 from evaluator.commands.version.cli import evaluatorVersion
 from evaluator.commands.visualise.cli import evaluatorVisualise
 
@@ -53,6 +54,9 @@ evaluator.add_typer(
 )
 evaluator.add_typer(
     evaluatorAnalyse,
+)
+evaluator.add_type(
+    evaluatorPlot,
 )
 evaluator.add_typer(
     evaluatorVisualise,
