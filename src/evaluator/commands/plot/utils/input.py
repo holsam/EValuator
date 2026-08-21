@@ -44,15 +44,16 @@ def _is_sample_sheet(path: Path) -> bool:
         header = fh.readline().strip().split("\t")
     return "sample_id" in header
 
-def resolve_plot_inputs(analyse_input: Path | None, model_input: Path | None) -> tuple[list[PlotRun], bool]:
+def resolve_plot_inputs(analyse_input: Path | None, model_input: Path | None) -> tuple[list[PlotRun], bool, Path | None]:
     '''
-    Resolve --analyse/--model into a list of PlotRun entries and whether this is multi-run mode (sample sheet supplied on either side)
+    Resolve --analyse/--model into a list of PlotRun entries, whether this is multi-run mode (sample sheet supplied on either side), and the sheet path used (if any)
     '''
     analyse_sheet = analyse_input is not None and _is_sample_sheet(analyse_input)
     model_sheet = model_input is not None and _is_sample_sheet(model_input)
     if not analyse_sheet and not model_sheet:
         run = PlotRun(sample_id="sample", analyse_path=analyse_input, model_path=model_input)
-        return [run], False
+        return [run], False, None
+    sheet_path = analyse_input if analyse_sheet else model_input
     analyse_rows = _read_sheet(analyse_input) if analyse_sheet else {}
     model_rows = _read_sheet(model_input) if model_sheet else {}
     sample_ids = set(analyse_rows) | set(model_rows)
@@ -67,7 +68,7 @@ def resolve_plot_inputs(analyse_input: Path | None, model_input: Path | None) ->
             group=a_row.get("group") or m_row.get("group"),
             replicate=int(a_row["replicate"]) if a_row.get("replicate") else (int(m_row["replicate"]) if m_row.get("replicate") else None),
         ))
-    return runs, True
+    return runs, True, sheet_path
 
 def _read_sheet(path: Path) -> dict[str, dict]:
     with path.open(newline="") as fh:
