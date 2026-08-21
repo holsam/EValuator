@@ -37,12 +37,8 @@ class PlotRun:
 # Define functions for parsing plot input
 # ====================
 def _is_sample_sheet(path: Path) -> bool:
-    '''A sample sheet is a TSV with a header row containing sample_id'''
-    if path.suffix.lower() not in {".tsv", ".txt"}:
-        return False
-    with path.open(newline="") as fh:
-        header = fh.readline().strip().split("\t")
-    return "sample_id" in header
+    '''A sample sheet is any TSV/TXT file (headers validated on read)'''
+    return path.suffix.lower() in {".tsv", ".txt"}
 
 def resolve_plot_inputs(analyse_input: Path | None, model_input: Path | None) -> tuple[list[PlotRun], bool, Path | None]:
     '''
