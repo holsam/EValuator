@@ -67,7 +67,7 @@ evaluator.add_typer(
 evaluator.add_typer(
     evaluatorTools,
     name='tools',
-    help='Animation and benchmarking tools',
+    help='Animation, benchmarking and miscellaneous tools',
     rich_help_panel='Utilities',
 )
 evaluator.add_typer(
