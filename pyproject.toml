@@ -40,6 +40,7 @@ include = [
     "LICENSE",   # Include the LICENSE file
     "README.md", # Include README or other files
     "src/evaluator/config.toml",
+    "src/evaluator/commands/plot/r/**",
     "docs/*",
 ]
 
