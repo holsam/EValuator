@@ -25,6 +25,7 @@ from evaluator.commands.label.cli import evaluatorLabel
 from evaluator.commands.license.cli import evaluatorLicense
 from evaluator.commands.model.cli import evaluatorModel
 from evaluator.commands.plot.cli import evaluatorPlot
+from evaluator.commands.tools.cli import evaluatorTools
 from evaluator.commands.version.cli import evaluatorVersion
 from evaluator.commands.visualise.cli import evaluatorVisualise
 
@@ -68,6 +69,12 @@ evaluator.add_typer(
 )
 evaluator.add_typer(
     evaluatorLicense,
+)
+evaluator.add_typer(
+    evaluatorTools,
+    name='tools',
+    help='Animation, benchmarking and miscellaneous tools',
+    rich_help_panel='Utilities',
 )
 evaluator.add_typer(
     evaluatorVersion
