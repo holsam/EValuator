@@ -61,7 +61,7 @@ def analyse(
     '''
     analyseFuncs.analyse(
         input,
-        output,,
+        output,
         fill_threshold=fill_threshold,
         max_workers=jobs,
     )
