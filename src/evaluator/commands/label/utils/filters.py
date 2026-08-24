@@ -36,7 +36,7 @@ def filterComponentsBySize(
         max_vox = geometry.shellVolume(maximum_diameter_nm, voxel_size_nm, membrane_thickness_vox)
     else:
         min_vox, max_vox = 0, numpy.inf
-    lg.debug(f"label | {seg_path.name} | Calculated voxel size limits: min_vox={min_vox}; max_vox={max_vox}{'' if voxel_size_nm is None else f'; membrane_thickness_vox={membrane_thickness_vox}'}")
+    lg.debug(f"label | Calculated voxel size limits: min_vox={min_vox}; max_vox={max_vox}{'' if voxel_size_nm is None else f'; membrane_thickness_vox={membrane_thickness_vox}'}")
     for component in measure.regionprops(filtered):
         if not (min_vox <= component.area <= max_vox):
             lg.debug(f"label | Component {component.label} | Voxel count {component.area} outside filter ({min_vox}<=c<={max_vox}) — excluding.")
