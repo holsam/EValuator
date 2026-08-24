@@ -9,6 +9,12 @@ format = "json"
 
 # Label command default configuration parameters
 [label]
+min_arc_coverage = 0.40
+merge_centre_tol_factor = 1.5
+merge_radius_tol_pct = 0.30
+maximum_diameter_nm = 500.0
+minimum_diameter_nm = 20.0
+membrane_thickness_nm = 7
 max_workers = 0
 
 # Model command default configuration parameters
@@ -20,9 +26,6 @@ max_workers = 0
 # Analyse command default configuration parameters
 [analyse]
 fill_threshold = 0.05
-maximum_diameter_nm = 500.0
-minimum_diameter_nm = 20.0
-membrane_thickness_nm = 7
 max_workers = 0
 
 # Plot command default configuration parameters
