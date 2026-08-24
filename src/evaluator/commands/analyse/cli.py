@@ -47,21 +47,9 @@ def analyse(
         )
     ] = Path("."),
     # Define optional configuration overrides
-    minimum_diameter_nm: Annotated[
-        Optional[float],
-        typer.Option('--min-diameter', help='Override configuration minimum diameter parameter for this run')
-    ] = None,
-    maximum_diameter_nm: Annotated[
-        Optional[float],
-        typer.Option('--max-diameter', help='Override configuration maximum diameter parameter for this run')
-    ] = None,
     fill_threshold: Annotated[
         Optional[float],
         typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run', min=0, max=1)
-    ] = None,
-    membrane_thickness_nm: Annotated[
-        Optional[float],
-        typer.Option('--membrane-thickness', help='Override configuration membrane thickness parameter for this run')
     ] = None,
     jobs: Annotated[
         Optional[int],
@@ -71,16 +59,9 @@ def analyse(
     '''
     Run post-processing pipeline on labelled EV segmentation files.
     '''
-    # Validate diameter arguments
-    if minimum_diameter_nm >= maximum_diameter_nm:
-        raise typer.BadParameter(f'Diameters are not compatible.')
-
     analyseFuncs.analyse(
         input,
-        output,
-        minimum_diameter_nm=minimum_diameter_nm,
-        maximum_diameter_nm=maximum_diameter_nm,
+        output,,
         fill_threshold=fill_threshold,
-        membrane_thickness_nm=membrane_thickness_nm,
         max_workers=jobs,
     )
