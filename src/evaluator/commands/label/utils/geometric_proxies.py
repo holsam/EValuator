@@ -34,11 +34,10 @@ def estimateArcCoverage(points: numpy.ndarray, centroid: numpy.ndarray, radius_e
     norms = numpy.linalg.norm(vecs, axis=1)
     norms[norms == 0] = 1e-9
     unit_vecs = vecs / norms[:, None]
-    # Coarse lat/long grid (10-degree bins each)
+    # Coarse lat/long grid (10-degree bins each), equal-area: bin sin(lat)
     n_lat_bins, n_lon_bins = 18, 36
-    lat = numpy.degrees(numpy.arcsin(numpy.clip(unit_vecs[:, 2], -1, 1)))
     lon = numpy.degrees(numpy.arctan2(unit_vecs[:, 1], unit_vecs[:, 0]))
-    lat_idx = numpy.clip(((lat + 90) / 180 * n_lat_bins).astype(int), 0, n_lat_bins - 1)
+    lat_idx = numpy.clip((((unit_vecs[:, 2] + 1) / 2) * n_lat_bins).astype(int), 0, n_lat_bins - 1)
     lon_idx = numpy.clip(((lon + 180) / 360 * n_lon_bins).astype(int), 0, n_lon_bins - 1)
     occupied = set(zip(lat_idx.tolist(), lon_idx.tolist()))
     return len(occupied) / (n_lat_bins * n_lon_bins)
