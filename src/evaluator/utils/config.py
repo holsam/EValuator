@@ -37,9 +37,9 @@ class LabelConfig(_Section):
     min_arc_coverage: float = Field(0.40, description='Minimum fraction of expected spherical surface a component must cover to be retained', gt=0, le=1)
     merge_centre_tol_factor: float = Field(1.5, description='Centroids within centre_tol_factor * (r_a + r_b) are merge candidates')
     merge_radius_tol_pct: float = Field(0.30, description='Maximum relative difference between two components\' estimated radii to be merge candidates', gt=0)
-    minimum_diameter_nm: float = Field(..., description='Minimum component diameter (nm)')
-    maximum_diameter_nm: float = Field(..., description='Maximum component diameter (nm)')
-    membrane_thickness_nm: float = Field(..., description='Membrane thickness (nm)')
+    minimum_diameter_nm: float = Field(20, description='Minimum component diameter (nm)')
+    maximum_diameter_nm: float = Field(500, description='Maximum component diameter (nm)')
+    membrane_thickness_nm: float = Field(7, description='Membrane thickness (nm)')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 
