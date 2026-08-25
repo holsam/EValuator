@@ -9,7 +9,7 @@ format = "json"
 
 # Label command default configuration parameters
 [label]
-min_arc_coverage = 0.40
+min_arc_coverage = 0.30
 merge_centre_tol_factor = 1.5
 merge_radius_tol_pct = 0.30
 maximum_diameter_nm = 500.0
