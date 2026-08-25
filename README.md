@@ -72,9 +72,10 @@ Component Analysis:
 Component Visualisation:
   visualise   Generate visualisations from MRC data
 
-Utility Commands:
-  config      Manage EValuator configuration files
+Utilities:
+  config      Create or edit an EValuator configuration file
   license     Print EValuator license
+  tools       Animation, benchmarking and miscellaneous tools
   version     Print current EValuator version
 ```
 
@@ -105,17 +106,17 @@ EValuator is structured around a three-step workflow. Each step produces output 
            └──▶ evaluator model  ┘                  →  fit results + fitted MRC (model_results.json/csv, model_fitted.mrc)
 ```
 
-**Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse` and `model`.
+**Step 1: `label`**: assigns a unique integer label to each connected membrane component in a binary segmentation mask, merges components that are likely split parts of the same EV, filters out components by arc-coverage and size, and writes the result as a labelled MRC file. This is a required pre-processing step before `analyse` and `model`.
 
-**`model`**: fits a least-squares sphere and, where the data support it, an ellipsoid to each labelled EV, gates the fit on reliability (RMSE, point count, surface coverage), and writes the per-vesicle fit parameters plus a rasterised fitted MRC of the reliable vesicles for visual QC.
+**Step 2a: `model`**: fits a least-squares sphere and, where the data support it, an ellipsoid to each labelled EV, gates the fit on reliability (RMSE, point count, surface coverage), and writes the per-vesicle fit parameters plus a rasterised fitted MRC of the reliable vesicles for visual QC.
 
-**Step 2: `analyse`**: runs the morphological analysis pipeline on a labelled MRC (or directory of labelled MRCs), filters components by size, and extracts quantitative measurements for each identified EV, writing the results to a CSV file.
+**Step 2b: `analyse`**: runs the morphological analysis pipeline on a labelled MRC (or directory of labelled MRCs) and extracts quantitative measurements for each identified EV, writing the results to a CSV file.
 
 **Step 3: `visualise overlay`**: reads the labelled MRC and the `analyse` CSV and renders a colour-coded overlay of the identified EVs onto slices of the original greyscale tomogram, for visual inspection of pipeline results.
 
 In addition, the `visualise movie` and `visualise isoview` subcommands can be used independently at any stage to quickly inspect MRC data.
 
-**Optional: `plot`**: generates plots and summary tables from `analyse` and/or `model` output.
+**(optional) Step 4: `plot`**: generates plots and summary tables from `analyse` and/or `model` output.
 
 ### Batch processing
 `label`, `model`, `analyse`, `visualise movie`, and `visualise isoview` all accept individual MRC files or a directory containing multiple MRC files. In the latter case, each valid MRC file is processed independently across worker processes, skipping invalid files (logged to terminal). The number of parallel jobs can be controlled via:
@@ -125,7 +126,7 @@ In addition, the `visualise movie` and `visualise isoview` subcommands can be us
 
 ```sh
 # Cap analysis at 4 worker processes for this run only
-evaluator analyse evaluator/results/label/ -j 4
+evaluator analyse evaluator/label/ -j 4
 ```
 
 ## Quick start examples
@@ -144,7 +145,7 @@ evaluator visualise overlay tomo.mrc evaluator/label/tomo_seg_labelled.mrc \
     -c evaluator/analyse/evaluator-analyse_results.csv
 
 # Optionally: generate summary plots from analyse (and/or model) output
-evaluator plot --analyse evaluator/results/analyse/evaluator-analyse_results.csv --all
+evaluator plot --analyse evaluator/analyse/evaluator-analyse_results.csv --all
 
 # Optionally: inspect raw MRC data
 evaluator visualise movie tomo.mrc
@@ -154,8 +155,8 @@ evaluator visualise isoview tomo_seg.mrc
 Verbosity flags are set on the root `evaluator` command and apply to all subcommands:
 
 ```sh
-evaluator -v analyse evaluator/results/label/     # progress messages
-evaluator -vv analyse evaluator/results/label/    # debug messages
+evaluator -v analyse evaluator/label/     # progress messages
+evaluator -vv analyse evaluator/label/    # debug messages
 ```
 
 ## Configuration

@@ -8,50 +8,64 @@
     - [Running with coverage report](#running-with-coverage-report)
 - [Test inventory](#test-inventory)
   - [conftest.py — shared session fixtures](#conftestpy--shared-session-fixtures)
-  - [unit/test\_analyse.py](#unittest_analysepy)
-  - [unit/test\_mrc.py](#unittest_mrcpy)
-  - [unit/test\_paths.py](#unittest_pathspy)
-  - [unit/test\_config.py](#unittest_configpy)
-  - [unit/test\_display.py](#unittest_displaypy)
-  - [integration/test\_label.py](#integrationtest_labelpy)
-  - [integration/test\_analyse.py](#integrationtest_analysepy)
-  - [integration/test\_config.py](#integrationtest_configpy)
-  - [cli/test\_cli.py](#clitest_clipy)
+  - [unit/conftest.py — shared unit fixtures](#unitconftestpy--shared-unit-fixtures)
+  - [unit/analyse\_unit\_test.py](#unitanalyse_unit_testpy)
+  - [unit/batch\_unit\_test.py](#unitbatch_unit_testpy)
+  - [unit/config\_unit\_test.py](#unitconfig_unit_testpy)
+  - [unit/display\_unit\_test.py](#unitdisplay_unit_testpy)
+  - [unit/label\_unit\_test.py](#unitlabel_unit_testpy)
+  - [unit/model\_unit\_test.py](#unitmodel_unit_testpy)
+  - [unit/mrc\_unit\_test.py](#unitmrc_unit_testpy)
+  - [unit/paths\_unit\_test.py](#unitpaths_unit_testpy)
+  - [unit/plot\_unit\_test.py](#unitplot_unit_testpy)
+  - [integration/analyse\_integration\_test.py](#integrationanalyse_integration_testpy)
+  - [integration/config\_integration\_test.py](#integrationconfig_integration_testpy)
+  - [integration/label\_integration\_test.py](#integrationlabel_integration_testpy)
+  - [integration/model\_integration\_test.py](#integrationmodel_integration_testpy)
+  - [integration/plot\_integration\_test.py](#integrationplot_integration_testpy)
+  - [cli/cli\_test.py](#clicli_testpy)
 - [Known expected failures](#known-expected-failures)
 - [Coverage exclusions](#coverage-exclusions)
 
 ## Overview
 The EValuator test suite uses [pytest](https://docs.pytest.org) and [pytest-cov](https://pytest-cov.readthedocs.io) and is organised into three sections:
-- **Unit tests:** fast, in-memory tests for individual functions. 
-    - All use small numpy arrays constructed inline in fixtures, so no MRC files are read or written. 
-    - These cover the analysis measurement functions, MRC utilities, path utilities, configuration management helpers, and display utilities.
-- **Integration tests:** tests that call top-level command functions (`label_components`, `analyse`, `config_*`).
-    - These are called against real MRC files on disk and assert on the content of the output files or directories, and so depend on the synthetic test MRC files described in [Test data](#test-data) below.
-- **CLI tests:** lightweight tests using `typer.testing.CliRunner` that verify argument parsing, option validation, and exit codes. 
+- **Unit tests:** fast, in-memory tests for individual functions.
+    - Most use small numpy arrays or point clouds constructed inline in fixtures/helpers, so no MRC files are read or written.
+    - These cover measurement/geometry/filtering/IO helpers, MRC utilities, path utilities, the batch-processing helper, the pydantic-based configuration system, visualisation display utilities, label merge/geometric-proxy heuristics, the model least-squares fitting and reconstruction code, and the plot command's input resolution and R dispatch logic.
+- **Integration tests:** tests that call top-level command functions (`label_components`, `analyse`, `model_evs`, `run_plot`) and pipeline-level config handling.
+    - Most are called against real MRC files on disk (via the synthetic test data described in [Test data](#test-data) below) and assert on the content of the output files or directories.
+    - `integration/plot_integration_test.py` additionally requires `Rscript` on `PATH` and is skipped automatically when it is absent.
+- **CLI tests:** lightweight tests using `typer.testing.CliRunner` that verify argument parsing, option validation, and exit codes.
     - These do not duplicate pipeline logic covered by integration tests.
 
 ## Test suite structure
 ```
 tests/
-  conftest.py                       # session-scoped fixtures for synthetic MRC files
+  conftest.py                            # session-scoped fixtures for synthetic MRC files
   data/
-    generate_test_data.py           # synthetic MRC file generator
-    test_tomogram.mrc               # generated on first run; cached
-    test_segmentation.mrc           # generated on first run; cached
-    test_segmentation_labelled.mrc  # generated on first run; cached
+    generate_test_data.py                # synthetic MRC file generator
+    test_tomogram.mrc                    # generated on first run; cached
+    test_segmentation.mrc                # generated on first run; cached
+    test_segmentation_labelled.mrc       # generated on first run; cached
   unit/
-    conftest.py                     # module-scoped small array fixtures
-    test_analyse.py                 # unit tests for commands/analyse.py
-    test_mrc.py                     # unit tests for utils/mrc.py
-    test_paths.py                   # unit tests for utils/paths.py
-    test_config.py                  # unit tests for commands/config.py
-    test_display.py                 # unit tests for utils/display.py
+    conftest.py                          # module-scoped small array fixtures
+    analyse_unit_test.py                 # unit tests for commands/analyse/utils/*
+    batch_unit_test.py                   # unit tests for utils/batch.py
+    config_unit_test.py                  # unit tests for utils/config.py & commands/config/*
+    display_unit_test.py                 # unit tests for commands/visualise/utils/display.py
+    label_unit_test.py                   # unit tests for commands/label/utils/*
+    model_unit_test.py                   # unit tests for commands/model/utils/*
+    mrc_unit_test.py                     # unit tests for utils/mrc.py
+    paths_unit_test.py                   # unit tests for utils/paths.py
+    plot_unit_test.py                    # unit tests for commands/plot/*
   integration/
-    test_label.py                   # integration tests for label_components
-    test_analyse.py                 # integration tests for analyse
-    test_config.py                  # integration tests for config subcommands
+    analyse_integration_test.py          # integration tests for analyse
+    config_integration_test.py           # integration tests for pipeline-level config resolution
+    label_integration_test.py            # integration tests for label_components
+    model_integration_test.py            # integration tests for model_evs
+    plot_integration_test.py             # integration tests for run_plot (skipped without Rscript)
   cli/
-    test_cli.py                     # CLI argument and exit code tests
+    cli_test.py                          # CLI argument and exit code tests for every subcommand
 ```
 
 ## Test data
@@ -63,7 +77,7 @@ Integration tests require synthetic MRC files, which can be reproducibly generat
 | `test_tomogram.mrc` | 300 x 682 x 960 | 5.36 Å (0.536 nm) | Float32 greyscale cryo-ET-like volume |
 | `test_segmentation.mrc` | 300 x 682 x 960 | 5.36 Å (0.536 nm) | Float32 binary mask with 4 hollow spherical shells (as would be produced by MemBrain-seg)|
 
-The shells (simulating EVs) are placed with `seed=42` and `N_EVS=4`, with outer radii uniformly drawn from 40–120 voxels (42.9–128.6 nm outer diameter) and a fixed shell thickness of 10 voxels (~5.4 nm). Non-overlap between EVs is enforced by the generator so shells remain distinct connected components during labelling. A third cached file, `test_segmentation_labelled.mrc`, is produced by running `label_components` on the segmentation and is cached alongside the other files. The tomograms are constructed using the following contrast schema:
+The shells (simulating EVs) are placed with `seed=42` and `N_EVS=4`, with outer radii uniformly drawn from 40–120 voxels (42.9–128.6 nm outer diameter) and a fixed shell thickness of 10 voxels (~5.4 nm). Non-overlap between EVs is enforced by the generator (via a further shell-thickness gap added on top of touching-radius separation) so shells remain distinct connected components during labelling. A third cached file, `test_segmentation_labelled.mrc`, is produced by running `label_components` on the segmentation and is cached alongside the other files. The tomograms are constructed using the following contrast schema:
 - **Background:** correlated Gaussian noise (sigma=1.2 vox), to mimic the texture of amorphous vitreous ice
 - **Gradient:** low-frequency YX intensity ramp, simulating ice thickness variation across the field of view
 - **Membranes:** elevated density (+1.8 above background), simulating natural electron density of lipid bilayers
@@ -101,24 +115,17 @@ uv run pytest -v
 ```
 
 ### Running with coverage report
-`pytest` can be run with coverage using the following command:
+`pytest` is configured (via `[tool.pytest.ini_options]` in `pyproject.toml`) to always run with `--cov=evaluator --cov-report=term-missing`, so a plain `uv run pytest` already prints a coverage summary. To additionally generate an HTML report:
 ```sh
 uv run pytest --cov=evaluator --cov-report=term-missing --cov-report=html
 ```
 The HTML report will be written to `htmlcov/`. Open `htmlcov/index.html` in a browser to inspect line-level coverage.
 
-The following modules are excluded from coverage measurement because they either consist entirely of Typer CLI wiring (tested at the CLI level rather than line-by-line) or produce matplotlib rendering outputs that require visual rather than automated verification:
-- `src/evaluator/cli/` — Typer CLI layer
-- `src/evaluator/commands/visualise.py` — matplotlib rendering functions
-- `src/evaluator/utils/display.py` — matplotlib rendering functions
-
-The `normaliseArray`, `getValidLabelsFromCSV`, `assignLabelColours`, and `getLabelCentroid2D` functions in `display.py` are excluded from the coverage omit list above and are fully tested in `unit/test_display.py`.
-
 
 <br>
 
 ---
-<p align="right"><a href="#evaluator">^ Back to top</a></p>
+<p align="right"><a href="#evaluator---test-suite">^ Back to top</a></p>
 
 ## Test suite files
 
@@ -130,7 +137,7 @@ Contains shared session fixtures.
 
 | Fixture | Scope | Description |
 |---|---|---|
-| `synthetic_mrc_files` | session | Generates (or locates) `test_tomogram.mrc` and `test_segmentation.mrc`. Returns `(tomo_path, seg_path)`. |
+| `synthetic_mrc_files` | session | Generates (or locates) `test_tomogram.mrc` and `test_segmentation.mrc`. Returns `[tomo_path, seg_path]`. |
 | `tomo_path` | session | Path to `test_tomogram.mrc`. |
 | `seg_path` | session | Path to `test_segmentation.mrc`. |
 | `labelled_path` | session | Runs `label_components` on the segmentation (once per session) and caches the result in `tests/data/test_segmentation_labelled.mrc`. Returns the path. |
@@ -147,14 +154,16 @@ Contains small array fixtures for unit tests.
 | Fixture | Scope | Description |
 |---|---|---|
 | `hollow_sphere_vol` | module | `(80, 80, 80)` boolean volume with a single hollow sphere: centre (40, 40, 40), r_outer=20, r_inner=12, shell thickness 8 vox. |
-| `labelled_sphere_vol` | module | Integer-labelled version of `hollow_sphere_vol` (background=0, sphere=1). Uses 6-connectivity, matching `labelComponents`. |
+| `labelled_sphere_vol` | module | Integer-labelled version of `hollow_sphere_vol` (background=0, sphere=1) using 6-connectivity. |
 | `sphere_regionprops` | module | `skimage.measure.RegionProperties` for the single sphere component. Used in tests of `measureAxes`, `measureMembraneVolumeDiameter`, etc. |
+
+Module-level constants `VOX_NM_SMALL`, `SMALL_VOL_SHAPE`, `CENTRE`, `R_OUTER`, `R_INNER` are also defined here and imported directly by `unit/analyse_unit_test.py` for analytic comparisons.
 
 </details>
 <br>
 
-### `unit/test_analyse.py`
-Tests for pure functions in `evaluator.commands.analyse`.
+### `unit/analyse_unit_test.py`
+Tests for functions in `evaluator.commands.analyse.utils.filtering`, `evaluator.commands.analyse.utils.geometry`, `evaluator.commands.analyse.utils.io`, and `evaluator.commands.analyse.utils.measurement`.
 
 <details>
 <summary>Test Descriptions</summary>
@@ -167,11 +176,11 @@ Tests for pure functions in `evaluator.commands.analyse`.
 | `test_larger_diameter_gives_larger_volume` | `shellVolume` is strictly increasing in diameter. |
 | `test_returns_positive` | Output is always positive for valid inputs. |
 
-#### `TestMorphologicalClosure`
+#### `TestMorphologicalDilation`
 | Test | What it checks |
 |---|---|
-| `test_fills_single_missing_voxel` | A voxel removed from the shell surface is restored by `binary_closing` with `ball(2)`. |
-| `test_all_original_voxels_preserved` | No existing True voxels are removed by closing. |
+| `test_fills_single_missing_voxel` | A voxel removed from the shell surface is restored by `morphologicalDilation`. |
+| `test_all_original_voxels_preserved` | No existing True voxels are removed by the dilation. |
 | `test_returns_bool_array` | Output dtype is boolean. |
 | `test_same_shape` | Output shape equals input shape. |
 
@@ -249,8 +258,258 @@ Tests for pure functions in `evaluator.commands.analyse`.
 </details>
 <br>
 
-### unit/test_mrc.py
+### `unit/batch_unit_test.py`
+Tests for `evaluator.utils.batch`.
 
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestResolveMrcInputs`
+| Test | What it checks |
+|---|---|
+| `test_resolve_mrc_inputs_single_file` | A single valid MRC file path resolves to a one-item list containing itself. |
+| `test_resolve_mrc_inputs_directory` | A directory resolves to the sorted list of `*.mrc` files it contains. |
+| `test_resolve_mrc_inputs_drops_invalid` | Files that fail `validateMRCFile` are excluded from the resolved list. |
+| `test_resolve_mrc_inputs_empty_dir_logs_error` | An empty/no-valid-file directory resolves to an empty list. |
+
+#### `TestRunBatch`
+| Test | What it checks |
+|---|---|
+| `test_run_batch_all_succeed` | `run_batch` applies `worker` to every input and collects all results. |
+| `test_run_batch_partial_failure_skips` | A worker that raises on one input is skipped; results for the other inputs are still returned. |
+| `test_run_batch_empty_input` | An empty input list returns an empty result list without error. |
+
+</details>
+<br>
+
+### `unit/config_unit_test.py`
+Tests for `evaluator.utils.config`, `evaluator.commands.config.utils.edit.edit_config`, and `evaluator.commands.config.cli`.
+
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestSchema`
+| Test | What it checks |
+|---|---|
+| `test_packaged_default_validates` | The packaged `evaluator/config.toml` validates against the `Config` pydantic model. |
+| `test_all_schema_sections_in_default` | Every top-level `Config` field has a matching table in the packaged default file. |
+| `test_unknown_key_raises` | An unrecognised key in a section raises `ValidationError` (`extra='forbid'`). |
+| `test_missing_required_field_raises` | Omitting a required field (`analyse.fill_threshold`) raises `ValidationError`. |
+| `test_label_config_type_coercion` | An int supplied for a float field (`fill_threshold`) is coerced to `float` without error. |
+
+#### `TestResolveConfig`
+| Test | What it checks |
+|---|---|
+| `test_returns_resolved_config_dataclass` | `resolve_config` returns a `ResolvedConfig` instance. |
+| `test_tilde_expansion` | A `~/`-prefixed path is expanded against `$HOME` before resolution. |
+| `test_resolver_does_not_mutate_filesystem` | Resolving a non-existent path leaves the filesystem unchanged. |
+
+#### `TestResolveConfigPrecedence`
+| Test | What it checks |
+|---|---|
+| `test_rule1_existing_file` | An explicit existing `.toml` file path is used directly (`existed=True`). |
+| `test_rule1_file_with_arbitrary_name` | Rule 1 applies regardless of the file's basename. |
+| `test_rule2_directory_contains_config_toml_directly` | A directory containing `config.toml` directly resolves to that file. |
+| `test_rule2_beats_rule3_when_both_present` | Rule 2 (`<dir>/config.toml`) takes precedence over rule 3 (`<dir>/evaluator/config.toml`) when both exist. |
+| `test_rule3_directory_contains_evaluator_subdir` | A directory containing `evaluator/config.toml` resolves to that nested file. |
+| `test_rule4_nonexistent_toml_path` | A non-existent `.toml` path resolves to itself with `existed=False`, without creating it. |
+| `test_rule5_nonexistent_directory_path` | A non-existent non-`.toml` path resolves to `<path>/evaluator/config.toml` with `existed=False`. |
+
+#### `TestCreateDefaultConfig`
+| Test | What it checks |
+|---|---|
+| `test_creates_file_and_parents` | `create_default_config` creates the target file and any missing parent directories. |
+| `test_content_matches_packaged_default` | Written content is byte-for-byte identical to the packaged `evaluator/config.toml`. |
+| `test_idempotent_overwrite` | Calling twice overwrites silently without raising. |
+| `test_comments_preserved` | The written file retains at least one `#` comment line. |
+
+#### `TestReadConfig`
+| Test | What it checks |
+|---|---|
+| `test_valid_file_returns_config` | A well-formed config file returns a `Config` instance. |
+| `test_invalid_toml_raises_config_error` | Malformed TOML raises `ConfigError` matching "not valid TOML". |
+| `test_schema_invalid_content_raises_config_error` | Schema-invalid but TOML-valid content raises `ConfigError` matching "failed validation". |
+| `test_unknown_key_raises_config_error` | An unrecognised key raises `ConfigError`. |
+| `test_raises_config_error_not_bare_pydantic` | Callers never see a raw `ValidationError` — only `ConfigError`. |
+
+#### `TestLoadConfig`
+| Test | What it checks |
+|---|---|
+| `test_autocreates_when_absent` | `load_config` creates `evaluator/config.toml` on first use and returns a valid `Config`. |
+| `test_returns_evaluator_dir` | The returned `evaluator_dir` is `<root>/evaluator`. |
+| `test_reuses_existing_config` | An existing config file is loaded rather than recreated. |
+| `test_autocreate_false_raises_when_absent` | `autocreate=False` raises `ConfigNotFoundError` when no file exists. |
+| `test_autocreate_false_succeeds_when_present` | `autocreate=False` succeeds when the file already exists. |
+| `test_autocreated_file_is_valid` | The autocreated file itself validates on a subsequent `load_config` call. |
+| `test_no_editor_opens_on_autocreate` | Autocreation during a pipeline run never calls `click.edit`. |
+
+#### `TestWriteParams`
+| Test | What it checks |
+|---|---|
+| `test_creates_params_toml` | `write_params` creates `params.toml` in the given directory. |
+| `test_custom_filename` | A custom `filename` argument is honoured. |
+| `test_output_is_valid_toml` | The written file parses as valid TOML. |
+| `test_values_match_params` | Written values match the source `AnalyseConfig` instance. |
+| `test_cli_override_is_captured` | A `model_copy(update=...)` override is reflected in the written file. |
+| `test_creates_output_dir_if_absent` | The target directory is created if it does not already exist. |
+| `test_overwrites_on_second_call` | A second call cleanly overwrites the previous `params.toml`. |
+
+#### `TestEditConfigEditor`
+| Test | What it checks |
+|---|---|
+| `test_calls_click_edit_with_file_path` | Non-stepwise `edit_config` calls `click.edit(filename=...)` once with the config path. |
+| `test_warns_but_does_not_raise_on_invalid_result` | If the editor leaves invalid TOML, a warning is printed to stderr but no exception is raised. |
+| `test_no_warning_on_valid_result` | No warning is printed when the editor produces valid content. |
+
+#### `TestEditConfigStepwise`
+| Test | What it checks |
+|---|---|
+| `test_unchanged_values_preserve_comments` | Accepting every default in stepwise mode leaves `#` comments intact. |
+| `test_changed_scalar_is_written` | A changed scalar value (`minimum_diameter_nm`) is written to the file. |
+| `test_other_values_unchanged_when_one_edited` | Editing one field leaves sibling fields (`maximum_diameter_nm`) unchanged. |
+| `test_invalid_value_aborts_without_writing` | A schema-invalid response raises and leaves the original file byte-for-byte unchanged. |
+| `test_no_candidate_file_left_on_abort` | The `.toml.candidate` scratch file is cleaned up after a validation failure. |
+
+#### `TestPlotConfig`
+| Test | What it checks |
+|---|---|
+| `test_default_construction` | Default `PlotConfig()` has `default_sections=['distributions', 'qc', 'scatter']` and `fill_ratio_flag_threshold=0.05`. |
+| `test_extra_key_forbidden` | An unrecognised keyword argument raises `ValidationError`. |
+| `test_invalid_section_name_rejected` | An unrecognised section name in `default_sections` raises `ValidationError`. |
+| `test_packaged_config_toml_has_plot_section` | The packaged `config.toml`'s `[plot]` table round-trips through `Config.model_validate`. |
+
+</details>
+<br>
+
+### `unit/display_unit_test.py`
+Tests for utility functions in `evaluator.commands.visualise.utils.display`.
+
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestNormaliseArray`
+| Test | What it checks |
+|---|---|
+| `test_output_in_unit_interval` | Output values lie in [0, 1]. |
+| `test_constant_array_returns_zeros` | A constant array returns an all-zero array (avoids division by zero). |
+| `test_output_range_for_random_array` | Output values lie in [0, 1] for random input. |
+| `test_output_shape_preserved` | Output shape equals input shape. |
+| `test_percentile_clipping_suppresses_outliers` | A single extreme outlier does not collapse contrast across the rest of the array. |
+
+#### `TestGetValidLabelsFromCSV`
+| Test | What it checks |
+|---|---|
+| `test_returns_correct_label_set` | Returns the correct set of integer labels for a matching filename. |
+| `test_filters_by_filename` | Labels from non-matching filenames are excluded. |
+| `test_returns_none_when_no_match` | Returns `None` when no rows match the given filename. |
+| `test_returns_none_for_missing_columns` | Returns `None` when `tomogram` or `label` column is absent. |
+| `test_returns_none_for_nonexistent_file` | Returns `None` for a path that does not exist. |
+| `test_labels_are_integers` | All returned labels are Python `int` instances. |
+| `test_multiple_rows_same_file` | All labels for a given filename are returned as a set. |
+
+#### `TestAssignLabelColours`
+| Test | What it checks |
+|---|---|
+| `test_returns_one_colour_per_label` | Colour dict has exactly one entry per label. |
+| `test_keys_match_input_labels` | Dict keys equal the input label set. |
+| `test_values_are_rgba_tuples` | Each value is a length-4 tuple (RGBA). |
+| `test_single_label` | Works correctly for a single-label input. |
+
+#### `TestGetLabelCentroid2D`
+| Test | What it checks |
+|---|---|
+| `test_returns_centroid_for_present_label` | Returns correct (row, col) centroid for a 3x3 block. |
+| `test_returns_none_for_absent_label` | Returns `None` when the label is not present in the slice. |
+| `test_centroid_is_integer_tuple` | Returned values are Python `int` instances. |
+| `test_single_voxel_centroid` | A single-voxel label returns its own position. |
+
+</details>
+<br>
+
+### `unit/label_unit_test.py`
+Tests for `evaluator.commands.label.utils.geometric_proxies` and `evaluator.commands.label.utils.merge`.
+
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestEstimateArcCoverage`
+| Test | What it checks |
+|---|---|
+| `test_full_sphere_near_one` | A full-sphere point cloud gives arc coverage > 0.9. |
+| `test_single_cap_below_threshold` | A single 20°-half-angle spherical cap gives arc coverage < 0.4. |
+| `test_two_opposing_arcs_combined_exceeds_either_alone` | Combining two opposing caps yields higher coverage than either cap alone. |
+| `test_empty_points_returns_zero` | An empty point array returns coverage 0.0 without raising. |
+
+#### `TestFindMergeGroups`
+| Test | What it checks |
+|---|---|
+| `test_split_pair_same_source_merges` | Two opposing caps from the same underlying sphere are grouped together. |
+| `test_separate_vesicles_not_merged` | Two well-separated spheres remain in separate singleton groups. |
+| `test_chain_merge_transitive` | Three collinear, mutually-adjacent spheres transitively merge into one group. |
+
+#### `TestApplyMerges`
+| Test | What it checks |
+|---|---|
+| `test_voxel_count_preserved` | Merging two labels reassigns all voxels to the first label; total voxel count is unchanged. |
+| `test_group_of_one_is_noop` | A merge group containing a single label leaves the volume unchanged. |
+
+</details>
+<br>
+
+### `unit/model_unit_test.py`
+Tests for `evaluator.commands.model.utils.least_squares_fit` and `evaluator.commands.model.utils.reconstruction.build_fitted_mrc`.
+
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestFitSphereLeastSquares`
+| Test | What it checks |
+|---|---|
+| `test_recovers_known_centre_and_radius` | A clean sphere point cloud recovers its true centre/radius within 0.5, with rmse < 0.5. |
+| `test_too_few_points_raises` | Fewer than the minimum required points raises `ValueError`. |
+| `test_rmse_increases_with_noise` | A noisier point cloud gives a higher fit RMSE than a clean one. |
+
+#### `TestFitEllipsoid`
+| Test | What it checks |
+|---|---|
+| `test_recovers_known_radii_axis_aligned` | An axis-aligned ellipsoid recovers its true (sorted) radii and centre. |
+| `test_too_few_points_returns_none` | Too few points (n=8) returns `None` rather than raising. |
+| `test_degenerate_flat_points_returns_none` | A flat ring of points (degenerate quadric) returns `None`. |
+
+#### `TestFitVesicleModelSelection`
+| Test | What it checks |
+|---|---|
+| `test_perfect_sphere_selects_sphere` | A clean spherical point cloud is classified `chosen_model` starting with `'sphere'`, with `radii`/`orientation` both `None`. |
+| `test_elongated_off_axis_selects_ellipsoid` | An elongated ellipsoid rotated 90° off the beam axis is classified `'ellipsoid'` with populated `radii`/`orientation`. |
+| `test_elongated_along_beam_axis_selects_sphere_beam_axis` | An elongated ellipsoid whose major axis lies along the beam (z) axis is classified `'sphere (beam-axis)'` (elongation along the beam is indistinguishable from a sphere and treated as a guard case). |
+| `test_insufficient_points_for_ellipsoid_defaults_to_sphere` | Between 4–8 points is too few to attempt an ellipsoid fit; falls back to `'sphere'` with `bic_ellipsoid=None`. |
+| `test_degenerate_ellipsoid_fit_falls_back_to_sphere` | A degenerate (flat-ring) ellipsoid fit falls back to `'sphere (degenerate)'`. |
+| `test_raises_for_fewer_than_min_sphere_points` | Fewer than the minimum sphere-fit points raises `ValueError`. |
+| `test_output_contains_expected_keys` | The result dict contains all expected keys (`chosen_model`, `centre`, `radius`, `radii`, `orientation`, `rmse_nm`, `bic_sphere`, `bic_ellipsoid`, `reliability`, `beam_axis`, `sphere_fit`, `ellipsoid_fit`). |
+
+#### `TestFitVesicleReliability`
+| Test | What it checks |
+|---|---|
+| `test_good_sphere_passes_gate` | A well-sampled, low-noise sphere passes all reliability sub-checks (`rmse_ok`, `count_ok`, `span_ok`) and is `is_reliable=True`. |
+| `test_low_point_count_fails_gate` | Fewer than 20 points fails `count_ok` and therefore `is_reliable`. |
+| `test_narrow_latitude_band_fails_gate` | A ~20° latitude band of points fails `span_ok` (under the 60° span threshold). |
+| `test_noisy_points_fail_rmse_gate` | Noise comparable to the sphere radius fails `rmse_ok`. |
+
+#### `TestBuildFittedMRC`
+| Test | What it checks |
+|---|---|
+| `test_default_excludes_unreliable` | By default, only records with `reliability.is_reliable=True` are rasterised into the output volume. |
+| `test_include_unreliable_flag_includes_all` | `include_unreliable=True` rasterises unreliable records too. |
+| `test_output_shape_matches_input` | Output volume shape matches the requested shape. |
+| `test_output_dtype_uint16` | Output array dtype is `uint16`. |
+| `test_sphere_voxel_count_matches_analytic` | Rasterised sphere voxel count ≈ (4/3)πr³ within 10%. |
+| `test_ellipsoid_voxel_count_matches_analytic` | Rasterised ellipsoid voxel count ≈ (4/3)π·a·b·c within 10%. |
+| `test_empty_records_returns_all_zero_volume` | An empty records list returns an all-zero volume of the requested shape. |
+
+</details>
+<br>
+
+### `unit/mrc_unit_test.py`
 Tests for `evaluator.utils.mrc` — MRC file I/O and component labelling.
 
 <details>
@@ -297,18 +556,16 @@ Tests for `evaluator.utils.mrc` — MRC file I/O and component labelling.
 </details>
 <br>
 
-### unit/test_paths.py
-
+### `unit/paths_unit_test.py`
 Tests for `evaluator.utils.paths` — output directory creation and unique file naming.
 
 <details>
 <summary>Test Descriptions</summary>
 
-#### `TestGenerateOutputFileStructure`
-
+#### `TestGenerateCommandOutputDir`
 | Test | What it checks |
 |---|---|
-| `test_creates_expected_subdirectory` | Returns path `<root>/evaluator/results/<command>/` and creates it. |
+| `test_creates_expected_subdirectory` | Returns path `<evaluator_dir>/<command>/` and creates it. |
 | `test_creates_label_subdirectory` | Same for the `label` command. |
 | `test_creates_visualise_subdirectory` | Same for the `visualise` command. |
 | `test_idempotent_on_existing_correct_path` | Two calls return the same path. |
@@ -329,145 +586,59 @@ Tests for `evaluator.utils.paths` — output directory creation and unique file 
 </details>
 <br>
 
-### unit/test_config.py
-
-Tests for pure functions in `evaluator.commands.config`. All filesystem operations are redirected to a temp directory via monkeypatch.
-
+### `unit/plot_unit_test.py`
+Tests for `evaluator.commands.plot.plot.run_plot`, `evaluator.commands.plot.utils.dispatch`, and `evaluator.commands.plot.utils.input`.
 
 <details>
 <summary>Test Descriptions</summary>
-#### `TestFlattenToml`
 
+#### `TestPlotUtilsInput`
 | Test | What it checks |
 |---|---|
-| `test_nested_dict` | `{"a": {"b": 1}}` → `{"a.b": 1}`. |
-| `test_flat_dict_unchanged` | Already-flat dict passes through unchanged. |
-| `test_deeply_nested` | Three-level nesting uses double-dot keys. |
-| `test_empty_dict` | Empty input returns empty output. |
-| `test_mixed_depth` | Dict with both top-level and nested keys. |
+| `test_analyse_only` | A single analyse CSV (no sheet) resolves to one `PlotRun` with `sample_id='sample'`. |
+| `test_model_only` | A single model JSON (no sheet) resolves to one `PlotRun` with only `model_path` set. |
+| `test_both_present` | Both an analyse CSV and a model JSON given directly resolve into a single combined `PlotRun`. |
+| `test_csv_suffix_never_treated_as_sheet` | A `.csv` file is never sniffed as a sample sheet, even with sheet-like headers (only `.tsv`/`.txt` are). |
+| `test_analyse_sheet_only` | A `.tsv` sample sheet of analyse paths resolves to one `PlotRun` per row, `multi_run=True`. |
+| `test_model_sheet_only` | A sample sheet of model paths resolves `model_path` per row and leaves `analyse_path=None`. |
+| `test_both_sheets_joined_on_sample_id` | Separate analyse and model sheets are joined on `sample_id` into combined runs; the analyse sheet path is returned as `sheet_path`. |
+| `test_replicate_parsed_as_int` | A `replicate` column value is parsed as `int` on the resulting `PlotRun`. |
+| `test_missing_sample_id_column_raises` | A sheet without a `sample_id` column raises `ValueError`. |
+| `test_analyse_only_gives_core_sections` | With only analyse data, `available_sections` returns `['distributions', 'qc', 'scatter']`. |
+| `test_model_only_gives_no_sections` | With only model data (no analyse), no section is currently runnable. |
+| `test_analyse_and_model_adds_concordance` | Having both analyse and model data adds `'concordance'` to the available sections. |
+| `test_single_group_excludes_compare` | With only one distinct `group` value, `'compare'` is excluded even in multi-run mode. |
+| `test_multiple_groups_adds_compare` | Multiple distinct `group` values in multi-run mode adds `'compare'`. |
+| `test_single_run_mode_never_adds_compare` | `'compare'` is never available when `multi_run=False`, regardless of group values. |
 
-#### `TestWriteLoadUserConfig`
-
+#### `TestPlotUtilsDispatch`
 | Test | What it checks |
 |---|---|
-| `test_write_creates_file` | `writeUserConfig` creates the config file. |
-| `test_write_creates_parent_directory` | Parent directory is created if absent (`mkdir(parents=True)`). |
-| `test_roundtrip_defaults` | Write then load the full default config — result matches exactly. |
-| `test_load_raises_if_missing` | `loadUserConfig` raises `FileNotFoundError` when the file is absent. |
-| `test_load_reads_correct_values` | Written values are read back correctly. |
+| `test_explicit_path_that_exists` | An explicit, existing Rscript path is returned unchanged. |
+| `test_explicit_path_missing_raises` | An explicit, non-existent Rscript path raises `RscriptNotFoundError`. |
+| `test_falls_back_to_path_lookup` | With no explicit path, `resolve_rscript` falls back to `shutil.which('Rscript')`. |
+| `test_not_on_path_raises` | If `Rscript` is not found on `PATH`, `RscriptNotFoundError` is raised. |
+| `test_builds_expected_command` | `dispatch` invokes `subprocess.run` with `[rscript, <script path ending in the given .R file>, *args]`, with all args stringified. |
+| `test_nonzero_exit_raises_rscript_error_with_stderr` | A non-zero subprocess exit code raises `RscriptError` containing the captured stderr. |
+| `test_zero_exit_does_not_raise` | A zero exit code does not raise. |
 
-#### `TestInternalConfigCheck`
-
+#### `TestPlot`
 | Test | What it checks |
 |---|---|
-| `test_exists_true_when_file_present` | `exists=True` returns True when file is present. |
-| `test_exists_false_when_file_absent` | `exists=True` returns False when file is absent. |
-| `test_not_exists_true_when_file_absent` | `exists=False` returns True when file is absent. |
-| `test_not_exists_false_when_file_present` | `exists=False` returns False when file is present. |
-
-#### `TestConfigInit`
-
-| Test | What it checks |
-|---|---|
-| `test_init_creates_config_file` | `config_init()` creates the config file. |
-| `test_init_writes_default_values` | Written content matches `loadDefaultConfig()` exactly. |
-| `test_init_does_not_overwrite_existing` | A pre-existing config file is left unchanged. |
-
-#### `TestConfigVerify`
-
-| Test | What it checks |
-|---|---|
-| `test_verify_passes_for_valid_config` | A complete default config passes without raising. |
-| `test_verify_exits_when_key_missing` | An incomplete config raises `typer.Exit` or `SystemExit`. |
+| `test_requested_but_unrunnable_section_is_skipped` | Requesting `'concordance'` with only `--analyse` given (no model) is skipped without dispatching. |
+| `test_all_sections_runs_every_runnable_section` | `all_sections=True` with only analyse data dispatches `distributions.R`, `qc.R`, and `scatter.R`. |
+| `test_qc_passes_fill_ratio_threshold_as_fourth_arg` | The `qc` section's dispatch args include the configured `fill_ratio_flag_threshold` (default 0.05) as the 4th positional arg. |
+| `test_section_failure_is_not_fatal` | One section raising `RscriptError` does not prevent other requested sections from running. |
+| `test_existing_section_dir_skipped_without_overwrite` | Re-running the same section without `overwrite=True` does not re-dispatch. |
+| `test_overwrite_reruns_existing_section` | `overwrite=True` re-dispatches a section whose output directory already exists. |
+| `test_index_md_lists_completed_sections` | `evaluator/plot/index.md` lists each completed section directory. |
+| `test_params_toml_written` | `evaluator/plot/params.toml` is written and contains the resolved `fill_ratio_flag_threshold`. |
 
 </details>
 <br>
 
-### unit/test_display.py
-
-Tests for utility functions in `evaluator.utils.display`. Rendering functions that produce matplotlib figures are excluded.
-<details>
-<summary>Test Descriptions</summary>
-
-#### `TestNormaliseArray`
-
-| Test | What it checks |
-|---|---|
-| `test_output_in_unit_interval` | Output values lie in [0, 1]. |
-| `test_constant_array_returns_zeros` | A constant array returns an all-zero array (avoids division by zero). |
-| `test_output_range_for_random_array` | Output values lie in [0, 1] for random input. |
-| `test_output_shape_preserved` | Output shape equals input shape. |
-| `test_percentile_clipping_suppresses_outliers` | A single extreme outlier does not collapse contrast across the rest of the array. |
-
-#### `TestGetValidLabelsFromCSV`
-
-| Test | What it checks |
-|---|---|
-| `test_returns_correct_label_set` | Returns the correct set of integer labels for a matching filename. |
-| `test_filters_by_filename` | Labels from non-matching filenames are excluded. |
-| `test_returns_none_when_no_match` | Returns `None` when no rows match the given filename. |
-| `test_returns_none_for_missing_columns` | Returns `None` when `tomogram` or `label` column is absent. |
-| `test_returns_none_for_nonexistent_file` | Returns `None` for a path that does not exist. |
-| `test_labels_are_integers` | All returned labels are Python `int` instances. |
-| `test_multiple_rows_same_file` | All labels for a given filename are returned as a set. |
-
-#### `TestAssignLabelColours`
-
-| Test | What it checks |
-|---|---|
-| `test_returns_one_colour_per_label` | Colour dict has exactly one entry per label. |
-| `test_keys_match_input_labels` | Dict keys equal the input label set. |
-| `test_values_are_rgba_tuples` | Each value is a length-4 tuple (RGBA). |
-| `test_single_label` | Works correctly for a single-label input. |
-
-#### `TestGetLabelCentroid2D`
-
-| Test | What it checks |
-|---|---|
-| `test_returns_centroid_for_present_label` | Returns correct (row, col) centroid for a 3x3 block. |
-| `test_returns_none_for_absent_label` | Returns `None` when the label is not present in the slice. |
-| `test_centroid_is_integer_tuple` | Returned values are Python `int` instances. |
-| `test_single_voxel_centroid` | A single-voxel label returns its own position. |
-
-</details>
-<br>
-
-
-### integration/test_label.py
-Integration tests for `label_components` against the full 300 x 682 x 960 synthetic segmentation.
-<details>
-<summary>Test Descriptions</summary>
-
-#### `TestLabelComponentsOutput`
-
-| Test | What it checks |
-|---|---|
-| `test_output_file_created` | Exactly one MRC file is written to the output directory. |
-| `test_output_directory_created` | `evaluator/results/label/` is created. |
-| `test_output_filename_contains_stem` | The output filename contains the input file's stem. |
-| `test_output_shape_matches_input` | Output volume shape equals input volume shape. |
-| `test_output_voxel_size_preserved` | Output MRC header voxel size matches input within 0.1%. |
-
-#### `TestLabelComponentsLabels`
-
-| Test | What it checks |
-|---|---|
-| `test_output_has_more_than_two_unique_values` | Output contains background + ≥1 labelled components. |
-| `test_n_components_matches_generator` | Exactly 4 components are labelled (matching seed=42, N_EVS=4). |
-| `test_background_is_zero` | Background voxels are labelled 0. |
-
-#### `TestLabelComponentsNamingConflict`
-
-| Test | What it checks |
-|---|---|
-| `test_second_run_appends_numeric_suffix` | Running label twice in the same output directory produces two files, the second with a `-1` suffix. |
-
-</details>
-<br>
-
-
-### integration/test_analyse.py
-Integration tests for `analyse` against the labelled MRC from the session fixture. A module-scoped `analyse_csv` fixture runs the pipeline once and shares the output path.
+### `integration/analyse_integration_test.py`
+Integration tests for `evaluator.commands.analyse.analyse.analyse`. A module-scoped `analyse_csv` fixture runs the pipeline once and shares the output path.
 
 <details>
 <summary>Test Descriptions</summary>
@@ -478,7 +649,7 @@ Integration tests for `analyse` against the labelled MRC from the session fixtur
 |---|---|
 | `test_csv_file_exists` | A CSV file is written to disk. |
 | `test_csv_is_readable` | The file is parseable as a CSV. |
-| `test_output_directory_structure` | The CSV is written under `evaluator/results/analyse/`. |
+| `test_output_directory_structure` | The CSV is written under `evaluator/analyse/`. |
 
 #### `TestAnalyseCSVSchema`
 
@@ -511,7 +682,6 @@ Integration tests for `analyse` against the labelled MRC from the session fixtur
 
 | Test | What it checks |
 |---|---|
-| `test_tight_diameter_filter_excludes_all_evs` | Filter range 1000–2000 nm produces no CSV output. |
 | `test_high_fill_threshold_excludes_all_evs` | `fill_threshold=1.0` results in `is_enclosed=False` for all rows (if any are written). |
 
 #### `TestAnalyseInputTypes`
@@ -521,37 +691,143 @@ Integration tests for `analyse` against the labelled MRC from the session fixtur
 | `test_binary_segmentation_input_accepted` | `analyse` accepts a binary mask directly and detects all 4 EVs. |
 | `test_directory_input_processes_single_file` | Batch mode with a single-file directory produces the same results as single-file mode. |
 | `test_no_voxel_size_uses_vox_units` | An MRC without a voxel size header produces `measurement_units='vox'` and `voxel_size_nm=NaN`. |
+
 </details>
 <br>
 
-
-### integration/test_config.py
-Integration tests for `config_init`, `config_exists`, `config_reset`, `config_verify`, and `config_list`. All tests use a monkeypatched `userConfigPath` pointing to a temp directory.
+### `integration/config_integration_test.py`
+Integration tests confirming pipeline commands correctly resolve, autocreate, and route through the config system end-to-end. Each pipeline command's internal processing function is patched out so the tests exercise only config/output-routing behaviour without needing real MRC content.
 
 <details>
 <summary>Test Descriptions</summary>
 
+#### `TestPipelineCommandIntegration`
 | Test | What it checks |
 |---|---|
-| `test_creates_config_file` | `config_init()` creates the file at the patched path. |
-| `test_written_config_matches_defaults` | The written content equals `loadDefaultConfig()` exactly. |
-| `test_does_not_overwrite_existing_file` | `config_init()` does not modify a pre-existing file. |
-| `test_exits_non_zero_when_no_file` | `config_exists()` raises `typer.Exit` when the file is absent. |
-| `test_passes_when_file_exists` | `config_exists()` completes without raising when the file is present. |
-| `test_reset_restores_defaults` | After writing a modified config, `config_reset(force=True)` restores all default values. |
-| `test_force_flag_skips_confirmation` | `force=True` completes without prompting. |
-| `test_verify_passes_for_default_config` | A freshly initialised config passes verification. |
-| `test_verify_exits_for_incomplete_config` | An incomplete config raises `typer.Exit`. |
-| `test_list_runs_without_error_with_user_config` | `config_list()` does not raise when a user config is present. |
-| `test_list_runs_without_error_without_user_config` | `config_list()` falls back to defaults without raising. |
+| `test_label_autocreates_config_on_first_run` | Running `label_components` against a fresh project directory autocreates `evaluator/config.toml`. |
+| `test_label_writes_to_correct_output_dir` | `label_components` creates the `evaluator/label/` output directory. |
+| `test_label_params_toml_written` | `label_components` writes an `evaluator/label/params.toml` provenance file. |
+| `test_cli_override_reflected_in_params_toml` | A `fill_threshold` override passed to `analyse` is reflected in the written `params.toml`. |
+| `test_config_file_unchanged_after_cli_override` | A CLI-level override (`minimum_diameter_nm`) does not mutate `config.toml` on disk. |
+| `test_explicit_output_flag_respected` | Passing an explicit output directory routes both the config file and results under that directory. |
+| `test_reuses_existing_config_on_second_run` | A second run does not overwrite a manually edited `config.toml`. |
+| `test_no_editor_opens_during_pipeline_run` | Pipeline commands never call `click.edit`, regardless of context. |
 
 </details>
 <br>
 
+### `integration/label_integration_test.py`
+Integration tests for `label_components` against the full 300 x 682 x 960 synthetic segmentation.
 
-### cli/test_cli.py
+<details>
+<summary>Test Descriptions</summary>
 
-CLI tests using `typer.testing.CliRunner`. Two tests are marked `xfail` — see [Known expected failures](#known-expected-failures).
+#### `TestLabelComponentsOutput`
+| Test | What it checks |
+|---|---|
+| `test_output_file_created` | Exactly one MRC file is written to the output directory. |
+| `test_output_directory_created` | `evaluator/label/` is created. |
+| `test_output_filename_contains_stem` | The output filename contains the input file's stem. |
+| `test_output_shape_matches_input` | Output volume shape equals input volume shape. |
+| `test_output_voxel_size_preserved` | Output MRC header voxel size matches input within 0.1%. |
+
+#### `TestLabelComponentsLabels`
+| Test | What it checks |
+|---|---|
+| `test_output_has_more_than_two_unique_values` | Output contains background + ≥1 labelled components. |
+| `test_n_components_matches_generator` | Exactly 4 components are labelled (matching seed=42, N_EVS=4). |
+| `test_background_is_zero` | Background voxels are labelled 0. |
+
+#### `TestLabelComponentsNamingConflict`
+| Test | What it checks |
+|---|---|
+| `test_second_run_appends_numeric_suffix` | Running label twice in the same output directory produces two files, the second with a `-1` suffix. |
+
+#### `TestLabelComponentsFilterOverrides`
+| Test | What it checks |
+|---|---|
+| `test_high_min_arc_coverage_excludes_all` | An unreachable `min_arc_coverage=1.01` override excludes all components (max label = 0). |
+| `test_tight_diameter_range_excludes_all` | A diameter filter range far outside the synthetic EV sizes excludes all components. |
+| `test_default_thresholds_retain_all_evs` | With default filter thresholds, all 4 synthetic EVs are retained. |
+
+</details>
+<br>
+
+### `integration/model_integration_test.py`
+Integration tests for `evaluator.commands.model.model.model_evs`.
+
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestModelOutputFiles`
+
+| Test | What it checks |
+|---|---|
+| `test_results_json_exists` | `evaluator/model/model_results.json` is written. |
+| `test_fitted_mrc_exists` | `evaluator/model/model_fitted.mrc` is written. |
+| `test_params_toml_exists` | `evaluator/model/params.toml` is written. |
+| `test_params_toml_readable` | `params.toml` parses as TOML and contains `rmse_relative_max` and `min_points`. |
+
+#### `TestModelResultsSchema`
+
+| Test | What it checks |
+|---|---|
+| `test_payload_has_parameters_and_results` | The results JSON has top-level `parameters` and `results` keys. |
+| `test_n_results_equals_n_evs` | `results` contains exactly 4 records (one per synthetic EV). |
+| `test_all_expected_keys_present` | Every record contains all expected keys (`chosen_model`, `centre`, `radius`, `radii`, `orientation`, `rmse_nm`, `bic_sphere`, `bic_ellipsoid`, `reliability`, `beam_axis`, `sphere_fit`, `ellipsoid_fit`, `source_file`, `label_id`). |
+| `test_provenance_records_n_vesicles` | `parameters['n_vesicles_fitted']` equals 4. |
+
+#### `TestModelFitQuality`
+
+| Test | What it checks |
+|---|---|
+| `test_all_reliable_for_clean_synthetic_spheres` | Every synthetic EV record passes the reliability gate (`is_reliable=True`). |
+| `test_radius_within_plausible_bounds` | Each fitted radius (nm) falls within the plausible bounds implied by the generator's inner/outer radius range. |
+| `test_chosen_model_is_recognised` | `chosen_model` is one of the recognised model labels (`sphere`, `ellipsoid`, `sphere (anisotropy)`, `sphere (beam-axis)`, `sphere (degenerate)`). |
+
+#### `TestModelFittedMRC`
+
+| Test | What it checks |
+|---|---|
+| `test_fitted_mrc_readable` | `model_fitted.mrc` is readable via `readMRCFile`. |
+| `test_fitted_mrc_has_labels` | The set of non-zero label values in the fitted MRC matches the set of `label_id`s in the results. |
+
+#### `TestModelConfigOverrides`
+
+| Test | What it checks |
+|---|---|
+| `test_overrides_recorded_in_params_toml` | `rmse_relative_max`/`min_points` overrides are captured in `params.toml`. |
+| `test_strict_min_points_override_fails_reliability` | An unreachably high `min_points` override flips every EV to `is_reliable=False`/`count_ok=False`, confirming the override reaches the reliability check itself rather than only being recorded in provenance. |
+
+</details>
+<br>
+
+### `integration/plot_integration_test.py`
+Integration tests for `evaluator.commands.plot.plot.run_plot`. **This is skipped when `Rscript` is not found on `PATH`.**
+
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestPlotDistributionsQC`
+
+| Test | What it checks |
+|---|---|
+| `test_distributions_summary_stats_written` | `distributions/summary_stats.xlsx` is written and contains more than a header row. |
+| `test_qc_summary_written` | `qc/qc_summary.xlsx` is written, with the tomogram name in the first data row. |
+| `test_density_svg_written_per_feature` | A per-feature density plot SVG (e.g. `equiv_diameter_nm_density.svg`) is written. |
+| `test_index_md_lists_both_sections` | `index.md` lists both the `distributions/` and `qc/` section directories. |
+
+#### `TestPlotConcordance`
+
+| Test | What it checks |
+|---|---|
+| `test_concordance_requires_matching_rows` | A model JSON whose `source_file`/`label_id` do not match any analyse row produces no `concordance_stats.xlsx` (no matching rows to compare). |
+
+</details>
+<br>
+
+### `cli/cli_test.py`
+CLI tests using `typer.testing.CliRunner`.
 
 <details>
 <summary>Test Descriptions</summary>
@@ -573,6 +849,16 @@ CLI tests using `typer.testing.CliRunner`. Two tests are marked `xfail` — see 
 | `test_nonexistent_file_exits_nonzero` | A path that does not exist exits non-zero. |
 | `test_valid_small_mrc_exits_zero` | A tiny valid MRC is processed and exits 0. |
 
+#### `TestModelCLI`
+
+| Test | What it checks |
+|---|---|
+| `test_help_exits_zero` | `evaluator model --help` exits 0. |
+| `test_missing_argument_exits_nonzero` | Missing input argument exits non-zero. |
+| `test_nonexistent_file_exits_nonzero` | A path that does not exist exits non-zero. |
+| `test_valid_labelled_mrc_exits_zero` | Running against the cached labelled MRC exits 0. |
+| `test_output_files_created` | `model_fitted.mrc` and `params.toml` are written to the output directory. |
+
 #### `TestAnalyseCLI`
 
 | Test | What it checks |
@@ -582,23 +868,37 @@ CLI tests using `typer.testing.CliRunner`. Two tests are marked `xfail` — see 
 | `test_negative_min_diam_exits_nonzero` | `--min-diam -1` (below 0 minimum) exits non-zero. |
 | `test_fill_threshold_above_one_exits_nonzero` | `--fill-threshold 1.5` (above 1.0 maximum) exits non-zero. |
 
-#### `TestConfigCLI`
+#### `TestPlotCLI`
 
 | Test | What it checks |
 |---|---|
-| `test_help_exits_zero` | `evaluator config --help` exits 0. |
-| `test_init_creates_file` | `evaluator config init` creates the config file (monkeypatched path). |
-| `test_exists_returns_nonzero_when_no_file` | `evaluator config exists` exits 1 when no file is present. |
-| `test_reset_force_exits_zero` | ⚠️ **xfail** — see below. |
+| `test_help_exits_zero` | `evaluator plot --help` exits 0. |
+| `test_no_input_exits_nonzero` | Invoking with neither `--analyse` nor `--model` exits non-zero. |
+| `test_nonexistent_analyse_file_exits_nonzero` | A non-existent `--analyse` path exits non-zero. |
+| `test_nonexistent_model_file_exits_nonzero` | A non-existent `--model` path exits non-zero. |
+| `test_valid_analyse_only_dispatches` | A valid `--analyse` CSV with `--section qc` exits 0 (Rscript resolution/dispatch mocked out). |
 
 #### `TestVisualiseCLI`
 
 | Test | What it checks |
 |---|---|
 | `test_help_exits_zero` | `evaluator visualise --help` exits 0. |
-| `test_movie_missing_argument_exits_nonzero` | Missing `INPUT` argument exits non-zero. |
-| `test_overlay_missing_csv_exits_nonzero` | Omitting `--csv` exits non-zero. |
-| `test_isoview_valid_mrc_exits_zero` | ⚠️ **xfail** — see below. |
+| `test_movie_missing_argument_exits_nonzero` | Missing `INPUT` argument for `movie` exits non-zero. |
+| `test_overlay_missing_csv_exits_nonzero` | Omitting `--csv` for `overlay` exits non-zero. |
+| `test_isoview_valid_mrc_exits_zero` | A tiny valid MRC is processed by `isoview` and exits 0. |
+
+#### `TestConfigCLI`
+
+| Test | What it checks |
+|---|---|
+| `test_creates_config_in_fresh_directory` | `evaluator config <dir>` creates `evaluator/config.toml` in a fresh directory and exits 0. |
+| `test_creation_message_shown` | The CLI output contains "Created" on first-time creation. |
+| `test_offer_to_edit_yes_opens_editor` | Confirming "edit now?" opens the editor (`click.edit` called once). |
+| `test_offer_to_edit_no_skips_editor` | Declining "edit now?" skips the editor. |
+| `test_interactive_flag_passed_through_on_create` | `-i` on a fresh directory drives stepwise prompting through to a 0/2 exit. |
+| `test_existing_config_edits_immediately` | Pointing at a directory with an existing config opens the editor immediately, without the "Edit it now?" prompt. |
+| `test_existing_config_interactive` | `-i` against an existing config drives stepwise prompting. |
+| `test_pointed_directly_at_file` | Pointing directly at a `.toml` file opens the editor for that exact file. |
 
 </details>
 <br>
@@ -606,4 +906,4 @@ CLI tests using `typer.testing.CliRunner`. Two tests are marked `xfail` — see 
 <br>
 
 ---
-<p align="right"><a href="#evaluator">^ Back to top</a></p>
+<p align="right"><a href="#evaluator---test-suite">^ Back to top</a></p>
