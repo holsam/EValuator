@@ -78,3 +78,24 @@ class TestLabelComponentsNamingConflict:
         assert len(outputs) == 2
         # The suffixed file must contain a dash-number pattern
         assert "-1" in outputs[1].name
+
+# -- Define arc-coverage/size filter override test
+class TestLabelComponentsFilterOverrides:
+    def test_high_min_arc_coverage_excludes_all(self, seg_path, tmp_path):
+        label_components(seg_path, tmp_path, min_arc_coverage=1.01)
+        out_dir = tmp_path / "evaluator" / "label"
+        out_file = next(out_dir.glob("*.mrc"))
+        data, _ = readMRCFile(out_file)
+        assert int(data.max()) == 0
+    def test_tight_diameter_range_excludes_all(self, seg_path, tmp_path):
+        label_components(seg_path, tmp_path, minimum_diameter_nm=1e6, maximum_diameter_nm=1e6 + 1)
+        out_dir = tmp_path / "evaluator" / "label"
+        out_file = next(out_dir.glob("*.mrc"))
+        data, _ = readMRCFile(out_file)
+        assert int(data.max()) == 0
+    def test_default_thresholds_retain_all_evs(self, seg_path, tmp_path):
+        label_components(seg_path, tmp_path)
+        out_dir = tmp_path / "evaluator" / "label"
+        out_file = next(out_dir.glob("*.mrc"))
+        data, _ = readMRCFile(out_file)
+        assert int(data.max()) == N_EVS
