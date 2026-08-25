@@ -78,7 +78,7 @@ def model_evs(
     # Create output directory
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "model")
     confutil.write_params(params, out_dir)
-    lg.debug(f"model | Saving results file...")
+    lg.debug(f"model | Saving results file as {input_file.stem}_model_results.{config.output.format}")
     provenance = {
         "command": "model",
         "source_file": str(input_file),
@@ -88,17 +88,17 @@ def model_evs(
     write_result = io.write_results(
         records=records,
         parameters=provenance,
-        output_path=out_dir / "model_results",
+        output_path=out_dir/f"{input_file.stem}_model_results",
         output_format=config.output.format,
     )
 
     # Build the fitted MRC file for visualisation
-    lg.debug(f"model | Building fitted MRC file...")
+    lg.debug(f"model | Building fitted MRC file as {input_file.stem}_model_fitted.mrc")
     fitted_volume = build_fitted_mrc(
         shape=labelled_data.shape,
         fit_records=records,
         voxel_size_nm=voxel_size_nm,
     )
-    mrc_out_file = out_dir / "model_fitted.mrc"
+    mrc_out_file = out_dir / f"{input_file.stem}_model_fitted.mrc"
     mrcutil.writeMRCFile(fitted_volume.astype(np.uint16), voxel_size_nm, mrc_out_file)
     lg.debug(f"model | Wrote fitted MRC file")
