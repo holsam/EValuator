@@ -40,18 +40,21 @@ def checkUniqueFileName(
         label    → <orig_name>_overlay-<overlay_style>.<fmt>
         overlay  → <orig_name>_overlay-<overlay_style>.<fmt>
         visualise→ <orig_name>_<vis_out>.<fmt>
+        viewer   → <orig_name>_filtered.csv
     '''
     naming_patterns = {
         "analyse": "evaluator-analyse_results",
         "label": ''.join([orig_name, "_overlay-", overlay_style]),
         "overlay": ''.join([orig_name, "_overlay-", overlay_style]),
         "visualise": ''.join([orig_name, "_", vis_out]),
+        "viewer": ''.join([orig_name], "_filtered")
     }
     out_fmt = {
         "analyse": ".csv",
         "label": ''.join([".", fmt]),
         "overlay": ''.join([".", fmt]),
         "visualise": ''.join([".", fmt]),
+        "viewer": ".csv"
     }
     out_filepath = Path(out_dir, ''.join([naming_patterns[command], out_fmt[command]]))
     if out_filepath.exists():
