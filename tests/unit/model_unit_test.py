@@ -286,3 +286,39 @@ class TestBuildFittedMRC:
         volume = build_fitted_mrc(shape, [], voxel_size_nm=1.0)
         assert volume.shape == shape
         assert np.all(volume == 0)
+    def test_vesicle_crossing_volume_edge_is_clipped(self):
+        record = [{
+            'centre': np.array([2.0, 2.0, 2.0]), 'radius': 8.0, 'radii': None,
+            'orientation': None, 'reliability': {'is_reliable': True}, 'label_id': 1,
+        }]
+        volume = build_fitted_mrc((40, 40, 40), record, voxel_size_nm=1.0)
+        assert (volume == 1).sum() > 0
+        # A sphere of radius 8 centred at (2,2,2) is roughly half inside the volume
+        expected_full = (4 / 3) * np.pi * 8.0 ** 3
+        assert 0 < int((volume == 1).sum()) < expected_full
+    def test_vesicle_entirely_outside_volume_is_skipped(self):
+        record = [{
+            'centre': np.array([-500.0, -500.0, -500.0]), 'radius': 5.0, 'radii': None,
+            'orientation': None, 'reliability': {'is_reliable': True}, 'label_id': 1,
+        }]
+        volume = build_fitted_mrc((40, 40, 40), record, voxel_size_nm=1.0)
+        assert np.all(volume == 0)
+    def test_non_finite_centre_is_skipped_not_raised(self):
+        record = [{
+            'centre': np.array([np.nan, 20.0, 20.0]), 'radius': 5.0, 'radii': None,
+            'orientation': None, 'reliability': {'is_reliable': True}, 'label_id': 1,
+        }]
+        volume = build_fitted_mrc((40, 40, 40), record, voxel_size_nm=1.0)
+        assert np.all(volume == 0)
+    def test_rotated_ellipsoid_bounding_box_not_clipped(self):
+        rng = np.random.default_rng(1)
+        rotation, _ = np.linalg.qr(rng.normal(size=(3, 3)))
+        record = [{
+            'centre': np.array([30.0, 30.0, 30.0]), 'radius': 8.0,
+            'radii': np.array([5.0, 8.0, 12.0]), 'orientation': rotation,
+            'reliability': {'is_reliable': True}, 'label_id': 1,
+        }]
+        volume = build_fitted_mrc((60, 60, 60), record, voxel_size_nm=1.0)
+        n_voxels = int((volume == 1).sum())
+        expected = (4 / 3) * np.pi * 5.0 * 8.0 * 12.0
+        assert np.isclose(n_voxels, expected, rtol=0.1)
