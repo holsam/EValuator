@@ -27,6 +27,7 @@ from evaluator.commands.model.cli import evaluatorModel
 from evaluator.commands.plot.cli import evaluatorPlot
 from evaluator.commands.tools.cli import evaluatorTools
 from evaluator.commands.version.cli import evaluatorVersion
+from evaluator.commands.viewer.cli import evaluatorViewer
 from evaluator.commands.visualise.cli import evaluatorVisualise
 
 # ====================
@@ -58,6 +59,9 @@ evaluator.add_typer(
 )
 evaluator.add_typer(
     evaluatorPlot,
+)
+evaluator.add_typer(
+    evaluatorViewer,
 )
 evaluator.add_typer(
     evaluatorVisualise,
