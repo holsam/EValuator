@@ -91,3 +91,100 @@ def apply_fourier_missing_wedge(
     reconstructed = np.real(np.fft.ifftn(np.fft.ifftshift(f_masked)))
     reconstructed = np.clip(reconstructed, 0, None)
     return reconstructed > (threshold * reconstructed.max())
+
+# ====================
+# _rotate_to_pole: returns ndarray of points generated around +z rotated so +z maps onto unit vector pole
+# ====================
+def _rotate_to_pole(points: np.ndarray, pole: np.ndarray) -> np.ndarray:
+    pole = pole / np.linalg.norm(pole)
+    z = np.array([0.0, 0.0, 1.0])
+    axis = np.cross(z, pole)
+    sin_angle = np.linalg.norm(axis)
+    cos_angle = np.dot(z, pole)
+    if sin_angle < 1e-12:
+        return points if cos_angle > 0 else points * np.array([1.0, -1.0, -1.0])
+    axis /= sin_angle
+    K = np.array([
+        [0, -axis[2], axis[1]],
+        [axis[2], 0, -axis[0]],
+        [-axis[1], axis[0], 0],
+    ])
+    R = np.eye(3) + K * sin_angle + K @ K * (1 - cos_angle)
+    return points @ R.T
+
+# ====================
+# generate_full_sphere_points: returns tuple of ndarray of points uniformly sampled on a full sphere shell and dictionary of true parameters
+# ====================
+def generate_full_sphere_points(
+    radius_nm: float,
+    centre: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    n: int = 500,
+    seed: int | None = None,
+) -> tuple[np.ndarray, dict]:
+    '''
+    Uniformly sample n points on a full sphere shell, used as the shared anchor case for both the polar-cap and equatorial-band completeness sweeps
+    '''
+    rng = np.random.default_rng(seed)
+    vecs = rng.normal(size=(n, 3))
+    vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
+    points = vecs * radius_nm + np.asarray(centre)
+    truth = {'centre': np.asarray(centre, dtype=float), 'radius_nm': radius_nm}
+    return points, truth
+
+# ====================
+# generate_spherical_cap_points: returns tuple of ndarray of points uniformly sampled on a spherical cap and dictionary of true parameters
+# ====================
+def generate_spherical_cap_points(
+    radius_nm: float,
+    half_angle_deg: float,
+    centre: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    pole: tuple[float, float, float] | None = None,
+    n: int = 500,
+    seed: int | None = None,
+) -> tuple[np.ndarray, dict]:
+    '''
+    Uniformly sample n points on a spherical cap (colatitude <= half_angle_deg from pole), simulating a segmentation that only captured one contiguous partial region of a sphere
+    '''
+    if half_angle_deg >= 180.0:
+        points, truth = generate_full_sphere_points(radius_nm, centre, n, seed)
+        truth.update({'half_angle_deg': half_angle_deg, 'pole': pole})
+        return points, truth
+    rng = np.random.default_rng(seed)
+    pole = np.array(pole, dtype=float) if pole is not None else np.array([0.0, 0.0, 1.0])
+    cos_min = np.cos(np.radians(half_angle_deg))
+    cos_theta = rng.uniform(cos_min, 1.0, n)
+    sin_theta = np.sqrt(1 - cos_theta ** 2)
+    phi = rng.uniform(0, 2 * np.pi, n)
+    local = np.stack([sin_theta * np.cos(phi), sin_theta * np.sin(phi), cos_theta], axis=1)
+    points = _rotate_to_pole(local, pole) * radius_nm + np.asarray(centre)
+    truth = {'centre': np.asarray(centre, dtype=float), 'radius_nm': radius_nm, 'half_angle_deg': half_angle_deg, 'pole': pole}
+    return points, truth
+
+# ====================
+# generate_equatorial_band_points: returns tuple of ndarray of points uniformly sampled on an equatorial band and dictionary of true parameters
+# ====================
+def generate_equatorial_band_points(
+    radius_nm: float,
+    band_half_width_deg: float,
+    centre: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    pole: tuple[float, float, float] | None = None,
+    n: int = 500,
+    seed: int | None = None,
+) -> tuple[np.ndarray, dict]:
+    '''
+    Uniformly sample n points on a belt around the equator (colatitude within band_half_width_deg of 90 deg from pole), simulating the real-world missing-wedge geometry where data loss is concentrated near the poles relative to the tilt axis rather than a single contiguous chunk
+    '''
+    if band_half_width_deg >= 90.0:
+        points, truth = generate_full_sphere_points(radius_nm, centre, n, seed)
+        truth.update({'band_half_width_deg': band_half_width_deg, 'pole': pole})
+        return points, truth
+    rng = np.random.default_rng(seed)
+    pole = np.array(pole, dtype=float) if pole is not None else np.array([0.0, 0.0, 1.0])
+    cos_max = np.sin(np.radians(band_half_width_deg))
+    cos_theta = rng.uniform(-cos_max, cos_max, n)
+    sin_theta = np.sqrt(1 - cos_theta ** 2)
+    phi = rng.uniform(0, 2 * np.pi, n)
+    local = np.stack([sin_theta * np.cos(phi), sin_theta * np.sin(phi), cos_theta], axis=1)
+    points = _rotate_to_pole(local, pole) * radius_nm + np.asarray(centre)
+    truth = {'centre': np.asarray(centre, dtype=float), 'radius_nm': radius_nm, 'band_half_width_deg': band_half_width_deg, 'pole': pole}
+    return points, truth
