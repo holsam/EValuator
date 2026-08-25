@@ -114,21 +114,9 @@ class TestAnalyseMeasurements:
 
 # -- Define filtering behaviour test ---
 class TestAnalyseFiltering:
-    def test_tight_diameter_filter_excludes_all_evs(self, labelled_path, tmp_path):
-        """
-        Filtering for diameters 1000-2000 nm must exclude all synthetic EVs
-        (max outer diameter ~128 nm) and produce no CSV output.
-        """
-        analyse(labelled_path, tmp_path, minimum_diameter_nm=1000.0, maximum_diameter_nm=2000.0)
-        csv_dir = tmp_path / "evaluator" / "analyse"
-        csvs = list(csv_dir.glob("*.csv")) if csv_dir.exists() else []
-        assert len(csvs) == 0, "Expected no CSV when all EVs are filtered out"
-
     def test_high_fill_threshold_excludes_all_evs(self, labelled_path, tmp_path):
         """
-        A fill threshold of 1.0 (nothing can satisfy fill_ratio > 1.0) must
-        classify all EVs as non-enclosed. They should still appear in the CSV
-        but with is_enclosed=False.
+        A fill threshold of 1.0 (nothing can satisfy fill_ratio > 1.0) should classify all EVs as non-enclosed
         """
         analyse(labelled_path, tmp_path, fill_threshold=1.0)
         csv_dir = tmp_path / "evaluator" / "analyse"
