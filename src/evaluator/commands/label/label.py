@@ -9,6 +9,7 @@ EValuator: SEGMENTATION EV LABELLING
 import numpy
 from functools import partial
 from pathlib import Path
+from skimage import measure
 
 # ====================
 # Import EValuator utilities
@@ -18,6 +19,13 @@ from evaluator.utils import config as confutil
 from evaluator.utils.settings import lg
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
+
+# ====================
+# Import EValuator label utilities
+# ====================
+from evaluator.commands.label.utils.filters import filterComponentsBySize
+from evaluator.commands.label.utils.geometric_proxies import estimateCentroidRadius, estimateArcCoverage
+from evaluator.commands.label.utils.merge import findMergeGroups, applyMerges
 
 # ====================
 # Define command: label
@@ -57,6 +65,40 @@ def label_components(
     lg.info(f"label | Labelling connected components...")
     labelled, n_components = mrcutil.labelComponents(seg_data)
     lg.info(f"label | {n_components} components identified.")
+
+    # Step 1: merge split components (geometric proxies only)
+    lg.debug(f"label | Merging split components...")
+    component_points = {c.label: c.coords for c in measure.regionprops(labelled)}
+    merge_groups = findMergeGroups(
+        component_points,
+        centre_tol_factor=params.merge_centre_tol_factor,
+        radius_tol_pct=params.merge_radius_tol_pct,
+    )
+    labelled = applyMerges(labelled, merge_groups)
+
+    # Step 2: arc-coverage filter (post-merge)
+    lg.debug(f"label | Applying arc-coverage filter...")
+    for component in measure.regionprops(labelled):
+        centroid, radius_estimate = estimateCentroidRadius(component.coords)
+        coverage = estimateArcCoverage(component.coords, centroid, radius_estimate)
+        if coverage < params.min_arc_coverage:
+            lg.info(f"label | Component {component.label} | Arc coverage {coverage:.2f} below threshold ({params.min_arc_coverage}) — excluding.")
+            labelled[labelled == component.label] = 0
+
+    # Step 3: size/extent filter
+    lg.debug(f"label | Applying size filter...")
+    labelled = filterComponentsBySize(
+        labelled,
+        voxel_size_nm,
+        minimum_diameter_nm=params.minimum_diameter_nm,
+        maximum_diameter_nm=params.maximum_diameter_nm,
+        membrane_thickness_nm=params.membrane_thickness_nm,
+    )
+
+    # Relabel sequentially so downstream commands see a 1..N label range
+    labelled, n_components = mrcutil.labelComponents(labelled.astype(bool))
+    lg.info(f"label | {n_components} components retained after merge/filter.")
+
     # Build output path
     lg.debug(f"label | Creating output directory structure...")
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "label")
@@ -70,9 +112,8 @@ def label_components(
             if not out_file.exists():
                 break
             counter += 1
+
     # Write labelled MRC
     lg.debug(f"label | Writing labelled MRC to {out_file.name}...")
     mrcutil.writeMRCFile(labelled.astype(numpy.float32), voxel_size_nm, out_file)
     lg.info(f"label | Finished labelling.")
-    print(f"\n{n_components} components labelled.")
-    print(f"Labelled MRC saved to: {out_file}\n")

@@ -34,6 +34,12 @@ class OutputConfig(_Section):
 
 class LabelConfig(_Section):
     '''Configuration parameters for `evaluator label` command'''
+    min_arc_coverage: float = Field(0.40, description='Minimum fraction of expected spherical surface a component must cover to be retained', gt=0, le=1)
+    merge_centre_tol_factor: float = Field(1.5, description='Centroids within centre_tol_factor * (r_a + r_b) are merge candidates')
+    merge_radius_tol_pct: float = Field(0.30, description='Maximum relative difference between two components\' estimated radii to be merge candidates', gt=0)
+    minimum_diameter_nm: float = Field(20, description='Minimum component diameter (nm)')
+    maximum_diameter_nm: float = Field(500, description='Maximum component diameter (nm)')
+    membrane_thickness_nm: float = Field(7, description='Membrane thickness (nm)')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 
@@ -45,10 +51,7 @@ class ModelConfig(_Section):
 
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
-    minimum_diameter_nm: float = Field(..., description='Minimum component diameter (nm)')
-    maximum_diameter_nm: float = Field(..., description='Maximum component diameter (nm)')
     fill_threshold: float = Field(..., description='Fill ratio threshold for labelling')
-    membrane_thickness_nm: float = Field(..., description='Membrane thickness (nm)')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 class PlotConfig(_Section):
@@ -76,7 +79,7 @@ class Config(_Section):
     '''Overall EValuator configuration'''
     log: LogConfig
     output: OutputConfig = OutputConfig()
-    label: LabelConfig
+    label: LabelConfig = LabelConfig()
     model: ModelConfig = ModelConfig()
     analyse: AnalyseConfig
     plot: PlotConfig = PlotConfig()

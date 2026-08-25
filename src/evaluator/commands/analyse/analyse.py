@@ -17,7 +17,6 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 # ====================
 # Import shared EValuator utilities
 # ====================
-
 from evaluator.utils import batch as batchutil
 from evaluator.utils import config as confutil
 from evaluator.utils import mrc as mrcutil
@@ -63,10 +62,7 @@ def analyse(
     lg.debug(f"analyse | Starting pipeline...")
     worker = partial(
         processSegmentation,
-        minimum_diameter=params.minimum_diameter_nm,
-        maximum_diameter=params.maximum_diameter_nm,
         fill_threshold=params.fill_threshold,
-        membrane_thickness=params.membrane_thickness_nm,
     )
     per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed", max_workers=params.max_workers)
     analyse_results = [row for file_results in per_file_results for row in file_results]
@@ -84,7 +80,7 @@ def analyse(
 # =========================
 # DEFINE FUNCTION: processSegmentation
 # =========================
-def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill_threshold, membrane_thickness):
+def processSegmentation(seg_path: Path, fill_threshold):
     '''
     Process a given labelled segmentation file by calling the component processing
     function for each component.
@@ -109,26 +105,10 @@ def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill
     lg.info(f"analyse | {seg_path.name} | {n_components} components identified for analysis.")
     lg.debug(f"analyse | {seg_path.name} | Measuring component properties...")
     component_list = measure.regionprops(components)
-    lg.debug(f"analyse | {seg_path.name} | Calculating voxel size limits...")
-    membrane_thickness_vox = membrane_thickness / voxel_size_nm if voxel_size_nm else 1.0
-    if voxel_size_nm is not None:
-        min_vox = geometry.shellVolume(minimum_diameter, voxel_size_nm, membrane_thickness_vox)
-        max_vox = geometry.shellVolume(maximum_diameter, voxel_size_nm, membrane_thickness_vox)
-    else:
-        min_vox = 0
-        max_vox = numpy.inf
     file_results = []
     lg.debug(f"analyse | {seg_path.name} | Starting component processing...")
     with logging_redirect_tqdm():
         for component in tqdm(component_list, desc="Components processed"):
-            lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Checking voxel count filter...")
-            if not (min_vox <= component.area <= max_vox):
-                lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Voxel count {component.area} outside filter ({min_vox}≤c≤{max_vox}) — skipping.")
-                continue
-            lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Checking extent filter...")
-            if component.extent < 0.01:
-                lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Extent {component.extent} outside filter (e<0.01) — skipping.")
-                continue
             lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Measuring component features...")
             component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold)
             if component_data is None:

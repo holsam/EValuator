@@ -34,34 +34,8 @@ from evaluator.commands.config.cli import evaluatorConfig
 # ====================
 def _config_toml() -> str:
     '''Return a valid config.toml string for tests that need one'''
-    return '''\
-# Global logging defaults
-[log]
-verbose = false
-debug = false
-
-# Label command default configuration parameters
-[label]
-
-# Analyse command default configuration parameters
-[analyse]
-fill_threshold = 0.05
-maximum_diameter_nm = 500.0
-minimum_diameter_nm = 20.0
-membrane_thickness_nm = 7
-
-# Visualise command default configuration parameters
-[visualise]
-overlay_style = "both"          # style of overlay to use (valid options: both, filled, contours)
-n_slices = 9                    # default number of slices in tiled panel
-fps = 45
-downsample = 2
-colourmap = "tab20"             # matplotlib colormap used to assign colours to component labels
-alpha_fill = 0.35               # opacity of filled overlay regions
-contour_linewidth = 1.0         # line width for contour overlays
-label_fontsize = 6              # font size for component label text annotations
-figure_dpi = 300                # output image resolution in dots per inch
-'''
+    from evaluator.utils.config import _default_text
+    return _default_text()
 
 def _write_config(path: Path, content: str | None = None) -> Path:
     '''Write content (or the default config TOML) to path, creating parents'''
@@ -107,7 +81,7 @@ class TestSchema:
     def test_missing_required_field_raises(self):
         '''Omitting a required field raises ValidationError'''
         data = tomllib.loads(_config_toml())
-        del data['analyse']['minimum_diameter_nm']
+        del data['analyse']['fill_threshold']
         with pytest.raises(ValidationError):
             Config.model_validate(data)
 
@@ -317,10 +291,8 @@ class TestWriteParams:
     '''Test write_params serialisation'''
     def _analyse_params(self) -> AnalyseConfig:
         return AnalyseConfig(
-            minimum_diameter_nm=30.0,
-            maximum_diameter_nm=300.0,
             fill_threshold=0.7,
-            membrane_thickness_nm=7,
+            max_workers=7,
         )
 
     def test_creates_params_toml(self, tmp_path):
@@ -346,18 +318,17 @@ class TestWriteParams:
         write_params(params, tmp_path)
         text = (tmp_path / 'params.toml').read_text(encoding='utf-8')
         parsed = tomllib.loads(text)
-        assert parsed['minimum_diameter_nm'] == pytest.approx(30.0)
-        assert parsed['maximum_diameter_nm'] == pytest.approx(300.0)
         assert parsed['fill_threshold'] == pytest.approx(0.7)
+        assert parsed['max_workers'] == pytest.approx(7)
 
     def test_cli_override_is_captured(self, tmp_path):
         '''An override applied via model_copy shows up in the written file'''
         params = self._analyse_params()
-        params = params.model_copy(update={'minimum_diameter_nm': 50.0})
+        params = params.model_copy(update={'fill_threshold': 0.1234})
         write_params(params, tmp_path)
         text = (tmp_path / 'params.toml').read_text(encoding='utf-8')
         parsed = tomllib.loads(text)
-        assert parsed['minimum_diameter_nm'] == pytest.approx(50.0)
+        assert parsed['fill_threshold'] == pytest.approx(0.1234)
 
     def test_creates_output_dir_if_absent(self, tmp_path):
         out_dir = tmp_path / 'evaluator' / 'label'
@@ -368,11 +339,11 @@ class TestWriteParams:
     def test_overwrites_on_second_call(self, tmp_path):
         '''A second run overwrites the previous params.toml cleanly'''
         write_params(self._analyse_params(), tmp_path)
-        params2 = self._analyse_params().model_copy(update={'minimum_diameter_nm': 99.0})
+        params2 = self._analyse_params().model_copy(update={'fill_threshold': 0.1234})
         write_params(params2, tmp_path)
         text = (tmp_path / 'params.toml').read_text(encoding='utf-8')
         parsed = tomllib.loads(text)
-        assert parsed['minimum_diameter_nm'] == pytest.approx(99.0)
+        assert parsed['fill_threshold'] == pytest.approx(0.1234)
 
 
 class TestEditConfigEditor:
@@ -422,7 +393,7 @@ class TestEditConfigStepwise:
             edit_config(cfg, stepwise=True)
         text = cfg.read_text(encoding='utf-8')
         parsed = tomllib.loads(text)
-        assert parsed['analyse']['minimum_diameter_nm'] == pytest.approx(99.0)
+        assert parsed['label']['minimum_diameter_nm'] == pytest.approx(99.0)
 
     def test_other_values_unchanged_when_one_edited(self, tmp_path):
         cfg = _write_config(tmp_path / 'evaluator' / 'config.toml')
@@ -434,7 +405,7 @@ class TestEditConfigStepwise:
         with patch('evaluator.commands.config.utils.edit.click.prompt', side_effect=prompt_side_effect):
             edit_config(cfg, stepwise=True)
         result = tomllib.loads(cfg.read_text(encoding='utf-8'))
-        assert result['analyse']['maximum_diameter_nm'] == pytest.approx(original['analyse']['maximum_diameter_nm'])
+        assert result['label']['maximum_diameter_nm'] == pytest.approx(original['label']['maximum_diameter_nm'])
 
     def test_invalid_value_aborts_without_writing(self, tmp_path):
         '''A schema-invalid response must leave the original file unchanged'''

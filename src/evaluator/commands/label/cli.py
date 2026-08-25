@@ -49,6 +49,18 @@ def label(
             writable=True,
         )
     ] = Path('.'),
+    min_arc_coverage: Annotated[
+        Optional[float],
+        typer.Option('--min-arc-coverage', help='Override configuration minimum arc coverage parameter for this run', min=0, max=1)
+    ] = None,
+    minimum_diameter_nm: Annotated[
+        Optional[float],
+        typer.Option('--min-diameter', help='Override configuration minimum diameter parameter for this run')
+    ] = None,
+    maximum_diameter_nm: Annotated[
+        Optional[float],
+        typer.Option('--max-diameter', help='Override configuration maximum diameter parameter for this run')
+    ] = None,
     jobs: Annotated[
         Optional[int],
         typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
@@ -57,8 +69,14 @@ def label(
     '''
     Label connected components in a binary segmentation MRC and write a labelled MRC
     '''
+    if minimum_diameter_nm is not None and maximum_diameter_nm is not None and minimum_diameter_nm >= maximum_diameter_nm:
+        raise typer.BadParameter(f'Diameters are not compatible.')
+
     labelFuncs.label_batch(
         segmentation,
         output,
         max_workers=jobs,
+        min_arc_coverage=min_arc_coverage,
+        minimum_diameter_nm=minimum_diameter_nm,
+        maximum_diameter_nm=maximum_diameter_nm,
     )
