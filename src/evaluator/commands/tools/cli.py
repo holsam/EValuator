@@ -14,6 +14,7 @@ import typer
 # ====================
 from evaluator.commands.tools.animate import evaluatorAnimate
 from evaluator.commands.tools.benchmark import evaluatorBenchmark
+from evaluator.commands.tools.diagram import evaluatorDiagram
 from evaluator.commands.tools.r_deps import evaluatorRDeps
 
 # ====================
@@ -36,6 +37,11 @@ evaluatorTools.add_typer(
     evaluatorBenchmark,
     name='benchmark',
     help='Run EValuator benchmarks'
+)
+evaluatorTools.add_typer(
+    evaluatorDiagram,
+    name='diagram',
+    help='Generate diagrams',
 )
 evaluatorTools.add_typer(
     evaluatorRDeps,
