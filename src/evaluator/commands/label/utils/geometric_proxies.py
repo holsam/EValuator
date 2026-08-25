@@ -14,12 +14,46 @@ import numpy
 # =========================
 def estimateCentroidRadius(points: numpy.ndarray) -> tuple[numpy.ndarray, float]:
     '''
-    Estimate radius from bounding-box (half the mean of extent diamters), only intended as a coarse estimate for filtering purposes
+    Estimate sphere centre/radius as a coarse proxy for filtering purposes
     '''
     centroid = points.mean(axis=0)
     extent = points.max(axis=0) - points.min(axis=0)
-    radius_estimate = float(numpy.mean(extent) / 2.0)
-    return centroid, radius_estimate
+    bbox_radius = float(numpy.mean(extent) / 2.0)
+    if len(points) < 4:
+        return centroid, bbox_radius
+    centered = points - centroid
+    eigenvalues, eigenvectors = numpy.linalg.eigh(numpy.cov(centered.T))
+    # If spread is roughly isotropic, use bounding-box proxies
+    if eigenvalues.max() <= 0 or eigenvalues.min() / eigenvalues.max() > 0.5:
+        return centroid, bbox_radius
+    # Smallest-variance eigenvector = symmetry axis of the anisotropic cloud
+    axis = eigenvectors[:, 0]
+    depth = centered @ axis
+    radial = numpy.linalg.norm(centered - numpy.outer(depth, axis), axis=1)
+    
+    # Determine cap/symmetric distribution
+    # Cap apexes taper to spread ≈ 0 at one depth extreme whereas a symmetric shape stays close to rim_radius at both extremes
+    # Orient axis so the smaller-radial (candidate apex) extreme is depth.max() then separate cap apexes from symmetric ends by calculating taper ratio
+    # If taper ratio > threshold, no real apex identified so have symmetric anisotopic shape: bbox centroid is accurate enought but extent is likely to underestimate radius
+    if radial[numpy.argmax(depth)] > radial[numpy.argmin(depth)]:
+        axis, depth = -axis, -depth
+
+    rim_radius = float(radial.max())
+    apex_radial = float(radial[numpy.argmax(depth)])
+    taper_ratio = apex_radial / rim_radius if rim_radius > 0 else 1.0
+    TAPER_RATIO_THRESHOLD = 0.5  # separate cap apexes (~0.1-0.3) from symmetric ends (~0.8-1.0)
+    if taper_ratio > TAPER_RATIO_THRESHOLD:
+        radius_estimate = float(numpy.linalg.norm(centered, axis=1).mean())
+        return centroid, radius_estimate
+
+    cap_height = float(depth.max() - depth.min())
+    if cap_height <= 1e-9:
+        return centroid, bbox_radius
+
+    radius_estimate = (rim_radius ** 2 + cap_height ** 2) / (2 * cap_height)
+    apex_point = centroid + axis * depth.max()
+    cap_centroid = apex_point - axis * radius_estimate
+    return cap_centroid, radius_estimate
 
 # =========================
 # DEFINE FUNCTION: estimateArcCoverage
