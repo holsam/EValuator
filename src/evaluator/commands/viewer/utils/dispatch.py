@@ -44,6 +44,24 @@ def _app_path() -> Path:
     '''
     return Path(str(pkg_files('evaluator.commands.viewer') / 'app' / 'viewer.py'))
 
+def resolve_port(port: int) -> int:
+    '''
+    Checks the given port isn't in use (if not 0) and returns
+    '''
+    if port != 0:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.connect(('localhost', port))
+            s.shutdown(2)
+            lg.warning(f'viewer | localhost:{port} is in use by another process, falling back to default')
+            port = 0
+        except socket.error:
+            lg.debug(f'viewer | localhost:{port} is available for use')
+        finally:
+            s.close()
+    return port
+
 def dispatch(streamlit_bin: Path, root_dir: Path, port: int) -> None:
     '''
     Launch the Streamlit app as a foreground interactive process

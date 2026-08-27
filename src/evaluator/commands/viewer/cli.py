@@ -34,8 +34,8 @@ def viewer(
     ] = None,
     port: Annotated[
         int,
-        typer.Option('--port', help='Local port for the Streamlit server'),
-    ] = 8501,
+        typer.Option('--port', help='Local port for the Streamlit server (default: resolved by OS)'),
+    ] = 0,
     streamlit_bin: Annotated[
         Optional[Path],
         typer.Option('--streamlit-bin', help='Path to the streamlit binary (default: resolved from PATH)'),
