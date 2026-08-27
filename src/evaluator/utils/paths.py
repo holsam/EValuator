@@ -47,7 +47,7 @@ def checkUniqueFileName(
         "label": ''.join([orig_name, "_overlay-", overlay_style]),
         "overlay": ''.join([orig_name, "_overlay-", overlay_style]),
         "visualise": ''.join([orig_name, "_", vis_out]),
-        "viewer": ''.join([orig_name], "_filtered")
+        "viewer": ''.join([orig_name, "_filtered"])
     }
     out_fmt = {
         "analyse": ".csv",
