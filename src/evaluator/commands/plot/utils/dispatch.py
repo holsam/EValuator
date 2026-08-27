@@ -47,11 +47,11 @@ def dispatch(rscript_bin: Path, script_name: str, args: list[str]) -> None:
     '''
     script = _script_path(script_name)
     cmd = [str(rscript_bin), str(script), *[str(a) for a in args]]
-    lg.debug(f"plot | Running: {' '.join(cmd)}")
+    lg.debug("plot | Running: {}", ' '.join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.stdout:
-        lg.debug(f"plot | {script_name} stdout:\n{proc.stdout}")
+        lg.debug("plot | {} stdout:\n{}", script_name, proc.stdout)
     if proc.returncode != 0:
         raise RscriptError(f"{script_name} failed (exit {proc.returncode}):\n{proc.stderr}")
     if proc.stderr:
-        lg.debug(f"plot | {script_name} stderr:\n{proc.stderr}")
+        lg.debug("plot | {} stderr:\n{}", script_name, proc.stderr)
