@@ -15,10 +15,11 @@ from skimage import measure
 # Define constants
 # ====================
 # Okabe-Ito colour-blind-safe palette
+# Okabe-Ito colour-blind-safe palette
 PALETTE = ["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"]
 MAX_SCATTER_POINTS = 25_000
 OPACITY_NORMAL = 0.85
-OPACITY_DIMMED = 0.15
+HIGHLIGHT_COLOR = "#FFD400"  # bright gold — distinct from every PALETTE entry
 MIN_LABEL_VOXELS = 8  # marching_cubes needs a minimally-sized mask; smaller components are skipped, same guard as pipeline_diagram.render_volume_mesh
 
 # ====================
@@ -90,6 +91,7 @@ def build_label_mesh_traces(
 # ====================
 def dim_trace(trace: go.Mesh3d, dim: bool) -> None:
     '''
-    Set a mesh's trace opacity
+    Set a mesh's trace colour
     '''
-    trace.opacity = OPACITY_DIMMED if dim else OPACITY_NORMAL
+    if not dim:
+        trace.color = HIGHLIGHT_COLOR
