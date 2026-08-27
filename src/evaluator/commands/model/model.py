@@ -58,7 +58,7 @@ def model_evs(
     labels = labels[labels != 0]
     records: list[dict] = []
     # Fit each labelled vesicle
-    lg.info(f"model | Fitting {len(labels)} labelled components..." )
+    lg.info("model | Fitting {} labelled components...", len(labels))
     for label_id in labels:
         points = np.argwhere(labelled_data == label_id).astype(float)
         try:
@@ -69,16 +69,16 @@ def model_evs(
                 min_points=params.min_points,
             )
         except ValueError as exc:
-            lg.warning(f"model | Fit failed for label {int(label_id)}: {exc}")
+            lg.warning("model | Fit failed for label {}: {}", int(label_id), exc)
             continue
         result["source_file"] = str(input_file)
         result["label_id"] = int(label_id)
         records.append(result)
-    lg.info(f"model | {len(records)}/{len(labels)} component(s) fitted" )
+    lg.info("model | {}/{} component(s) fitted", len(records), len(labels))
     # Create output directory
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, "model")
     confutil.write_params(params, out_dir)
-    lg.debug(f"model | Saving results file as {input_file.stem}_model_results.{config.output.format}")
+    lg.debug("model | Saving results file as {}_model_results.{}", input_file.stem, config.output.format)
     provenance = {
         "command": "model",
         "source_file": str(input_file),
@@ -93,7 +93,7 @@ def model_evs(
     )
 
     # Build the fitted MRC file for visualisation
-    lg.debug(f"model | Building fitted MRC file as {input_file.stem}_model_fitted.mrc")
+    lg.debug("model | Building fitted MRC file as {}_model_fitted.mrc", input_file.stem)
     fitted_volume = build_fitted_mrc(
         shape=labelled_data.shape,
         fit_records=records,

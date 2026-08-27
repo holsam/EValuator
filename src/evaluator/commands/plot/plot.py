@@ -59,7 +59,7 @@ def run_plot(analyse_input, model_input, output, sections, all_sections, overwri
             _run_section(section, runs, multi_run, section_dir, rscript_bin, params, sheet_path)
             completed.append(section)
         except RscriptError as e:
-            lg.warning(f'plot | Section {section} failed: {e}')
+            lg.warning('plot | Section {} failed: {}', section, e)
     _write_index(out_dir, completed)
     lg.info(f'plot | Finished. Sections completed: {completed}')
 

@@ -14,7 +14,7 @@ from typing import Annotated
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.utils.settings import initEvaluator, lg
+from evaluator.utils.settings import configure_logging, initEvaluator, lg
 
 # ====================
 # Import EValuator commands
@@ -94,14 +94,7 @@ def main(
         typer.Option("-v", "--verbose", help="Show progress in terminal.", rich_help_panel="Options")
     ] = False,
 ):
-    if debug:
-        log_level = logging.DEBUG
-    elif verbose:
-        log_level = logging.INFO
-    else:
-        log_level = logging.WARN
-    logging.basicConfig(
-        format='%(asctime)s %(levelname)-10s %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        level=log_level,
-    )
+    level = 'DEBUG' if debug else 'INFO' if verbose else 'WARNING'
+    log_path = configure_logging(level)
+    # Output confirmation message that logging has been set up
+    lg.info(f'Log messages (levels: <yellow><b>warning</b></yellow>{', <b>info</b>, <blue><b>debug</b></blue>' if debug else ', info' if verbose else ''}) will be written to <cyan>{log_path}</cyan>')
