@@ -8,7 +8,7 @@ Configure the five pipeline stage directories, list the results resolved across 
 # ====================
 # Import external dependencies
 # ====================
-import base64, html, io, pandas as pd, streamlit as st
+import base64, io, pandas as pd, streamlit as st
 from pathlib import Path
 from PIL import Image
 
@@ -29,18 +29,11 @@ def _open_result(index: int) -> None:
     st.session_state.results_table_last_selection = ()
     st.switch_page('pages/tomogram.py')
 
-# Button column click callback stashes row here
-_pending_open = st.session_state.pop('_gallery_open_row', None)
-_qp_open = st.query_params.get('open')
-if _qp_open is not None:
-    st.query_params.clear()
-    _pending_open = _qp_open
-if _pending_open is not None and st.session_state.get('result_sets'):
-    try:
-        _open_result(int(_pending_open))
-    except (ValueError, IndexError):
-        pass
-
+# Open tomogram callbacks land here
+_row = st.session_state.pop('_gallery_open_row', None)
+if _row is not None and st.session_state.get('result_sets'):
+    if 0 <= int(_row) < len(st.session_state.result_sets):
+        _open_result(int(_row))
 
 # ====================
 # PAGE SECTION: title/experiment directories
@@ -48,45 +41,57 @@ if _pending_open is not None and st.session_state.get('result_sets'):
 st.title('EValuator Viewer')
 st.header('Experiment')
 
-# Root: derives every stage directory from common subfolder names in one go
-_rc_in, _rc_btn = st.columns([5, 1], vertical_alignment='bottom')
-_root_in = _rc_in.text_input('Root directory', value=str(st.session_state.get('root_dir', Path.cwd())))
-if _rc_btn.button('Set root', type='primary', icon=':material/folder_open:', width='stretch'):
-    st.session_state.root_dir = Path(_root_in).expanduser()
-    st.session_state.stage_dirs = default_stage_dirs(st.session_state.root_dir)
-    st.session_state.result_sets = None
-    st.rerun()
-
+_root_set = st.session_state.get('root_set', False)
 _stage_dirs = st.session_state.stage_dirs
 _col_dirs, _col_results = st.columns(2)
 
 with _col_dirs:
-    st.subheader('Directories')
-    for _stage in STAGES:
-        _cur = _stage_dirs.get(_stage)
-        _found = _cur is not None and _cur.exists()
-        _c_name, _c_val, _c_edit = st.columns([2, 6, 1], vertical_alignment='center')
-        _c_name.write(f'**{_stage.capitalize()}**')
-        _c_val.write(str(_cur) if _cur else '_not found – add manually_')
-        if not _found and _c_edit.button('Edit', icon=':material/edit:', key=f'edit_dir_{_stage}', type='tertiary'):
-            st.session_state._edit_dir = _stage
+    st.subheader('Setup')
+    # Root box: open until a root is set, then it collapses and Directories opens.
+    with st.expander('Root directory', expanded=not _root_set):
+        _root_in = st.text_input(
+            'Root directory',
+            value=str(st.session_state.get('root_dir', Path.cwd())),
+            label_visibility='collapsed',
+        )
+        if st.button('Set root', type='primary', icon=':material/folder_open:', width='stretch'):
+            st.session_state.root_dir = Path(_root_in).expanduser()
+            st.session_state.stage_dirs = default_stage_dirs(st.session_state.root_dir)
+            st.session_state.result_sets = None
+            st.session_state.root_set = True
             st.rerun()
 
-    if st.session_state.get('_edit_dir'):
-        _stage = st.session_state._edit_dir
-        with st.form('dir_edit'):
-            _val = st.text_input(f'{_stage.capitalize()} directory', value=str(_stage_dirs.get(_stage) or ''))
-            if st.form_submit_button('Save', type='primary'):
-                _stage_dirs[_stage] = Path(_val).expanduser() if _val.strip() else None
-                st.session_state.result_sets = None
-                del st.session_state._edit_dir
-                st.rerun()
-            if st.form_submit_button('Cancel'):
-                del st.session_state._edit_dir
+    with st.expander('Directories', expanded=_root_set):
+        for _stage in STAGES:
+            _cur = _stage_dirs.get(_stage)
+            _found = _cur is not None and _cur.exists()
+            _c_name, _c_val, _c_edit = st.columns([2, 6, 1], vertical_alignment='center')
+            _c_name.write(f'**{_stage.capitalize()}**')
+            if _cur:
+                _c_val.write(str(_cur))
+            else:
+                _c_val.write('_not found – add manually_' if _root_set else '_set root_')
+            if _root_set and not _found and _c_edit.button(
+                'Edit', icon=':material/edit:', key=f'edit_dir_{_stage}', type='tertiary',
+            ):
+                st.session_state._edit_dir = _stage
                 st.rerun()
 
-    if st.button('Scan', type='primary', icon=':material/search:'):
-        st.session_state.result_sets = scan_stage_dirs(st.session_state.stage_dirs)
+        if st.session_state.get('_edit_dir'):
+            _stage = st.session_state._edit_dir
+            with st.form('dir_edit'):
+                _val = st.text_input(f'{_stage.capitalize()} directory', value=str(_stage_dirs.get(_stage) or ''))
+                if st.form_submit_button('Save', type='primary'):
+                    _stage_dirs[_stage] = Path(_val).expanduser() if _val.strip() else None
+                    st.session_state.result_sets = None
+                    del st.session_state._edit_dir
+                    st.rerun()
+                if st.form_submit_button('Cancel'):
+                    del st.session_state._edit_dir
+                    st.rerun()
+
+        if st.button('Scan', type='primary', icon=':material/search:'):
+            st.session_state.result_sets = scan_stage_dirs(st.session_state.stage_dirs)
 
 result_sets = st.session_state.result_sets
 
@@ -104,7 +109,7 @@ def _on_open_click() -> None:
 with _col_results:
     st.subheader('Available results')
     if not result_sets:
-        st.info('Set the stage directories and click Scan.')
+        st.info('Set the root directory, confirm stage directories and click Scan.')
     else:
         summary_df = pd.DataFrame([
             {
@@ -158,26 +163,29 @@ _shown = [(i, rs) for i, rs in enumerate(result_sets) if getattr(rs, _attr) is n
 if not _shown:
     st.caption(f'No {_stage.lower()} volumes found.')
 else:
-    st.markdown(
+    _cards, _bg_rules = [], []
+    for _idx, rs in _shown:
+        path = getattr(rs, _attr)
+        try:
+            uri = _card_data_uri(str(path), path.stat().st_mtime, _is_label)
+        except Exception as exc:  # a bad MRC shouldn't kill the whole gallery
+            _cards.append((_idx, rs, None, str(exc)))
+            continue
+        _bg_rules.append(f'.st-key-card_{_idx} button{{background-image:url("{uri}")}}')
+        _cards.append((_idx, rs, f'card_{_idx}', None))
+
+    st.html(
         '<style>'
-        '.tomo-card{position:relative;display:block;margin-bottom:12px;border-radius:8px;'
-        'overflow:hidden;line-height:0;cursor:pointer}'
-        '.tomo-card img{width:100%;height:auto;display:block}'
-        '.tomo-card .tomo-name{position:absolute;left:0;right:0;bottom:0;padding:4px 8px;'
-        'background:rgba(0,0,0,.55);color:#fff;font-size:.8rem;line-height:1.2}'
-        '</style>',
-        unsafe_allow_html=True,
+        '[class*="st-key-card_"] button{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;aspect-ratio:1/1!important;height:auto!important;min-height:0!important;padding:0!important;overflow:hidden;border-radius:8px;white-space:normal;color:#fff;background-color:#000!important;background-position:center!important;background-repeat:no-repeat!important;background-size:contain!important}'
+        '[class*="st-key-card_"] button p{margin:0;flex:0 0 auto;padding:3px 6px;background:rgba(255,75,75,.5);font-size:.75rem;line-height:1.2;text-align:left}'
+        + ''.join(_bg_rules)
+        + '</style>'
     )
     _cols = st.columns(4)
-    for _slot, (_idx, rs) in enumerate(_shown):
-        path = getattr(rs, _attr)
+    for _slot, (_idx, rs, _key, _err) in enumerate(_cards):
         with _cols[_slot % 4]:
-            try:
-                uri = _card_data_uri(str(path), path.stat().st_mtime, _is_label)
-                st.markdown(
-                    f'<a class="tomo-card" href="?open={_idx}" target="_self">'
-                    f'<img src="{uri}"/><span class="tomo-name">{html.escape(rs.stem)}</span></a>',
-                    unsafe_allow_html=True,
-                )
-            except Exception as exc:  # a bad/oddly-shaped MRC shouldn't kill the whole gallery
-                st.caption(f'preview failed: {exc}')
+            if _err:
+                st.caption(f'preview failed: {_err}')
+            elif st.button(rs.stem, key=_key, width='stretch'):
+                st.session_state._gallery_open_row = _idx
+                st.rerun()

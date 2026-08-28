@@ -27,6 +27,8 @@ if 'root_dir' not in st.session_state:
     st.session_state.root_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
 if 'stage_dirs' not in st.session_state:
     st.session_state.stage_dirs = default_stage_dirs(st.session_state.root_dir)
+if 'root_set' not in st.session_state:
+    st.session_state.root_set = False
 if 'result_sets' not in st.session_state:
     st.session_state.result_sets = None
 if 'selected_result' not in st.session_state:
