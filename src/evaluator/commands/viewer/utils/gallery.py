@@ -122,7 +122,7 @@ def scan_stage_dirs(stage_dirs: dict[str, Path | None]) -> list[ResultSet]:
             if source_file:
                 records_by_stem.setdefault(_stem_of_source_file(source_file), []).append(record)
 
-shared_analyse = _first_existing(
+    shared_analyse = _first_existing(
         *([ana_d / 'evaluator-analyse_results.csv'] if ana_d else []),
     )
 
