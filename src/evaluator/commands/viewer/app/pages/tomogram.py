@@ -95,14 +95,15 @@ DOWNSAMPLE = 2
 
 # Load volumes and build traces (cached per result-set + downsample so drags don't re-run marching_cubes)
 @st.cache_data(show_spinner='Building meshes...')
-def _load_traces(labelled_mrc: Path, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int):
+def _load_traces(labelled_mrc: Path | None, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int):
     views: dict[str, list[go.Mesh3d | go.Scatter3d]] = {}
     trace_index_to_label: dict[str, dict[int, int]] = {}
 
-    labelled_data, _ = mrcutil.readMRCFile(labelled_mrc)
-    labelled_traces = build_label_mesh_traces(labelled_data, downsample=downsample)
-    views['labelled'] = list(labelled_traces.values())
-    trace_index_to_label['labelled'] = {i: label_id for i, label_id in enumerate(labelled_traces)}
+    if labelled_mrc is not None:
+        labelled_data, _ = mrcutil.readMRCFile(labelled_mrc)
+        labelled_traces = build_label_mesh_traces(labelled_data, downsample=downsample)
+        views['labelled'] = list(labelled_traces.values())
+        trace_index_to_label['labelled'] = {i: label_id for i, label_id in enumerate(labelled_traces)}
 
     if fitted_mrc is not None:
         fitted_data, _ = mrcutil.readMRCFile(fitted_mrc)
@@ -123,7 +124,9 @@ def _load_traces(labelled_mrc: Path, fitted_mrc: Path | None, raw_mrc: Path | No
 views, trace_index_to_label = _load_traces(result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE)
 
 VIEW_LABELS = {'raw': 'Raw tomogram', 'binary': 'Binary segmentation', 'labelled': 'Labelled', 'fitted': 'Fitted'}
-available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
+if not available_views:
+    st.warning('No volumes to display for this result. Set a path in Metadata above.')
+    st.stop()
 
 # ====================
 # Load results tables and cache on source path
