@@ -124,6 +124,7 @@ def _load_traces(labelled_mrc: Path | None, fitted_mrc: Path | None, raw_mrc: Pa
 views, trace_index_to_label = _load_traces(result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE)
 
 VIEW_LABELS = {'raw': 'Raw tomogram', 'binary': 'Binary segmentation', 'labelled': 'Labelled', 'fitted': 'Fitted'}
+available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
 if not available_views:
     st.warning('No volumes to display for this result. Set a path in Metadata above.')
     st.stop()
