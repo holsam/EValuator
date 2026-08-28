@@ -2,61 +2,98 @@
 =======================================
 EValuator: VIEWER TOMOGRAM PAGE
 =======================================
-Main interactive pane (drag/orbit, click-to-select-vesicle) + a non-interactive
-4-panel overview row mirroring its current orientation, a results table cross-filtered
-with the 3D selection, and an include/export workflow for visual QC.
+Main interactive pane (drag/orbit, click-to-select-vesicle) + a non-interactive 4-panel overview row mirroring its current orientation, a results table cross-filtered with the 3D selection, and an include/export workflow for visual QC.
 '''
 
 # ====================
-# Import external dependencies
+# Import dependencies
 # ====================
+
+# Import external dependencies
+import pandas as pd, plotly.graph_objects as go, streamlit as st, tempfile
 from pathlib import Path
 
-import pandas as pd
-import streamlit as st
-
-# ====================
 # Import EValuator utilities
-# ====================
 from evaluator.utils import io as ioutil
 from evaluator.utils import mrc as mrcutil
 
-# ====================
 # Import EValuator viewer utilities
-# ====================
 from evaluator.commands.viewer.app.components.plotly_camera_sync import plotly_view
 from evaluator.commands.viewer.utils.export import export_filtered_csv
 from evaluator.commands.viewer.utils.join import join_analyse_model
-from evaluator.commands.viewer.utils.mesh import HIGHLIGHT_COLOR, build_label_mesh_traces, build_point_cloud_trace, dim_trace
-
-import plotly.graph_objects as go
+from evaluator.commands.viewer.utils.mesh import build_label_mesh_traces, build_point_cloud_trace, dim_trace
 
 # ====================
-# Guard: a result set must be open
+# Set guard for open result set (if session state is gone eg from hard refresh, send back to the Gallery)
 # ====================
 result = st.session_state.selected_result
 if result is None:
-    st.info('No tomogram open — pick one from the Gallery page.')
-    st.stop()
-
-st.title(f'Viewer — {result.stem}')
+    st.switch_page('pages/gallery.py')
 
 # ====================
-# Optional manual file pickers for the 2 volumes with no output-tree home
+# PAGE SECTION: navigation/title
 # ====================
-with st.expander('Add raw tomogram / binary segmentation (optional, not stored by the pipeline)'):
-    raw_path_input = st.text_input('Raw tomogram MRC path', value=str(result.raw_mrc) if result.raw_mrc else '')
-    binary_path_input = st.text_input('Binary segmentation MRC path', value=str(result.binary_mrc) if result.binary_mrc else '')
-    if raw_path_input:
-        result.raw_mrc = Path(raw_path_input)
-    if binary_path_input:
-        result.binary_mrc = Path(binary_path_input)
+if st.button('Gallery', icon=':material/arrow_back:', type='primary'):
+    st.switch_page('pages/gallery.py')
+st.title(result.stem)
+_n_rel = result.n_reliable if result.n_reliable is not None else '—'
+st.caption(f'{result.n_vesicles} vesicles · {_n_rel} reliable')
+st.divider()
 
 # ====================
-# Load volumes and build traces (cached per result-set + downsample so drags don't re-run marching_cubes)
+# PAGE SECTION: metadata
+# ====================
+st.header('Metadata')
+
+# Available path fields to fill
+_PATH_FIELDS = {
+    'Labelled MRC': 'labelled_mrc',
+    'Fitted MRC': 'fitted_mrc',
+    'Raw tomogram MRC': 'raw_mrc',
+    'Binary segmentation MRC': 'binary_mrc',
+    'Analyse CSV': 'analyse_csv',
+    'Model results': 'model_results_path',
+}
+
+# Table showing paths
+with st.container():
+    for _fname, _fattr in _PATH_FIELDS.items():
+        _c_name, _c_val = st.columns([2, 5], vertical_alignment='center')
+        _c_name.write(f'**{_fname}**')
+        _cur = getattr(result, _fattr)
+        if _cur:
+            _c_val.write(str(_cur))
+        elif _c_val.button('Set', icon=':material/edit:', key=f'edit_{_fattr}'):
+            st.session_state._edit_field = (_fname, _fattr)
+            st.rerun()
+
+# Inline form for adding entries
+if st.session_state.get('_edit_field'):
+    _fname, _fattr = st.session_state._edit_field
+    with st.form('path_edit'):
+        _up = st.file_uploader(
+            f'Upload {_fname}',
+            type=['mrc'] if _fattr.endswith('_mrc') else None,
+            accept_multiple_files=False,
+        )
+        _save_col, _cancel_col = st.columns(2)
+        if _save_col.form_submit_button('Save', type='primary', width='stretch'):
+            if _up is not None:
+                _dest = Path(tempfile.gettempdir()) / f'evaluator_viewer_{result.stem}_{_up.name}'
+                _dest.write_bytes(_up.getbuffer())
+                setattr(result, _fattr, _dest)
+            del st.session_state._edit_field
+            st.rerun()
+        if _cancel_col.form_submit_button('Cancel', width='stretch'):
+            del st.session_state._edit_field
+            st.rerun()
+
+# ====================
+# Load volumes & build traces for viewer section
 # ====================
 DOWNSAMPLE = 2
 
+# Load volumes and build traces (cached per result-set + downsample so drags don't re-run marching_cubes)
 @st.cache_data(show_spinner='Building meshes...')
 def _load_traces(labelled_mrc: Path, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int):
     views: dict[str, list[go.Mesh3d | go.Scatter3d]] = {}
@@ -89,48 +126,67 @@ VIEW_LABELS = {'raw': 'Raw tomogram', 'binary': 'Binary segmentation', 'labelled
 available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
 
 # ====================
-# Load and join results table
+# Load results tables and cache on source path
 # ====================
-analyse_df = pd.read_csv(result.analyse_csv) if result.analyse_csv else None
-model_df = (
-    pd.DataFrame(ioutil.read_results(result.model_results_path)[0])
-    if result.model_results_path else None
-)
-joined_df = join_analyse_model(analyse_df, model_df, result.stem)
+_pretty = lambda c: c.replace('_', ' ').replace('.', ' ').strip().capitalize()
+
+def _build_results(stem: str, analyse_csv, model_results_path):
+    analyse_df = pd.read_csv(analyse_csv) if analyse_csv else None
+    model_df = pd.DataFrame(ioutil.read_results(model_results_path)[0]) if model_results_path else None
+    joined, _a_names, _m_names = join_analyse_model(analyse_df, model_df, stem)
+
+    # Flatten nested-dict columns (model reliability/sphere_fit/ellipsoid_fit) into real columns
+    for col in list(joined.columns):
+        vals = joined[col].dropna()
+        if not vals.empty and all(isinstance(v, dict) for v in vals):
+            exp = pd.json_normalize(joined[col].apply(lambda v: v if isinstance(v, dict) else {}).tolist()).add_prefix(f'{col}.')
+            exp.index = joined.index
+            joined = pd.concat([joined.drop(columns=[col]), exp], axis=1)
+
+    def origin(c):
+        return 'model' if (c in _m_names or c.split('.', 1)[0] in _m_names) else 'analyse'
+
+    a_cols = ['label'] + [c for c in joined.columns if c not in ('label', 'include') and origin(c) == 'analyse']
+    m_body = [c for c in joined.columns if c not in ('label', 'include', 'label_id', 'source_file') and origin(c) == 'model']
+    m_cols = (['label'] if 'label' in joined.columns else []) + m_body + (['source_file'] if 'source_file' in joined.columns else [])
+
+    def _display(cols):  # None when the source is absent (only the `label` key present)
+        if len(cols) <= 1:
+            return None
+        df = joined[cols].fillna('')  # blank, not "None"/"<NA>", for missing cells
+        return df, {c: st.column_config.Column(_pretty(c)) for c in cols}
+
+    return {'joined': joined, 'analyse': _display(a_cols), 'model': _display(m_cols)}
+
+_res_key = (result.stem, str(result.analyse_csv), str(result.model_results_path))
+if st.session_state.get('_results_key') != _res_key:
+    st.session_state._results_key = _res_key
+    st.session_state._results_data = _build_results(result.stem, result.analyse_csv, result.model_results_path)
+_results = st.session_state._results_data
+joined_df = _results['joined']
+
+# Positional row indices (shared by both source tables, same row order) for a label set — used to mirror a selection made in the 3D view or one table into the other table.
+def _rows_for(labels: set[int]) -> list[int]:
+    return [i for i, l in enumerate(joined_df['label'].tolist()) if l in labels]
 
 # ====================
-# Flatten nested-dict columns (e.g. model's reliability/sphere_fit/ellipsoid_fit) so the
-# results table shows real columns instead of a raw dict repr in one cell
+# Display helpers 
 # ====================
-for _col in list(joined_df.columns):
-    _values = joined_df[_col].dropna()
-    if not _values.empty and all(isinstance(v, dict) for v in _values):
-        _expanded = pd.json_normalize(joined_df[_col].apply(lambda v: v if isinstance(v, dict) else {}).tolist()).add_prefix(f'{_col}.')
-        _expanded.index = joined_df.index
-        joined_df = pd.concat([joined_df.drop(columns=[_col]), _expanded], axis=1)
 
-# label first, everything else after, in whatever order they came in
-_column_order = ['label'] + [c for c in joined_df.columns if c != 'label']
-
-# ====================
-# Dark-mode-aware plot background, so the 3D views match the app theme instead of always
-# rendering on white
-# ====================
+# Dark-mode-aware plot background, so the 3D views match the app theme instead of always rendering on white
 _dark_mode = st.context.theme.type == 'dark'
 _SCENE_BG = '#0e1117' if _dark_mode else 'white'
 _PAPER_BG = '#0e1117' if _dark_mode else 'white'
 _GRID_COLOR = '#31333F' if _dark_mode else '#e5e5e5'
 
-# ====================
 # Highlight helper — funnels both selection directions through one function
-# ====================
 def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
     traces = views[view_name]
     fig = go.Figure()
     for trace in traces:
-        if view_name in ('labelled', 'fitted') and isinstance(trace, go.Mesh3d):
-            trace = go.Mesh3d(trace)  # copy so dimming one view doesn't mutate the cached original
-            dim_trace(trace, dim=(bool(selected_labels) and trace.name not in {str(l) for l in selected_labels}))
+        if view_name in ('labelled', 'fitted') and isinstance(trace, go.Mesh3d) and selected_labels:
+            trace = go.Mesh3d(trace)  # copy so recolouring one view doesn't mutate the cached original
+            dim_trace(trace, dim=(trace.name not in {str(l) for l in selected_labels}))
         fig.add_trace(trace)
     axis = dict(backgroundcolor=_SCENE_BG, gridcolor=_GRID_COLOR, showbackground=True)
     fig.update_layout(
@@ -141,27 +197,44 @@ def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
     return fig
 
 # ====================
-# Main interactive pane
+# PAGE SECTION: viewer
 # ====================
-active_view = st.radio('Active view', available_views, format_func=lambda v: VIEW_LABELS[v], horizontal=True, key='active_view')
+st.divider()
+st.header('Viewer')
 
-main_event = plotly_view(
-    _figure_for(active_view, st.session_state.selected_labels),
-    interactive=True,
-    camera=st.session_state.camera,
-    key='main_view',
-)
-# Streamlit replays the component's last return value on every rerun, even ones
-# triggered by unrelated widgets — only act on an event_id we haven't seen yet,
-# otherwise a single click/drag re-fires forever (permanent rerun spinner, and
-# selected_labels flip-flopping so the mini panels never see a stable selection).
+_sel_labels = st.session_state.selected_labels
+_col_main, _col_side = st.columns([3, 2])
+
+with _col_main:
+    active_view = st.segmented_control(
+        'Active view', available_views, format_func=lambda v: VIEW_LABELS[v],
+        default=available_views[0], key='active_view', label_visibility='collapsed',
+    ) or available_views[0]
+    main_event = plotly_view(
+        _figure_for(active_view, _sel_labels),
+        interactive=True,
+        camera=st.session_state.camera,
+        key='main_view',
+    )
+
+with _col_side:
+    for _r0 in range(0, len(available_views), 2):
+        _chunk = available_views[_r0:_r0 + 2]
+        for _c, _vn in zip(st.columns(len(_chunk)), _chunk):
+            with _c:
+                st.markdown(f'#### {VIEW_LABELS[_vn]}')
+                plotly_view(
+                    _figure_for(_vn, _sel_labels),
+                    interactive=False,
+                    camera=st.session_state.camera,
+                    key=f'mini_{_vn}',
+                )
+
+# Only act on unseen event_ids so single click/drag doesn't refire forever
 if main_event and main_event.get('event_id') != st.session_state.get('main_view_last_event_id'):
     st.session_state.main_view_last_event_id = main_event.get('event_id')
     new_camera = main_event.get('camera')
-    # Plotly can echo a relayout event back after we push a camera update into it
-    # programmatically (gl3d quirk) — that echo gets its own fresh event_id, so it
-    # passes the check above even though nothing changed; comparing the value itself
-    # is what actually breaks the loop.
+    # Plotly can echo a relayout event back (gl3d quirk) so give echo new event_id so it passes above check 
     if new_camera and new_camera != st.session_state.camera:
         st.session_state.camera = new_camera
         st.rerun()
@@ -173,82 +246,76 @@ if main_event and main_event.get('event_id') != st.session_state.get('main_view_
                 # Shift+click adds/removes just this vesicle from the current selection
                 current = current ^ {label_id}
             else:
-                # A plain click replaces the selection, or clears it if re-clicking the
-                # only currently-selected vesicle (the existing deselect-by-reclick behaviour)
+                # A plain click replaces the selection, or clears it if re-clicking the only currently-selected vesicle (the existing deselect-by-reclick behaviour)
                 current = set() if current == {label_id} else {label_id}
             st.session_state.selected_labels = current
+            _cur_rows = _rows_for(current)
+            st.session_state['_pending_table_rows'] = _cur_rows
+            st.session_state._last_a_rows = st.session_state._last_m_rows = tuple(_cur_rows)
             st.rerun()
 
 # ====================
-# Non-interactive 4-panel overview row, mirroring the main pane's current camera
+# PAGE SECTION: results
 # ====================
-st.caption('Overview (all available views, current orientation)')
-cols = st.columns(len(available_views))
-for col, view_name in zip(cols, available_views):
-    with col:
-        st.caption(VIEW_LABELS[view_name])
-        plotly_view(
-            _figure_for(view_name, st.session_state.selected_labels),
-            interactive=False,
-            camera=st.session_state.camera,
-            key=f'mini_{view_name}',
-        )
-
-# ====================
-# Results table: cross-filter + include checkboxes
-# ====================
-st.subheader('Results')
+st.divider()
+st.header('Results')
 if joined_df.empty:
-    st.info('No analyse/model results found for this tomogram yet.')
+    st.info('No analyse or model results for this tomogram.')
 else:
     if st.session_state.selected_labels:
         st.info(f"Selected vesicles: {', '.join(str(l) for l in sorted(st.session_state.selected_labels))}")
-
-    def _highlight_selected(row):
-        is_selected = row['label'] in st.session_state.selected_labels
-        return [f'background-color: {HIGHLIGHT_COLOR}66' if is_selected else '' for _ in row]  # ~40% alpha over the theme's own bg/text
-
-    for label_id, flag in st.session_state.include_flags.items():
-        if label_id in joined_df['label'].values:
-            joined_df.loc[joined_df['label'] == label_id, 'include'] = flag
-
-    edited_df = st.data_editor(
-        joined_df.style.apply(_highlight_selected, axis=1) if hasattr(joined_df, 'style') else joined_df,
-        column_config={'include': st.column_config.CheckboxColumn(default=True)},
-        disabled=[c for c in joined_df.columns if c != 'include'],
-        column_order=_column_order,
-        hide_index=True,
-        key='include_editor',
-        width='stretch',
-    )
-    for _, row in edited_df.iterrows():
-        st.session_state.include_flags[int(row['label'])] = bool(row['include'])
-
-    # st.data_editor has no on_select in this Streamlit version, so row-click selection needs
-    # a second, selectable st.dataframe — tucked into a collapsed expander so it reads as a
-    # deliberate "click here to select" control rather than a mysterious stray table.
-    with st.expander('Select a vesicle by clicking a row (or click one in the 3D view above)'):
-        table_event = st.dataframe(
-            joined_df, on_select='rerun', selection_mode='single-row', key='results_table_shadow',
-            column_order=_column_order, hide_index=True, width='stretch',
-        )
-    selected_rows = tuple(table_event.selection.rows) if table_event and table_event.selection else ()
-    # This selection persists across every rerun (native widget state), not just the one
-    # it caused — same trap as the camera event above. Only act when it actually changed
-    # from what we last processed, otherwise it re-fires st.rerun() forever and stomps
-    # whatever row the user just clicked back to the stale one.
-    if selected_rows and selected_rows != st.session_state.get('results_table_last_selection'):
-        st.session_state.results_table_last_selection = selected_rows
-        clicked_label = int(joined_df.iloc[selected_rows[0]]['label'])
-        st.session_state.selected_labels = set() if st.session_state.selected_labels == {clicked_label} else {clicked_label}
-        st.rerun()
-
-    st.download_button(
-        'Download filtered CSV',
-        data=joined_df[joined_df['label'].map(st.session_state.include_flags).fillna(True)].to_csv(index=False),
-        file_name=f'{result.stem}_filtered.csv',
-        mime='text/csv',
-    )
-    if result.analyse_csv and st.button('Export filtered CSV to evaluator/analyse/'):
-        out_path = export_filtered_csv(joined_df, st.session_state.include_flags, result.analyse_csv)
-        st.success(f'Wrote {out_path}')
+    _has_a = _results['analyse'] is not None
+    _has_m = _results['model'] is not None
+    def _source_table(display, key: str):
+        df, colcfg = display
+        return st.dataframe(df, on_select='rerun', selection_mode='multi-row', hide_index=True, width='stretch', key=key, column_config=colcfg)
+    # Mirror a pending selection (from the 3D view or the other table) into the rendered tables before they instantiate
+    _pending = st.session_state.pop('_pending_table_rows', None)
+    if _pending is not None:
+        if _has_a:
+            st.session_state.analyse_table = {'selection': {'rows': _pending, 'columns': []}}
+        if _has_m:
+            st.session_state.model_table = {'selection': {'rows': _pending, 'columns': []}}
+    a_event = m_event = None
+    left, right = st.columns(2)
+    with left:
+        st.markdown('#### Analyse')
+        if _has_a:
+            a_event = _source_table(_results['analyse'], 'analyse_table')
+        else:
+            st.caption('No analyse results.')
+    with right:
+        st.markdown('#### Model')
+        if _has_m:
+            m_event = _source_table(_results['model'], 'model_table')
+        else:
+            st.caption('No model results.')
+    _a_rows = tuple(a_event.selection.rows) if a_event is not None else None
+    _m_rows = tuple(m_event.selection.rows) if m_event is not None else None
+    _rows = None
+    if _a_rows is not None and _a_rows != st.session_state.get('_last_a_rows', ()):
+        _rows = _a_rows
+    elif _m_rows is not None and _m_rows != st.session_state.get('_last_m_rows', ()):
+        _rows = _m_rows
+    if _rows is not None:
+        if _a_rows is not None:
+            st.session_state._last_a_rows = _rows
+        if _m_rows is not None:
+            st.session_state._last_m_rows = _rows
+        _picked = {int(joined_df.iloc[i]['label']) for i in _rows}
+        if _picked != set(st.session_state.selected_labels):
+            st.session_state.selected_labels = _picked
+            st.session_state['_pending_table_rows'] = list(_rows)
+            st.rerun()
+    st.subheader('Export')
+    _sel = sorted(st.session_state.selected_labels)
+    if not _sel:
+        st.caption('Select rows in the tables above (or a vesicle in the 3D view) to choose what to export.')
+    else:
+        st.write(f'Export {len(_sel)} selected vesicle{"" if len(_sel) == 1 else "s"} to CSV')
+        _out_df = joined_df[joined_df['label'].isin(_sel)].drop(columns=['include'], errors='ignore')
+        st.download_button('Download CSV', data=_out_df.to_csv(index=False), file_name=f'{result.stem}_selected.csv', mime='text/csv')
+        if result.analyse_csv and st.button('Export CSV to evaluator/analyse/'):
+            _flags = {int(l): (int(l) in set(_sel)) for l in joined_df['label']}
+            out_path = export_filtered_csv(joined_df.drop(columns=['include'], errors='ignore'), _flags, result.analyse_csv)
+            st.success(f'Wrote {out_path}')

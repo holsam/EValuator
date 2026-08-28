@@ -8,10 +8,8 @@ Scan a directory for evaluator/ output and let the user pick a tomogram to open.
 # ====================
 # Import external dependencies
 # ====================
+import pandas as pd, streamlit as st
 from pathlib import Path
-
-import pandas as pd
-import streamlit as st
 
 # ====================
 # Import EValuator viewer utilities
@@ -44,14 +42,11 @@ summary_df = pd.DataFrame([
     for rs in result_sets
 ])
 
-event = st.dataframe(summary_df, on_select='rerun', selection_mode='single-row', key='gallery_table', width='stretch')
+_table_key = f"gallery_table_{st.session_state.get('gallery_table_nonce', 0)}"
+event = st.dataframe(summary_df, on_select='rerun', selection_mode='single-row', key=_table_key, width='stretch')
 selected_rows = tuple(event.selection.rows) if event and event.selection else ()
-# This selection persists across reruns (native widget state), not just the one it
-# caused — landing back on this page later with a stale selection would otherwise
-# silently switch_page again on the next unrelated rerun (e.g. typing in the text
-# box). Only act on a selection we haven't already processed.
-if selected_rows and selected_rows != st.session_state.get('gallery_table_last_selection'):
-    st.session_state.gallery_table_last_selection = selected_rows
+if selected_rows:
+    st.session_state.gallery_table_nonce = st.session_state.get('gallery_table_nonce', 0) + 1
     st.session_state.selected_result = result_sets[selected_rows[0]]
     st.session_state.selected_labels = set()
     st.session_state.camera = None

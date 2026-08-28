@@ -35,7 +35,7 @@ if 'include_flags' not in st.session_state:
 # Register pages and run
 # ====================
 gallery_page = st.Page('pages/gallery.py', title='Gallery', icon=':material/grid_view:')
-tomogram_page = st.Page('pages/tomogram.py', title='Viewer', icon=':material/image:')
+tomogram_page = st.Page('pages/tomogram.py', title='Tomogram', icon=':material/image:')
 
-nav = st.navigation([gallery_page, tomogram_page])
+nav = st.navigation([gallery_page, tomogram_page], position='hidden')
 nav.run()
