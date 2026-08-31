@@ -2,7 +2,6 @@
 =======================================
 EValuator: VIEWER TOMOGRAM PAGE
 =======================================
-Main interactive pane (drag/orbit, click-to-select-vesicle) + a non-interactive 4-panel overview row mirroring its current orientation, a results table cross-filtered with the 3D selection, and an include/export workflow for visual QC.
 '''
 
 # ====================
@@ -19,7 +18,9 @@ from evaluator.utils import mrc as mrcutil
 
 # Import EValuator viewer utilities
 from evaluator.commands.viewer.app.components.plotly_camera_sync import plotly_view
+from evaluator.commands.viewer.utils import plots as plotutil
 from evaluator.commands.viewer.utils.export import export_filtered_csv
+from evaluator.commands.viewer.utils.format import pretty_column
 from evaluator.commands.viewer.utils.join import join_analyse_model
 from evaluator.commands.viewer.utils.mesh import build_label_mesh_traces, build_point_cloud_trace, dim_trace
 
@@ -93,47 +94,49 @@ if st.session_state.get('_edit_field'):
 # ====================
 DOWNSAMPLE = 2
 
-# Load volumes and build traces (cached per result-set + downsample so drags don't re-run marching_cubes)
-@st.cache_data(show_spinner='Building meshes...')
+# Load volumes and build traces (cached per result-set  downsample so drags don't re-run marching_cubes)
+@st.cache_data(show_spinner=False)
 def _load_traces(labelled_mrc: Path | None, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int):
     views: dict[str, list[go.Mesh3d | go.Scatter3d]] = {}
     trace_index_to_label: dict[str, dict[int, int]] = {}
+    shapes: list[tuple[int, int, int]] = []  # (Z, Y, X) of every loaded volume, for a shared scene box
 
     if labelled_mrc is not None:
         labelled_data, _ = mrcutil.readMRCFile(labelled_mrc)
+        shapes.append(labelled_data.shape)
         labelled_traces = build_label_mesh_traces(labelled_data, downsample=downsample)
         views['labelled'] = list(labelled_traces.values())
         trace_index_to_label['labelled'] = {i: label_id for i, label_id in enumerate(labelled_traces)}
 
     if fitted_mrc is not None:
         fitted_data, _ = mrcutil.readMRCFile(fitted_mrc)
+        shapes.append(fitted_data.shape)
         fitted_traces = build_label_mesh_traces(fitted_data, downsample=downsample)
         views['fitted'] = list(fitted_traces.values())
         trace_index_to_label['fitted'] = {i: label_id for i, label_id in enumerate(fitted_traces)}
 
     if raw_mrc is not None and raw_mrc.exists():
         raw_data, _ = mrcutil.readMRCFile(raw_mrc)
+        shapes.append(raw_data.shape)
         views['raw'] = [build_point_cloud_trace(raw_data, downsample=downsample, percentile=97.5, name='raw tomogram')]
 
     if binary_mrc is not None and binary_mrc.exists():
         binary_data, _ = mrcutil.readMRCFile(binary_mrc)
+        shapes.append(binary_data.shape)
         views['binary'] = [build_point_cloud_trace(binary_data, downsample=downsample, name='binary segmentation')]
 
-    return views, trace_index_to_label
-
-views, trace_index_to_label = _load_traces(result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE)
+     # Common scene bounds in downsampled screen (X,Y,Z) order
+    scene_bounds = None
+    if shapes:
+        zmax = max(s[0] for s in shapes); ymax = max(s[1] for s in shapes); xmax = max(s[2] for s in shapes)
+        scene_bounds = (xmax // downsample, ymax // downsample, zmax // downsample)
+    return views, trace_index_to_label, scene_bounds
 
 VIEW_LABELS = {'raw': 'Raw tomogram', 'binary': 'Binary segmentation', 'labelled': 'Labelled', 'fitted': 'Fitted'}
-available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
-if not available_views:
-    st.warning('No volumes to display for this result. Set a path in Metadata above.')
-    st.stop()
 
 # ====================
 # Load results tables and cache on source path
 # ====================
-_pretty = lambda c: c.replace('_', ' ').replace('.', ' ').strip().capitalize()
-
 def _build_results(stem: str, analyse_csv, model_results_path):
     analyse_df = pd.read_csv(analyse_csv) if analyse_csv else None
     model_df = pd.DataFrame(ioutil.read_results(model_results_path)[0]) if model_results_path else None
@@ -150,24 +153,17 @@ def _build_results(stem: str, analyse_csv, model_results_path):
     def origin(c):
         return 'model' if (c in _m_names or c.split('.', 1)[0] in _m_names) else 'analyse'
 
-    a_cols = ['label'] + [c for c in joined.columns if c not in ('label', 'include') and origin(c) == 'analyse']
+    a_cols = ['label']  [c for c in joined.columns if c not in ('label', 'include') and origin(c) == 'analyse']
     m_body = [c for c in joined.columns if c not in ('label', 'include', 'label_id', 'source_file') and origin(c) == 'model']
-    m_cols = (['label'] if 'label' in joined.columns else []) + m_body + (['source_file'] if 'source_file' in joined.columns else [])
+    m_cols = (['label'] if 'label' in joined.columns else [])  m_body  (['source_file'] if 'source_file' in joined.columns else [])
 
     def _display(cols):  # None when the source is absent (only the `label` key present)
         if len(cols) <= 1:
             return None
         df = joined[cols].fillna('')  # blank, not "None"/"<NA>", for missing cells
-        return df, {c: st.column_config.Column(_pretty(c)) for c in cols}
+        return df, {c: st.column_config.Column(pretty_column(c)) for c in cols}
 
     return {'joined': joined, 'analyse': _display(a_cols), 'model': _display(m_cols)}
-
-_res_key = (result.stem, str(result.analyse_csv), str(result.model_results_path))
-if st.session_state.get('_results_key') != _res_key:
-    st.session_state._results_key = _res_key
-    st.session_state._results_data = _build_results(result.stem, result.analyse_csv, result.model_results_path)
-_results = st.session_state._results_data
-joined_df = _results['joined']
 
 # Positional row indices (shared by both source tables, same row order) for a label set — used to mirror a selection made in the 3D view or one table into the other table.
 def _rows_for(labels: set[int]) -> list[int]:
@@ -193,11 +189,14 @@ def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
             dim_trace(trace, dim=(trace.name not in {str(l) for l in selected_labels}))
         fig.add_trace(trace)
     axis = dict(backgroundcolor=_SCENE_BG, gridcolor=_GRID_COLOR, showbackground=True)
+    # Same box for every view/panel so meshes and point clouds are spatially comparable at a glance
+    ax = lambda n: {**axis, 'range': [0, scene_bounds[n]]} if scene_bounds else axis
     fig.update_layout(
         showlegend=False,
         paper_bgcolor=_PAPER_BG,
         scene=dict(aspectmode='data', xaxis=axis, yaxis=axis, zaxis=axis, bgcolor=_SCENE_BG),
     )
+    scene=dict(aspectmode='data', xaxis=ax(0), yaxis=ax(1), zaxis=ax(2), bgcolor=_SCENE_BG),
     return fig
 
 # ====================
@@ -205,6 +204,24 @@ def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
 # ====================
 st.divider()
 st.header('Viewer')
+
+# Load data here so nav/title/metadata render immediately with a spinner in their place
+with st.spinner('Loading volumes and results...'):
+    views, trace_index_to_label, scene_bounds = _load_traces(
+        result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE,
+    )
+    available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
+
+    _res_key = (result.stem, str(result.analyse_csv), str(result.model_results_path))
+    if st.session_state.get('_results_key') != _res_key:
+        st.session_state._results_key = _res_key
+        st.session_state._results_data = _build_results(result.stem, result.analyse_csv, result.model_results_path)
+    _results = st.session_state._results_data
+    joined_df = _results['joined']
+
+if not available_views:
+    st.warning('No volumes to display for this result. Set a path in Metadata above.')
+    st.stop()
 
 _sel_labels = st.session_state.selected_labels
 _col_main, _col_side = st.columns([3, 2])
@@ -223,7 +240,7 @@ with _col_main:
 
 with _col_side:
     for _r0 in range(0, len(available_views), 2):
-        _chunk = available_views[_r0:_r0 + 2]
+        _chunk = available_views[_r0:_r0  2]
         for _c, _vn in zip(st.columns(len(_chunk)), _chunk):
             with _c:
                 st.markdown(f'#### {VIEW_LABELS[_vn]}')
@@ -247,7 +264,7 @@ if main_event and main_event.get('event_id') != st.session_state.get('main_view_
         if label_id is not None:
             current = st.session_state.selected_labels
             if main_event.get('shift_key'):
-                # Shift+click adds/removes just this vesicle from the current selection
+                # Shiftclick adds/removes just this vesicle from the current selection
                 current = current ^ {label_id}
             else:
                 # A plain click replaces the selection, or clears it if re-clicking the only currently-selected vesicle (the existing deselect-by-reclick behaviour)
@@ -311,6 +328,57 @@ else:
             st.session_state.selected_labels = _picked
             st.session_state['_pending_table_rows'] = list(_rows)
             st.rerun()
+
+    # results plots
+    st.subheader('Plots')
+    _sel_now = set(st.session_state.selected_labels)
+    _num_cols = plotutil.numeric_columns(joined_df)
+
+    def _plot_cross_filter(event, tag: str):
+        picked = plotutil.selected_labels_from_event(event)
+        seen_key = f'_last_plot_{tag}'
+        if picked and picked != set(st.session_state.selected_labels) and tuple(sorted(picked)) != st.session_state.get(seen_key):
+            st.session_state[seen_key] = tuple(sorted(picked))
+            st.session_state.selected_labels = picked
+            _r = _rows_for(picked)
+            st.session_state['_pending_table_rows'] = _r
+            st.session_state._last_a_rows = st.session_state._last_m_rows = tuple(_r)
+            st.rerun()
+
+    _tab_conc, _tab_reliab, _tab_dist, _tab_scatter = st.tabs(['Concordance', 'Reliability', 'Distribution', 'Feature scatter'])
+    with _tab_conc:
+        _fig = plotutil.concordance(joined_df, _sel_now, _dark_mode)
+        if _fig is None:
+            st.caption('Needs model fitted radius and an analyse diameter column.')
+        else:
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_conc', on_select='rerun'), 'conc')
+    with _tab_reliab:
+        _fig = plotutil.reliability(joined_df, _sel_now, _dark_mode)
+        if _fig is None:
+            st.caption('Needs model RMSE and analyse closure/enclosed columns.')
+        else:
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_reliab', on_select='rerun'), 'reliab')
+    with _tab_dist:
+        if not _num_cols:
+            st.caption('No numeric columns to plot.')
+        else:
+            _di = _num_cols.index('equiv_diameter_nm') if 'equiv_diameter_nm' in _num_cols else 0
+            _f = st.selectbox('Feature', _num_cols, index=_di, format_func=pretty_column, key='dist_feature')
+            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, _dark_mode), key='plot_dist')
+    with _tab_scatter:
+        if len(_num_cols) < 2:
+            st.caption('Need at least two numeric columns.')
+        else:
+            _cx, _cy = st.columns(2)
+            _x = _cx.selectbox('X', _num_cols, index=0, format_func=pretty_column, key='scatter_x')
+            _y = _cy.selectbox('Y', _num_cols, index=min(1, len(_num_cols) - 1), format_func=pretty_column, key='scatter_y')
+            _plot_cross_filter(
+                st.plotly_chart(plotutil.feature_scatter(joined_df, _x, _y, _sel_now, _dark_mode),
+                                key='plot_scatter', on_select='rerun'),
+                'scatter',
+            )
+
+    # results export
     st.subheader('Export')
     _sel = sorted(st.session_state.selected_labels)
     if not _sel:
