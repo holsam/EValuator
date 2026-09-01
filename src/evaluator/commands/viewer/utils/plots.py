@@ -112,7 +112,7 @@ def _scatter(df, x, y, colours, hovertext=None):
 def feature_scatter(df: pd.DataFrame, x: str, y: str, selected: set[int]) -> go.Figure:
     fig = go.Figure(_scatter(df, x, y, _point_colours(df, selected, ACTIVE['base'])))
     _style(fig, f'{pretty_column(y)} vs {pretty_column(x)}', pretty_column(x), pretty_column(y))
-     return _apply_axes(fig, x=df[x], y=df[y])
+    return _apply_axes(fig, x=df[x], y=df[y])
 
 def distribution(df: pd.DataFrame, feature: str, selected: set[int], bin_size: float | None = None) -> go.Figure:
     vals = pd.to_numeric(df[feature], errors='coerce')
