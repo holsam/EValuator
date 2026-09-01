@@ -270,9 +270,6 @@ if main_event and main_event.get('event_id') != st.session_state.get('main_view_
                 # A plain click replaces the selection, or clears it if re-clicking the only currently-selected vesicle (the existing deselect-by-reclick behaviour)
                 current = set() if current == {label_id} else {label_id}
             st.session_state.selected_labels = current
-            _cur_rows = _rows_for(current)
-            st.session_state['_pending_table_rows'] = _cur_rows
-            st.session_state._last_a_rows = st.session_state._last_m_rows = tuple(_cur_rows)
             st.rerun()
 
 # ====================
@@ -287,47 +284,64 @@ else:
         st.info(f"Selected vesicles: {', '.join(str(l) for l in sorted(st.session_state.selected_labels))}")
     _has_a = _results['analyse'] is not None
     _has_m = _results['model'] is not None
+
+    # use selected_labels as single source of truth, seeding tables from it
+    def _rows_of(ev) -> list[int]:
+        sel = getattr(ev, 'selection', None)
+        if sel is None and isinstance(ev, dict):
+            sel = ev.get('selection')
+        rows = getattr(sel, 'rows', None)
+        if rows is None and isinstance(sel, dict):
+            rows = sel.get('rows')
+        return list(rows or [])
+
+    def _labels_for_rows(rows) -> set[int]:
+        out = set()
+        for i in rows:
+            v = joined_df.iloc[i]['label']
+            if pd.notna(v):
+                out.add(int(v))
+        return out
+
+    _want = _rows_for(set(st.session_state.selected_labels))
+    # check if current picks differs from seed
+    _picked = None
+    for _key, _has, _ in _TABLES:
+        if not _has:
+            continue
+        _raw = st.session_state.get(_key)
+        _cur = _rows_of(_raw)
+        if _raw is not None and _cur != _want and _cur != st.session_state.get(f'{_key}__seed'):
+            _picked = _labels_for_rows(_cur)
+            break
+    if _picked is not None and _picked != set(st.session_state.selected_labels):
+        st.session_state.selected_labels = _picked
+        st.rerun()
+
+    # Re-seed both tables so each mirrors the current selection before it instantiates
+    _want = _rows_for(set(st.session_state.selected_labels))
+    for _key, _has, _ in _TABLES:
+        if _has:
+            st.session_state[_key] = {'selection': {'rows': _want, 'columns': []}}
+            st.session_state[f'{_key}__seed'] = list(_want)
+
     def _source_table(display, key: str):
         df, colcfg = display
-        return st.dataframe(df, on_select='rerun', selection_mode='multi-row', hide_index=True, width='stretch', key=key, column_config=colcfg)
-    # Mirror a pending selection (from the 3D view or the other table) into the rendered tables before they instantiate
-    _pending = st.session_state.pop('_pending_table_rows', None)
-    if _pending is not None:
-        if _has_a:
-            st.session_state.analyse_table = {'selection': {'rows': _pending, 'columns': []}}
-        if _has_m:
-            st.session_state.model_table = {'selection': {'rows': _pending, 'columns': []}}
-    a_event = m_event = None
+        st.dataframe(df, on_select='rerun', selection_mode='multi-row', hide_index=True, width='stretch', key=key, column_config=colcfg)
+
     left, right = st.columns(2)
     with left:
         st.markdown('#### Analyse')
         if _has_a:
-            a_event = _source_table(_results['analyse'], 'analyse_table')
+            _source_table(_results['analyse'], 'analyse_table')
         else:
             st.caption('No analyse results.')
     with right:
         st.markdown('#### Model')
         if _has_m:
-            m_event = _source_table(_results['model'], 'model_table')
+            _source_table(_results['model'], 'model_table')
         else:
             st.caption('No model results.')
-    _a_rows = tuple(a_event.selection.rows) if a_event is not None else None
-    _m_rows = tuple(m_event.selection.rows) if m_event is not None else None
-    _rows = None
-    if _a_rows is not None and _a_rows != st.session_state.get('_last_a_rows', ()):
-        _rows = _a_rows
-    elif _m_rows is not None and _m_rows != st.session_state.get('_last_m_rows', ()):
-        _rows = _m_rows
-    if _rows is not None:
-        if _a_rows is not None:
-            st.session_state._last_a_rows = _rows
-        if _m_rows is not None:
-            st.session_state._last_m_rows = _rows
-        _picked = {int(joined_df.iloc[i]['label']) for i in _rows}
-        if _picked != set(st.session_state.selected_labels):
-            st.session_state.selected_labels = _picked
-            st.session_state['_pending_table_rows'] = list(_rows)
-            st.rerun()
 
     # results plots
     st.subheader('Plots')
@@ -340,9 +354,6 @@ else:
         if picked and picked != set(st.session_state.selected_labels) and tuple(sorted(picked)) != st.session_state.get(seen_key):
             st.session_state[seen_key] = tuple(sorted(picked))
             st.session_state.selected_labels = picked
-            _r = _rows_for(picked)
-            st.session_state['_pending_table_rows'] = _r
-            st.session_state._last_a_rows = st.session_state._last_m_rows = tuple(_r)
             st.rerun()
 
     _tab_conc, _tab_reliab, _tab_dist, _tab_scatter = st.tabs(['Concordance', 'Reliability', 'Distribution', 'Feature scatter'])
