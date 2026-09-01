@@ -30,6 +30,12 @@ dependencies = [
 [project.scripts]
 evaluator = "evaluator.cli:evaluator"
 
+[project.optional-dependencies]
+viewer = [
+    "plotly>=6.0",
+    "streamlit>=1.57",
+]
+
 [build-system]
 requires = ["uv_build<0.12"]
 build-backend = "uv_build"
@@ -43,6 +49,7 @@ include = [
     "README.md", # Include README or other files
     "src/evaluator/config.toml",
     "src/evaluator/commands/plot/r/**",
+    "src/evaluator/commands/viewer/app/**",
     "docs/*",
 ]
 
@@ -62,6 +69,7 @@ omit = [
     "src/evaluator/cli/*",           # Typer wiring; covered by CLI tests
     "src/evaluator/commands/visualise.py",  # rendering functions; visual inspection only
     "src/evaluator/utils/display.py",       # rendering functions; visual inspection only
+    "src/evaluator/commands/viewer/app/*",  # Streamlit UI code; visual inspection only
 ]
 
 [tool.coverage.report]
