@@ -284,3 +284,41 @@ class TestConfigCLI:
                 ["config", str(cfg)],
             )
         mock_edit.assert_called_once_with(filename=str(cfg))
+
+class TestViewerCLI:
+    '''Viewer command CLI tests (mocked Streamlit launch)'''
+    def test_help_exits_zero(self):
+        result = runner.invoke(evaluator, ['viewer', '--help'])
+        assert result.exit_code == 0
+
+    def test_nonexistent_root_exits_nonzero(self, tmp_path):
+        result = runner.invoke(evaluator, ['viewer', str(tmp_path / 'nope')])
+        assert result.exit_code != 0
+
+    def test_root_must_be_a_directory(self, tmp_path):
+        f = tmp_path / 'a_file.txt'
+        f.write_text('x')
+        result = runner.invoke(evaluator, ['viewer', str(f)])
+        assert result.exit_code != 0
+
+    def test_defaults_to_cwd_and_dispatches(self, tmp_path):
+        with patch('evaluator.commands.viewer.viewer.dispatch') as mock_dispatch:
+            result = runner.invoke(evaluator, ['viewer'])
+        assert result.exit_code == 0
+        assert mock_dispatch.resolve_streamlit.called
+        assert mock_dispatch.dispatch.called
+
+    def test_explicit_root_passed_through_to_dispatch(self, tmp_path):
+        with patch('evaluator.commands.viewer.viewer.dispatch') as mock_dispatch:
+            mock_dispatch.resolve_port.return_value = 0
+            result = runner.invoke(evaluator, ['viewer', str(tmp_path)])
+        assert result.exit_code == 0
+        assert mock_dispatch.dispatch.call_args.kwargs['root_dir'] == tmp_path
+
+    def test_port_option_forwarded(self, tmp_path):
+        with patch('evaluator.commands.viewer.viewer.dispatch') as mock_dispatch:
+            mock_dispatch.resolve_port.return_value = 8599
+            result = runner.invoke(evaluator, ['viewer', str(tmp_path), '--port', '8599'])
+        assert result.exit_code == 0
+        mock_dispatch.resolve_port.assert_called_once_with(8599)
+        assert mock_dispatch.dispatch.call_args.kwargs['port'] == 8599
