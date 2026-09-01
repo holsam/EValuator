@@ -52,14 +52,14 @@ def getValidLabelsFromCSV(csv_path: Path, seg_filename: str) -> Optional[set]:
     try:
         results = pandas.read_csv(csv_path)
     except Exception as e:
-        lg.warning(f"Could not read CSV '{csv_path}': {e}.")
+        lg.warning("Could not read CSV <cyan>{}</cyan>:\n{}", csv_path, e)
         return None
     if "tomogram" not in results.columns or "label" not in results.columns:
-        lg.warning(f"CSV '{csv_path}' is not in compatible format.")
+        lg.warning("CSV <cyan>{}</cyan> is not in compatible format.", csv_path)
         return None
     matches = results[results["tomogram"] == seg_filename]
     if matches.empty:
-        lg.warning(f"No entries for '{seg_filename}' found in CSV '{csv_path}'.")
+        lg.warning("No entries for {} found in CSV {}.", seg_filename, csv_path)
         return None
     return set(matches["label"].astype(int).tolist())
 
