@@ -7,7 +7,7 @@ EValuator: VIEWER STREAMLIT DISPATCH
 # ====================
 # Import external dependencies
 # ====================
-import shutil, subprocess
+import re, shutil, subprocess
 from importlib.resources import files as pkg_files
 from pathlib import Path
 
@@ -21,6 +21,16 @@ from evaluator.utils.settings import lg
 # ====================
 class StreamlitNotFoundError(RuntimeError):
     '''Raised when no usable streamlit binary can be resolved'''
+
+# ====================
+# Define constants
+# ====================
+# Lines from streamlit/tornado/uvicorn that are pure chrome or per-request noise -> demote to debug
+_NOISE = re.compile(
+    r'(Welcome to Streamlit|Gathering usage statistics|streamlit run|^\s*$'
+    r'|Tornado|uvicorn|\d{3}\s+(GET|POST|HEAD)|HTTP/1\.[01]"|For better performance, install)',
+    re.IGNORECASE,
+)
 
 # ====================
 # Define streamlit dispatch functions
@@ -66,6 +76,27 @@ def dispatch(streamlit_bin: Path, root_dir: Path, port: int) -> None:
     '''
     Launch the Streamlit app as a foreground interactive process
     '''
-    cmd = [str(streamlit_bin), 'run', str(_app_path()), '--server.port', str(port), '--', str(root_dir)]
+    cmd = [
+        str(streamlit_bin), 'run', str(_app_path()),
+        '--server.port', str(port), 
+        '--server.headless', 'true',
+        '--browser.gatherUsageStats', 'false',
+        '--global.showWarningOnDirectExecution', 'false',
+        '--', str(root_dir),
+    ]
     lg.info(f"viewer | launching: {' '.join(cmd)}")
     subprocess.run(cmd)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    try:
+        for line in proc.stdout:
+            line = line.rstrip()
+            if not line:
+                continue
+            (lg.debug if _NOISE.search(line) else lg.info)('viewer | %s', line)
+        proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
