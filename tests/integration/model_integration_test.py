@@ -50,20 +50,22 @@ def model_output(labelled_path, tmp_path_factory):
     return model_dir
 
 @pytest.fixture(scope='module')
-def model_results(model_output, labelled_path):
-    path = _results_json(model_output, labelled_path)
-    assert path.exists()
-    return json.loads(path.read_text())
+def model_results(model_output):
+    '''Load the results JSON produced by model_evs.'''
+    results_path = model_output / 'test_segmentation_labelled_model_results.json'
+    assert results_path.exists()
+    payload = json.loads(results_path.read_text())
+    return payload
 
 # ====================
 # Define output file tests
 # ====================
 class TestModelOutputFiles:
-    def test_results_json_exists(self, model_output, labelled_path):
-        assert _results_json(model_output, labelled_path).exists()
+    def test_results_json_exists(self, model_output):
+        assert (model_output / 'test_segmentation_labelled_model_results.json').exists()
 
-    def test_fitted_mrc_exists(self, model_output, labelled_path):
-        assert _fitted_mrc(model_output, labelled_path).exists()
+    def test_fitted_mrc_exists(self, model_output):
+        assert (model_output / 'test_segmentation_labelled_model_fitted.mrc').exists()
 
     def test_params_toml_exists(self, model_output):
         assert (model_output / 'params.toml').exists()
@@ -123,12 +125,12 @@ class TestModelFitQuality:
 # Define fitted MRC tests
 # ====================
 class TestModelFittedMRC:
-    def test_fitted_mrc_readable(self, model_output, labelled_path):
-        data, _ = readMRCFile(_fitted_mrc(model_output, labelled_path))
+    def test_fitted_mrc_readable(self, model_output):
+        data, _ = readMRCFile(model_output / 'test_segmentation_labelled_model_fitted.mrc')
         assert data is not None
-
-    def test_fitted_mrc_has_labels(self, model_output, labelled_path, model_results):
-        data, _ = readMRCFile(_fitted_mrc(model_output, labelled_path))
+    def test_fitted_mrc_has_labels(self, model_output, model_results):
+        '''All four synthetic EVs are reliable, so all four should be rasterised.'''
+        data, _ = readMRCFile(model_output / 'test_segmentation_labelled_model_fitted.mrc')
         labels = set(int(v) for v in set(data.flatten().tolist()) if v != 0)
         expected = {record['label_id'] for record in model_results['results']}
         assert labels == expected
@@ -150,7 +152,8 @@ class TestModelConfigOverrides:
         A deliberately unreachable min_points threshold must flip every synthetic EV to unreliable, confirming the override reaches _assess_reliability rather than only being recorded in provenance.
         '''
         model_evs(labelled_path, tmp_path, min_points=10_000_000)
-        payload = json.loads(_results_json(tmp_path / 'evaluator' / 'model', labelled_path).read_text())
+        results_path = tmp_path / 'evaluator' / 'model' / 'test_segmentation_labelled_model_results.json'
+        payload = json.loads(results_path.read_text())
         for record in payload['results']:
             assert record['reliability']['is_reliable'] is False
             assert record['reliability']['count_ok'] is False

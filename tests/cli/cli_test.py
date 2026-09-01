@@ -82,7 +82,7 @@ class TestModelCLI:
     def test_output_files_created(self, labelled_path, tmp_path):
         runner.invoke(evaluator, ["model", str(labelled_path), "-o", str(tmp_path)])
         model_dir = tmp_path / "evaluator" / "model"
-        assert (model_dir / f"{labelled_path.stem}_model_fitted.mrc").exists()
+        assert (model_dir / "test_segmentation_labelled_model_fitted.mrc").exists()
         assert (model_dir / "params.toml").exists()
 
 
