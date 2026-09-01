@@ -21,6 +21,7 @@ EValuator provides several commands:
 | Component Analysis|  [`analyse`](docs/analyse.md) | Run a morphological analysis pipeline on one or more labelled segmentation files and write results to a CSV. |
 | Component Analysis|  [`plot`](docs/plot.md) | Generate plots and summary tables from `analyse` and/or `model` output. |
 | Component Visualisation| [`visualise`](docs/visualise.md) | Generate various visualisations of tomograms and/or segmentation masks. |
+| Component Visualisation| [`viewer`](docs/viewer.md) | Launch the interactive vesicle viewer. |
 
 
 ## Installation
@@ -70,6 +71,7 @@ Component Analysis:
   plot        Generate plots from evaluator analyse and/or model output
 
 Component Visualisation:
+  viewer      Launch the interactive 3D vesicle viewer
   visualise   Generate visualisations from MRC data
 
 Utilities:
@@ -85,6 +87,7 @@ Use `evaluator COMMAND --help` for detailed usage information for each command o
 - [`docs/label.md`](docs/label.md)
 - [`docs/model.md`](docs/model.md)
 - [`docs/plot.md`](docs/plot.md)
+- [`docs/viewer.md`](docs/viewer.md)
 - [`docs/visualise.md`](docs/visualise.md)
 
 ## Workflow
@@ -114,7 +117,7 @@ EValuator is structured around a three-step workflow. Each step produces output 
 
 **Step 3: `visualise overlay`**: reads the labelled MRC and the `analyse` CSV and renders a colour-coded overlay of the identified EVs onto slices of the original greyscale tomogram, for visual inspection of pipeline results.
 
-In addition, the `visualise movie` and `visualise isoview` subcommands can be used independently at any stage to quickly inspect MRC data.
+In addition, the `visualise movie` and `visualise isoview` subcommands can be used independently at any stage to quickly inspect MRC data, and `viewer` launches an interactive viewer which links `label`, `model` and `analyse` outputs for a directory of results.
 
 **(optional) Step 4: `plot`**: generates plots and summary tables from `analyse` and/or `model` output.
 
