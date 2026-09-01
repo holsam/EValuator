@@ -367,8 +367,8 @@ else:
             _di = _num_cols.index('equiv_diameter_nm') if 'equiv_diameter_nm' in _num_cols else 0
             _dc1, _dc2 = st.columns([3, 1])
             _f = _dc1.selectbox('Feature', _num_cols, index=_di, format_func=pretty_column, key='dist_feature')
-            _bins = _dc2.number_input('Bins', min_value=2, max_value=200, value=30, step=1, key='dist_bins')
-            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, _dark_mode, nbins=_bins), key='plot_dist')
+            _bw = _dc2.number_input('Bin width', min_value=0.0, value=25.0, step=5.0, key='dist_bin_width', help='In feature units, anchored at 0: (0, w], (w, 2w], … Set 0 for auto bins.')
+            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, _dark_mode, bin_size=_bw or None), key='plot_dist')
     with _tab_scatter:
         if len(_num_cols) < 2:
             st.caption('Need at least two numeric columns.')
