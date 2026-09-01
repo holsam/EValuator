@@ -157,7 +157,7 @@ def _build_results(stem: str, analyse_csv, model_results_path):
 
     a_cols = ['label'] + [c for c in joined.columns if c not in ('label', 'include') and origin(c) == 'analyse']
     m_body = [c for c in joined.columns if c not in ('label', 'include', 'label_id', 'source_file') and origin(c) == 'model']
-    m_cols = (['label'] if 'label' in joined.columns else [])  + m_body  (['source_file'] if 'source_file' in joined.columns else [])
+    m_cols = (['label'] if 'label' in joined.columns else [])  + m_body + (['source_file'] if 'source_file' in joined.columns else [])
 
     def _display(cols):  # None when the source is absent (only the `label` key present)
         if len(cols) <= 1:
@@ -286,7 +286,7 @@ else:
 
     # use selected_labels as single source of truth, seeding tables from it
     _TABLES = [('analyse_table', _has_a, 'analyse'), ('model_table', _has_m, 'model')]
-    
+
     def _rows_of(ev) -> list[int]:
         sel = getattr(ev, 'selection', None)
         if sel is None and isinstance(ev, dict):
