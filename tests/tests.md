@@ -18,6 +18,7 @@
   - [unit/mrc\_unit\_test.py](#unitmrc_unit_testpy)
   - [unit/paths\_unit\_test.py](#unitpaths_unit_testpy)
   - [unit/plot\_unit\_test.py](#unitplot_unit_testpy)
+  - [unit/viewer\_unit\_test.py](#unitviewer_unit_testpy)
   - [integration/analyse\_integration\_test.py](#integrationanalyse_integration_testpy)
   - [integration/config\_integration\_test.py](#integrationconfig_integration_testpy)
   - [integration/label\_integration\_test.py](#integrationlabel_integration_testpy)
@@ -31,7 +32,7 @@
 The EValuator test suite uses [pytest](https://docs.pytest.org) and [pytest-cov](https://pytest-cov.readthedocs.io) and is organised into three sections:
 - **Unit tests:** fast, in-memory tests for individual functions.
     - Most use small numpy arrays or point clouds constructed inline in fixtures/helpers, so no MRC files are read or written.
-    - These cover measurement/geometry/filtering/IO helpers, MRC utilities, path utilities, the batch-processing helper, the pydantic-based configuration system, visualisation display utilities, label merge/geometric-proxy heuristics, the model least-squares fitting and reconstruction code, and the plot command's input resolution and R dispatch logic.
+    - These cover measurement/geometry/filtering/IO helpers, MRC utilities, path utilities, the batch-processing helper, the pydantic-based configuration system, visualisation display utilities, label merge/geometric-proxy heuristics, the model least-squares fitting and reconstruction code, the plot command's input resolution and R dispatch logic, and the viewer command's helpers.
 - **Integration tests:** tests that call top-level command functions (`label_components`, `analyse`, `model_evs`, `run_plot`) and pipeline-level config handling.
     - Most are called against real MRC files on disk (via the synthetic test data described in [Test data](#test-data) below) and assert on the content of the output files or directories.
     - `integration/plot_integration_test.py` additionally requires `Rscript` on `PATH` and is skipped automatically when it is absent.
@@ -58,6 +59,7 @@ tests/
     mrc_unit_test.py                     # unit tests for utils/mrc.py
     paths_unit_test.py                   # unit tests for utils/paths.py
     plot_unit_test.py                    # unit tests for commands/plot/*
+    viewer_unit_test.py                  # unit tests for commands/viewer/utils/*
   integration/
     analyse_integration_test.py          # integration tests for analyse
     config_integration_test.py           # integration tests for pipeline-level config resolution
@@ -637,6 +639,120 @@ Tests for `evaluator.commands.plot.plot.run_plot`, `evaluator.commands.plot.util
 </details>
 <br>
 
+### `unit/viewer_unit_test.py`
+Tests for the pure helpers behind the Streamlit viewer: `evaluator.commands.viewer.utils.format`, `.join`, `.theme`, `.plots`, `.mesh`, `.gallery`, `.export`, and `.dispatch`. The Streamlit UI code under `commands/viewer/app/*` is excluded from coverage (visual inspection only) and is not exercised here.
+
+<details>
+<summary>Test Descriptions</summary>
+
+#### `TestPrettyColumn`
+| Test | What it checks |
+|---|---|
+| `test_unit_suffix_becomes_parenthesised` | A trailing `_nm` token renders as a `(nm)` unit suffix. |
+| `test_acronyms_kept_uppercase` | `bic`/`rmse` tokens stay upper-case. |
+| `test_dotted_path_flattened` | `a.b_c` splits on both `.` and `_`. |
+| `test_only_first_alpha_char_capitalised` | Only the first alphabetic character is upper-cased. |
+| `test_single_token` | A one-word name is title-cased. |
+| `test_no_alpha_returns_input_joined` | A name with no letters is returned space-joined without error. |
+
+#### `TestJoinAnalyseModel`
+| Test | What it checks |
+|---|---|
+| `test_stem_filter_selects_only_matching_rows` | Only rows whose tomogram/`source_file` stem (minus `_labelled`) matches the requested stem are kept. |
+| `test_outer_merge_on_label` | `analyse.label` joins `model.label_id` correctly. |
+| `test_include_column_added_true` | The join adds an `include` column defaulting to `True`. |
+| `test_analyse_only` | With no model frame, analyse rows pass through and `label` is in both name sets. |
+| `test_model_only_renames_label_id_to_label` | With no analyse frame, `label_id` is renamed to `label`. |
+| `test_no_match_returns_empty_frame` | A stem matching neither side returns an empty frame. |
+
+#### `TestTheme`
+| Test | What it checks |
+|---|---|
+| `test_default_theme_when_unset` | With empty session state, `active()` resolves the Okabe-Ito default palette. |
+| `test_light_chrome_defaults` | Light Streamlit theme → white scene/paper background. |
+| `test_dark_chrome_defaults` | Dark Streamlit theme → `#0E1117` background, `#FAFAFA` font. |
+| `test_named_theme_selected` | A theme name in session state selects that theme. |
+| `test_per_colour_override_wins` | Per-colour overrides beat the named theme; untouched keys still resolve. |
+| `test_unknown_theme_falls_back_per_key` | An unrecognised theme name resolves entirely from the default's keys. |
+| `test_empty_override_value_ignored` | Empty string / empty list overrides are ignored. |
+
+#### `TestPlotHelpers`
+| Test | What it checks |
+|---|---|
+| `test_find_col_first_substring_match` | `find_col` returns the first column containing a needle, else `None`. |
+| `test_numeric_columns_excludes_ids_and_flags` | `label`/`include` and non-numeric columns are excluded. |
+| `test_axis_kwargs_ratio_locks_unit_range` | A column bounded in [0, 1] locks the axis range to [0, 1] with 0.2 ticks. |
+| `test_axis_kwargs_small_integer_span` | A small-span integer column gets `{'tickformat': 'd', 'dtick': 1}`. |
+| `test_axis_kwargs_wide_integer_span` | A wide integer span gets an integer `dtick` of ~span/6. |
+| `test_axis_kwargs_constant_series_is_empty` | A column with <2 distinct values gets no axis hints. |
+| `test_axis_kwargs_float_span_untouched` | A non-ratio float column gets no forced range. |
+| `test_selected_labels_from_dict_event` | Dict-style selection events yield the set of vesicle labels. |
+| `test_selected_labels_from_none` | A `None` event yields the empty set. |
+| `test_selected_labels_ignores_nan_customdata` | NaN `customdata` points are dropped. |
+
+#### `TestPlotBuilders`
+| Test | What it checks |
+|---|---|
+| `test_feature_scatter_highlights_selection` | Selected vesicles are painted with the active highlight colour. |
+| `test_distribution_fixed_bin_size_anchored_at_zero` | An explicit `bin_size` produces fixed-width bins anchored at 0. |
+| `test_distribution_auto_bins_when_size_omitted` | No `bin_size` → 30 auto bins. |
+| `test_concordance_returns_figure_when_columns_present` | `concordance` returns a figure when a radius and a diameter column exist. |
+| `test_concordance_none_without_radius` | `concordance` returns `None` when no radius column is present. |
+| `test_concordance_analyse_column_choice_sets_x_title` | An explicit `analyse_col` drives the x-axis title. |
+| `test_concordance_analyse_options` | Only `equiv_diameter`/`major_axis_diameter` columns are offered as x-axis options. |
+| `test_reliability_colours_by_is_reliable` | Points are coloured by the `is_reliable` flag (reliable vs unreliable role colours). |
+| `test_reliability_none_without_rmse_column` | `reliability` returns `None` when no RMSE column is present. |
+| `test_use_theme_swaps_active_colours` | `use_theme` swaps the module-level `ACTIVE` colours used by subsequent builders. |
+
+#### `TestMesh`
+| Test | What it checks |
+|---|---|
+| `test_point_cloud_trace_uses_nonzero_voxels` | The point-cloud trace contains one marker per non-zero voxel. |
+| `test_point_cloud_trace_downsamples_before_count` | `downsample` strides the volume before extracting points. |
+| `test_point_cloud_trace_caps_at_max_points` | Point count is capped at `MAX_SCATTER_POINTS`. |
+| `test_label_mesh_traces_one_per_label` | One marching-cubes surface per non-zero label id. |
+| `test_label_mesh_skips_tiny_components` | Components smaller than `MIN_LABEL_VOXELS` are skipped. |
+| `test_label_mesh_vertices_in_xyz_order` | Vertices are reordered from (Z, Y, X) array order to (X, Y, Z) screen order. |
+| `test_dim_trace_recolours_only_when_highlighted` | `dim_trace` recolours to the highlight colour only when not dimmed. |
+
+#### `TestGalleryScan`
+| Test | What it checks |
+|---|---|
+| `test_default_stage_dirs_finds_common_names` | Stage directories are guessed from common subfolder names; absent stages resolve to `None`. |
+| `test_scan_returns_one_result_set_per_stem` | `scan_stage_dirs` returns one `ResultSet` per discovered stem. |
+| `test_scan_populates_paths_and_counts` | Labelled/fitted/analyse paths and `n_vesicles`/`n_reliable` are populated from a full result tree. |
+| `test_scan_counts_labels_when_no_model` | With no model output, `n_vesicles` is counted from the labelled MRC and `n_reliable` is `None`. |
+| `test_scan_empty_root_returns_nothing` | An empty root yields no result sets. |
+| `test_midslice_preview_is_uint8_2d` | The mid-slice preview is a 2D `uint8` image in [0, 255]. |
+| `test_midslice_preview_label_mode_normalises_by_max` | Label mode normalises by the max label id rather than a percentile stretch. |
+
+#### `TestExportFilteredCSV`
+| Test | What it checks |
+|---|---|
+| `test_writes_only_included_rows` | Only rows whose label maps to `include=True` are written. |
+| `test_missing_flag_defaults_to_included` | A label absent from the flag dict is treated as included. |
+| `test_output_name_follows_viewer_pattern` | The output filename is `<stem>_filtered.csv` beside the source CSV. |
+| `test_second_export_increments_suffix` | A second export appends a `-1` suffix. |
+
+#### `TestResolveStreamlit`
+| Test | What it checks |
+|---|---|
+| `test_explicit_path_that_exists` | An explicit, existing streamlit path is returned unchanged. |
+| `test_explicit_path_missing_raises` | An explicit, non-existent path raises `StreamlitNotFoundError`. |
+| `test_falls_back_to_path_lookup` | With no explicit path, resolution falls back to `shutil.which('streamlit')`. |
+| `test_not_on_path_raises` | `streamlit` not found on `PATH` raises `StreamlitNotFoundError`. |
+| `test_app_path_points_at_packaged_entrypoint` | `_app_path()` points at the packaged `app/viewer.py` and it exists. |
+
+#### `TestResolvePort`
+| Test | What it checks |
+|---|---|
+| `test_zero_passes_through_without_probe` | Port `0` is returned unchanged (OS-resolved). |
+| `test_in_use_port_falls_back_to_zero` | A port with a live listener falls back to `0`. |
+| `test_free_port_passes_through` | A free port is returned unchanged. |
+
+</details>
+<br>
+
 ### `integration/analyse_integration_test.py`
 Integration tests for `evaluator.commands.analyse.analyse.analyse`. A module-scoped `analyse_csv` fixture runs the pipeline once and shares the output path.
 
@@ -899,6 +1015,17 @@ CLI tests using `typer.testing.CliRunner`.
 | `test_existing_config_edits_immediately` | Pointing at a directory with an existing config opens the editor immediately, without the "Edit it now?" prompt. |
 | `test_existing_config_interactive` | `-i` against an existing config drives stepwise prompting. |
 | `test_pointed_directly_at_file` | Pointing directly at a `.toml` file opens the editor for that exact file. |
+
+#### `TestViewerCLI`
+
+| Test | What it checks |
+|---|---|
+| `test_help_exits_zero` | `evaluator viewer --help` exits 0. |
+| `test_nonexistent_root_exits_nonzero` | A non-existent root argument exits non-zero. |
+| `test_root_must_be_a_directory` | A file passed as the root argument exits non-zero. |
+| `test_defaults_to_cwd_and_dispatches` | With no argument, the command resolves the streamlit binary and dispatches (Streamlit launch mocked). |
+| `test_explicit_root_passed_through_to_dispatch` | An explicit root directory reaches `dispatch(root_dir=...)`. |
+| `test_port_option_forwarded` | `--port` is passed to `resolve_port` and the resolved port reaches `dispatch(port=...)`. |
 
 </details>
 <br>
