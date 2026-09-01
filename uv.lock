@@ -154,6 +154,7 @@ name = "evaluator"
 version = "0.7.7"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "datetime" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -182,6 +183,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.3.1" },
     { name = "datetime", specifier = ">=6.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "matplotlib", specifier = ">=3.10.8" },
