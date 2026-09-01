@@ -14,7 +14,7 @@ from skimage import measure
 # ====================
 # Define constants
 # ====================
-# Okabe-Ito colour-blind-safe palette
+
 # Okabe-Ito colour-blind-safe palette
 PALETTE = ["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"]
 MAX_SCATTER_POINTS = 25_000
@@ -89,9 +89,7 @@ def build_label_mesh_traces(
 # ====================
 # Define highlight helper
 # ====================
-def dim_trace(trace: go.Mesh3d, dim: bool) -> None:
-    '''
-    Set a mesh's trace colour
-    '''
+def dim_trace(trace: go.Mesh3d, dim: bool, highlight: str = HIGHLIGHT_COLOR) -> None:
+    '''Recolour a mesh: `highlight` when it is the selected one, left as-is when dimmed'''
     if not dim:
-        trace.color = HIGHLIGHT_COLOR
+        trace.color = highlight

@@ -12,15 +12,22 @@ import numpy as np, pandas as pd, plotly.graph_objects as go
 # ====================
 # Import internal viewer utilities
 # ====================
+from evaluator.commands.viewer.utils import theme as themeutil
 from evaluator.commands.viewer.utils.format import pretty_column
 
 # ====================
-# Define constants
+# Theme helpers
 # ====================
-HIGHLIGHT = '#FFD400'   # same as the mesh HIGHLIGHT_COLOR
-BASE = '#56B4E9'        # Okabe-Ito sky blue
-RELIABLE = '#009E73'
-UNRELIABLE = '#D55E00'
+ACTIVE: dict = {
+    **{k: themeutil.THEMES[themeutil.DEFAULT_THEME][k] for k in ('highlight', 'base', 'reliable', 'unreliable')},
+    'palette': list(themeutil.THEMES[themeutil.DEFAULT_THEME]['palette']),
+    'scene_bg': '#FFFFFF', 'paper_bg': '#FFFFFF', 'grid': '#E5E5E5', 'font': '#31333F',
+}
+
+
+def use_theme(theme: dict) -> None:
+    '''Point plot builders at resolved theme dict'''
+    ACTIVE.update(theme)
 
 # ====================
 # Column / value helpers
@@ -48,22 +55,22 @@ def _labels(df: pd.DataFrame) -> np.ndarray:
     return pd.to_numeric(df['label'], errors='coerce').to_numpy()
 
 def _point_colours(df: pd.DataFrame, selected: set[int], base) -> list:
-    '''Gold for selected vesicles, otherwise `base` (a scalar colour or a per-row list)'''
+    '''Highlight colour for selected vesicles, otherwise `base` (a scalar colour or a per-row list)'''
     labs = _labels(df)
     base_list = base if isinstance(base, (list, np.ndarray)) else [base] * len(df)
-    return [HIGHLIGHT if (not np.isnan(l) and int(l) in selected) else b for l, b in zip(labs, base_list)]
+    hi = ACTIVE['highlight']
+    return [hi if (not np.isnan(l) and int(l) in selected) else b for l, b in zip(labs, base_list)]
 
-def _style(fig: go.Figure, title: str, x_title: str, y_title: str, dark: bool) -> go.Figure:
-    bg = '#0e1117' if dark else 'white'
-    grid = '#31333F' if dark else '#e5e5e5'
+def _style(fig: go.Figure, title: str, x_title: str, y_title: str) -> go.Figure:
     fig.update_layout(
         title=title,
-        paper_bgcolor=bg, plot_bgcolor=bg,
-        font_color='#fafafa' if dark else '#31333f',
+        paper_bgcolor=ACTIVE['paper_bg'],
+        plot_bgcolor=ACTIVE['scene_bg'],
+        font_color=ACTIVE['font'],
         margin=dict(l=60, r=20, t=48, b=48),
         showlegend=False, dragmode='select',
-        xaxis=dict(title=x_title, gridcolor=grid, zeroline=False),
-        yaxis=dict(title=y_title, gridcolor=grid, zeroline=False),
+        xaxis=dict(title=x_title, gridcolor=ACTIVE['grid'], zeroline=False),
+        yaxis=dict(title=y_title, gridcolor=ACTIVE['grid'], zeroline=False)
     )
     return fig
 
@@ -102,14 +109,14 @@ def _scatter(df, x, y, colours, hovertext=None):
 # ====================
 # Define plot builder functions
 # ====================
-def feature_scatter(df: pd.DataFrame, x: str, y: str, selected: set[int], dark: bool) -> go.Figure:
-    fig = go.Figure(_scatter(df, x, y, _point_colours(df, selected, BASE)))
-    _style(fig, f'{pretty_column(y)} vs {pretty_column(x)}', pretty_column(x), pretty_column(y), dark)
-    return _apply_axes(fig, x=df[x], y=df[y])
+def feature_scatter(df: pd.DataFrame, x: str, y: str, selected: set[int]) -> go.Figure:
+    fig = go.Figure(_scatter(df, x, y, _point_colours(df, selected, ACTIVE['base'])))
+    _style(fig, f'{pretty_column(y)} vs {pretty_column(x)}', pretty_column(x), pretty_column(y))
+     return _apply_axes(fig, x=df[x], y=df[y])
 
-def distribution(df: pd.DataFrame, feature: str, selected: set[int], dark: bool, bin_size: float | None = None) -> go.Figure:
+def distribution(df: pd.DataFrame, feature: str, selected: set[int], bin_size: float | None = None) -> go.Figure:
     vals = pd.to_numeric(df[feature], errors='coerce')
-    hist = go.Histogram(x=vals, marker_color=BASE)
+    hist = go.Histogram(x=vals, marker_color=ACTIVE['base'])
     if bin_size and bin_size > 0:
         hist.xbins = dict(start=0, size=bin_size)  # fixed-width bins anchored at 0: (0, w], (w, 2w], ...
     else:
@@ -118,8 +125,8 @@ def distribution(df: pd.DataFrame, feature: str, selected: set[int], dark: bool,
     labs = _labels(df)
     for l, v in zip(labs, vals):
         if not np.isnan(l) and int(l) in selected and pd.notna(v):
-            fig.add_vline(x=v, line_color=HIGHLIGHT, line_width=2)
-    _style(fig, f'{pretty_column(feature)} distribution', pretty_column(feature), 'Count', dark)
+            fig.add_vline(x=v, line_color=ACTIVE['highlight'], line_width=2)
+    _style(fig, f'{pretty_column(feature)} distribution', pretty_column(feature), 'Count')
     fig.update_xaxes(**_axis_kwargs(vals))
     fig.update_yaxes(tickformat='d')  # counts are integers
     return fig
@@ -127,22 +134,22 @@ def distribution(df: pd.DataFrame, feature: str, selected: set[int], dark: bool,
 def concordance_analyse_options(df: pd.DataFrame) -> list[str]:
     return [c for c in df.columns if 'equiv_diameter' in c.lower() or 'major_axis_diameter' in c.lower()]
 
-def concordance(df: pd.DataFrame, selected: set[int], dark: bool, analyse_col: str | None = None) -> go.Figure | None:
+def concordance(df: pd.DataFrame, selected: set[int], analyse_col: str | None = None) -> go.Figure | None:
     radius = find_col(df, 'radius')
     diam = analyse_col if (analyse_col and analyse_col in df.columns) else find_col(df, 'equiv_diameter', 'major_axis_diameter')
     if radius is None or diam is None:
         return None
     work = df.copy()
     work['_model_diameter'] = pd.to_numeric(work[radius], errors='coerce') * 2
-    fig = go.Figure(_scatter(work, diam, '_model_diameter', _point_colours(work, selected, BASE)))
+    fig = go.Figure(_scatter(work, diam, '_model_diameter', _point_colours(work, selected, ACTIVE['base'])))
     finite = pd.concat([pd.to_numeric(work[diam], errors='coerce'), work['_model_diameter']]).dropna()
     if not finite.empty:
         lo, hi = float(finite.min()), float(finite.max())
-        fig.add_trace(go.Scattergl(x=[lo, hi], y=[lo, hi], mode='lines', line=dict(color='grey', dash='dash'), hoverinfo='skip'))
-    _style(fig, 'Model fitted diameter vs analyse diameter', pretty_column(diam), 'Model fitted diameter (2 × radius)', dark)
+        fig.add_trace(go.Scattergl(x=[lo, hi], y=[lo, hi], mode='lines', line=dict(color=ACTIVE['grid'], dash='dash'), hoverinfo='skip'))
+    _style(fig, 'Model fitted diameter vs analyse diameter', pretty_column(diam), 'Model fitted diameter (2 × radius)')
     return _apply_axes(fig, x=work[diam], y=work['_model_diameter'])
 
-def reliability(df: pd.DataFrame, selected: set[int], dark: bool) -> go.Figure | None:
+def reliability(df: pd.DataFrame, selected: set[int]) -> go.Figure | None:
     x_col = find_col(df, 'closure_fill_ratio', 'is_enclosed')
     y_col = find_col(df, 'rmse_nm', 'relative_rmse', 'rmse')
     rel_col = find_col(df, 'is_reliable')
@@ -150,11 +157,11 @@ def reliability(df: pd.DataFrame, selected: set[int], dark: bool) -> go.Figure |
         return None
     if rel_col is not None:
         rel = df[rel_col].map(lambda v: bool(v) if pd.notna(v) else None)
-        base = [RELIABLE if r else UNRELIABLE for r in rel]
+        base = [ACTIVE['reliable'] if r else ACTIVE['unreliable'] for r in rel]
     else:
-        base = BASE
+        base = ACTIVE['base']
     fig = go.Figure(_scatter(df, x_col, y_col, _point_colours(df, selected, base)))
-    _style(fig, 'Fit RMSE vs closure', pretty_column(x_col), pretty_column(y_col), dark)
+    _style(fig, 'Fit RMSE vs closure', pretty_column(x_col), pretty_column(y_col))
     return _apply_axes(fig, x=df[x_col], y=df[y_col])
 
 # ====================

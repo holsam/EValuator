@@ -19,6 +19,7 @@ from evaluator.utils import mrc as mrcutil
 # Import EValuator viewer utilities
 from evaluator.commands.viewer.app.components.plotly_camera_sync import plotly_view
 from evaluator.commands.viewer.utils import plots as plotutil
+from evaluator.commands.viewer.utils import theme as themeutil
 from evaluator.commands.viewer.utils.export import export_filtered_csv
 from evaluator.commands.viewer.utils.format import pretty_column
 from evaluator.commands.viewer.utils.join import join_analyse_model
@@ -96,34 +97,35 @@ DOWNSAMPLE = 2
 
 # Load volumes and build traces (cached per result-set  downsample so drags don't re-run marching_cubes)
 @st.cache_data(show_spinner=False)
-def _load_traces(labelled_mrc: Path | None, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int):
+def _load_traces(labelled_mrc: Path | None, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int, palette: tuple[str, ...], points_colour: str):
     views: dict[str, list[go.Mesh3d | go.Scatter3d]] = {}
     trace_index_to_label: dict[str, dict[int, int]] = {}
     shapes: list[tuple[int, int, int]] = []  # (Z, Y, X) of every loaded volume, for a shared scene box
+    pal = list(palette)
 
     if labelled_mrc is not None:
         labelled_data, _ = mrcutil.readMRCFile(labelled_mrc)
         shapes.append(labelled_data.shape)
-        labelled_traces = build_label_mesh_traces(labelled_data, downsample=downsample)
+        labelled_traces = build_label_mesh_traces(labelled_data, downsample=downsample, palette=pal)
         views['labelled'] = list(labelled_traces.values())
         trace_index_to_label['labelled'] = {i: label_id for i, label_id in enumerate(labelled_traces)}
 
     if fitted_mrc is not None:
         fitted_data, _ = mrcutil.readMRCFile(fitted_mrc)
         shapes.append(fitted_data.shape)
-        fitted_traces = build_label_mesh_traces(fitted_data, downsample=downsample)
+        fitted_traces = build_label_mesh_traces(fitted_data, downsample=downsample, palette=pal)
         views['fitted'] = list(fitted_traces.values())
         trace_index_to_label['fitted'] = {i: label_id for i, label_id in enumerate(fitted_traces)}
 
     if raw_mrc is not None and raw_mrc.exists():
         raw_data, _ = mrcutil.readMRCFile(raw_mrc)
         shapes.append(raw_data.shape)
-        views['raw'] = [build_point_cloud_trace(raw_data, downsample=downsample, percentile=97.5, name='raw tomogram')]
+        views['raw'] = [build_point_cloud_trace(raw_data, downsample=downsample, percentile=97.5, name='raw tomogram', colour=points_colour)]
 
     if binary_mrc is not None and binary_mrc.exists():
         binary_data, _ = mrcutil.readMRCFile(binary_mrc)
         shapes.append(binary_data.shape)
-        views['binary'] = [build_point_cloud_trace(binary_data, downsample=downsample, name='binary segmentation')]
+        views['binary'] = [build_point_cloud_trace(binary_data, downsample=downsample, name='binary segmentation', colour=points_colour)]
 
      # Common scene bounds in downsampled screen (X,Y,Z) order
     scene_bounds = None
@@ -173,11 +175,9 @@ def _rows_for(labels: set[int]) -> list[int]:
 # Display helpers 
 # ====================
 
-# Dark-mode-aware plot background, so the 3D views match the app theme instead of always rendering on white
-_dark_mode = st.context.theme.type == 'dark'
-_SCENE_BG = '#0e1117' if _dark_mode else 'white'
-_PAPER_BG = '#0e1117' if _dark_mode else 'white'
-_GRID_COLOR = '#31333F' if _dark_mode else '#e5e5e5'
+# Active colour theme (named theme + Settings-pane overrides)
+_THEME = themeutil.active()
+plotutil.use_theme(_THEME)
 
 # Highlight helper — funnels both selection directions through one function
 def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
@@ -186,15 +186,15 @@ def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
     for trace in traces:
         if view_name in ('labelled', 'fitted') and isinstance(trace, go.Mesh3d) and selected_labels:
             trace = go.Mesh3d(trace)  # copy so recolouring one view doesn't mutate the cached original
-            dim_trace(trace, dim=(trace.name not in {str(l) for l in selected_labels}))
+            dim_trace(trace, dim=(trace.name not in {str(l) for l in selected_labels}), highlight=_THEME['highlight'])
         fig.add_trace(trace)
-    axis = dict(backgroundcolor=_SCENE_BG, gridcolor=_GRID_COLOR, showbackground=True)
+    axis = dict(backgroundcolor=_THEME['scene_bg'], gridcolor=_THEME['grid'], showbackground=True)
     # Same box for every view/panel so meshes and point clouds are spatially comparable at a glance
     ax = lambda n: {**axis, 'range': [0, scene_bounds[n]]} if scene_bounds else axis
     fig.update_layout(
         showlegend=False,
-        paper_bgcolor=_PAPER_BG,
-        scene=dict(aspectmode='data', xaxis=axis, yaxis=axis, zaxis=axis, bgcolor=_SCENE_BG),
+        paper_bgcolor=_THEME['paper_bg'],
+        scene=dict(aspectmode='data', xaxis=ax(0), yaxis=ax(1), zaxis=ax(2), bgcolor=_THEME['scene_bg']),
     )
     scene=dict(aspectmode='data', xaxis=ax(0), yaxis=ax(1), zaxis=ax(2), bgcolor=_SCENE_BG),
     return fig
@@ -208,7 +208,7 @@ st.header('Viewer')
 # Load data here so nav/title/metadata render immediately with a spinner in their place
 with st.spinner('Loading volumes and results...'):
     views, trace_index_to_label, scene_bounds = _load_traces(
-        result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE,
+        result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE, tuple(_THEME['palette']), _THEME['points'],
     )
     available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
 
@@ -349,13 +349,13 @@ else:
     with _tab_conc:
         _diam_opts = plotutil.concordance_analyse_options(joined_df)
         _diam_col = st.selectbox('Analyse diameter', _diam_opts, format_func=pretty_column, key='conc_diam') if _diam_opts else None
-        _fig = plotutil.concordance(joined_df, _sel_now, _dark_mode, analyse_col=_diam_col)
+        _fig = plotutil.concordance(joined_df, _sel_now, analyse_col=_diam_col)
         if _fig is None:
             st.caption('Needs model fitted radius and an analyse diameter column.')
         else:
             _plot_cross_filter(st.plotly_chart(_fig, key='plot_conc', on_select='rerun'), 'conc')
     with _tab_reliab:
-        _fig = plotutil.reliability(joined_df, _sel_now, _dark_mode)
+        _fig = plotutil.reliability(joined_df, _sel_now)
         if _fig is None:
             st.caption('Needs model RMSE and analyse closure/enclosed columns.')
         else:
@@ -368,7 +368,7 @@ else:
             _dc1, _dc2 = st.columns([3, 1])
             _f = _dc1.selectbox('Feature', _num_cols, index=_di, format_func=pretty_column, key='dist_feature')
             _bw = _dc2.number_input('Bin width', min_value=0.0, value=25.0, step=5.0, key='dist_bin_width', help='In feature units, anchored at 0: (0, w], (w, 2w], … Set 0 for auto bins.')
-            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, _dark_mode, bin_size=_bw or None), key='plot_dist')
+            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, bin_size=_bw or None), key='plot_dist')
     with _tab_scatter:
         if len(_num_cols) < 2:
             st.caption('Need at least two numeric columns.')
@@ -377,8 +377,7 @@ else:
             _x = _cx.selectbox('X', _num_cols, index=0, format_func=pretty_column, key='scatter_x')
             _y = _cy.selectbox('Y', _num_cols, index=min(1, len(_num_cols) - 1), format_func=pretty_column, key='scatter_y')
             _plot_cross_filter(
-                st.plotly_chart(plotutil.feature_scatter(joined_df, _x, _y, _sel_now, _dark_mode),
-                                key='plot_scatter', on_select='rerun'),
+                st.plotly_chart(plotutil.feature_scatter(joined_df, _x, _y, _sel_now), key='plot_scatter', on_select='rerun'),
                 'scatter',
             )
 
