@@ -155,9 +155,9 @@ def _build_results(stem: str, analyse_csv, model_results_path):
     def origin(c):
         return 'model' if (c in _m_names or c.split('.', 1)[0] in _m_names) else 'analyse'
 
-    a_cols = ['label']  [c for c in joined.columns if c not in ('label', 'include') and origin(c) == 'analyse']
+    a_cols = ['label'] + [c for c in joined.columns if c not in ('label', 'include') and origin(c) == 'analyse']
     m_body = [c for c in joined.columns if c not in ('label', 'include', 'label_id', 'source_file') and origin(c) == 'model']
-    m_cols = (['label'] if 'label' in joined.columns else [])  m_body  (['source_file'] if 'source_file' in joined.columns else [])
+    m_cols = (['label'] if 'label' in joined.columns else [])  + m_body  (['source_file'] if 'source_file' in joined.columns else [])
 
     def _display(cols):  # None when the source is absent (only the `label` key present)
         if len(cols) <= 1:
@@ -196,7 +196,6 @@ def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
         paper_bgcolor=_THEME['paper_bg'],
         scene=dict(aspectmode='data', xaxis=ax(0), yaxis=ax(1), zaxis=ax(2), bgcolor=_THEME['scene_bg']),
     )
-    scene=dict(aspectmode='data', xaxis=ax(0), yaxis=ax(1), zaxis=ax(2), bgcolor=_SCENE_BG),
     return fig
 
 # ====================
@@ -240,7 +239,7 @@ with _col_main:
 
 with _col_side:
     for _r0 in range(0, len(available_views), 2):
-        _chunk = available_views[_r0:_r0  2]
+        _chunk = available_views[_r0:_r0 + 2]
         for _c, _vn in zip(st.columns(len(_chunk)), _chunk):
             with _c:
                 st.markdown(f'#### {VIEW_LABELS[_vn]}')
@@ -286,6 +285,8 @@ else:
     _has_m = _results['model'] is not None
 
     # use selected_labels as single source of truth, seeding tables from it
+    _TABLES = [('analyse_table', _has_a, 'analyse'), ('model_table', _has_m, 'model')]
+    
     def _rows_of(ev) -> list[int]:
         sel = getattr(ev, 'selection', None)
         if sel is None and isinstance(ev, dict):

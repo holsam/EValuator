@@ -40,7 +40,7 @@ def render() -> None:
                     st.session_state[_OVERRIDES] = {'palette': list(now['palette']), **{k: now[k] for k in _EDITABLE}}
                 else:
                     st.session_state[_OVERRIDES] = {}
-                 st.rerun()
+                st.rerun()
 
             is_custom = picked == _CUSTOM
             active = themeutil.active()
