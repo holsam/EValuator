@@ -347,7 +347,9 @@ else:
 
     _tab_conc, _tab_reliab, _tab_dist, _tab_scatter = st.tabs(['Concordance', 'Reliability', 'Distribution', 'Feature scatter'])
     with _tab_conc:
-        _fig = plotutil.concordance(joined_df, _sel_now, _dark_mode)
+        _diam_opts = plotutil.concordance_analyse_options(joined_df)
+        _diam_col = st.selectbox('Analyse diameter', _diam_opts, format_func=pretty_column, key='conc_diam') if _diam_opts else None
+        _fig = plotutil.concordance(joined_df, _sel_now, _dark_mode, analyse_col=_diam_col)
         if _fig is None:
             st.caption('Needs model fitted radius and an analyse diameter column.')
         else:
@@ -363,8 +365,10 @@ else:
             st.caption('No numeric columns to plot.')
         else:
             _di = _num_cols.index('equiv_diameter_nm') if 'equiv_diameter_nm' in _num_cols else 0
-            _f = st.selectbox('Feature', _num_cols, index=_di, format_func=pretty_column, key='dist_feature')
-            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, _dark_mode), key='plot_dist')
+            _dc1, _dc2 = st.columns([3, 1])
+            _f = _dc1.selectbox('Feature', _num_cols, index=_di, format_func=pretty_column, key='dist_feature')
+            _bins = _dc2.number_input('Bins', min_value=2, max_value=200, value=30, step=1, key='dist_bins')
+            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, _dark_mode, nbins=_bins), key='plot_dist')
     with _tab_scatter:
         if len(_num_cols) < 2:
             st.caption('Need at least two numeric columns.')
