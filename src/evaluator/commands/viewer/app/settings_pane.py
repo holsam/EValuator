@@ -24,7 +24,7 @@ _OVERRIDES = 'viewer_theme_overrides'
 # Define functions for creating settings pane
 # ====================
 _CUSTOM = 'Custom'
-_EDITABLE = (*themeutil.ROLE_KEYS, *themeutil.CHROME_KEYS)
+_EDITABLE = (*themeutil.ROLE_KEYS, *themeutil.UI_KEYS)
 
 def render() -> None:
     with st.bottom:
