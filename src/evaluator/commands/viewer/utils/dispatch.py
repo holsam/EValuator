@@ -7,7 +7,7 @@ EValuator: VIEWER STREAMLIT DISPATCH
 # ====================
 # Import external dependencies
 # ====================
-import re, shutil, subprocess
+import re, shutil, subprocess, webbrowser
 from importlib.resources import files as pkg_files
 from pathlib import Path
 
@@ -25,10 +25,13 @@ class StreamlitNotFoundError(RuntimeError):
 # ====================
 # Define constants
 # ====================
+
+_URL = re.compile(r'\b(Local|Network|External)\s+URL\s*:', re.IGNORECASE)
 # Lines from streamlit/tornado/uvicorn that are pure chrome or per-request noise -> demote to debug
 _NOISE = re.compile(
-    r'(Welcome to Streamlit|Gathering usage statistics|streamlit run|^\s*$'
-    r'|Tornado|uvicorn|\d{3}\s+(GET|POST|HEAD)|HTTP/1\.[01]"|For better performance, install)',
+    r'(Welcome to Streamlit|Gathering usage statistics|streamlit run'
+    r'|Tornado|uvicorn|\d{3}\s+(GET|POST|HEAD)|HTTP/1\.[01]"|For better performance, install'
+    r'|You can now view your Streamlit app)',
     re.IGNORECASE,
 )
 
@@ -85,14 +88,23 @@ def dispatch(streamlit_bin: Path, root_dir: Path, port: int) -> None:
         '--', str(root_dir),
     ]
     lg.info(f"viewer | launching: {' '.join(cmd)}")
+    print('Starting EValuator viewer (Ctrl-C to stop)...', flush=True)
     subprocess.run(cmd)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    opened=False
     try:
         for line in proc.stdout:
             line = line.rstrip()
             if not line:
                 continue
-            (lg.debug if _NOISE.search(line) else lg.info)('viewer | %s', line)
+            if _URL.search(line):
+                print(line.strip(), flush=True)
+                m = re.search(r'https?://\S+', line)
+                if m and not opened and 'local' in line.lower():
+                    opened = True
+                    webbrowser.open(m.group(0))
+            else:
+                (lg.debug if _NOISE.search(line) else lg.info)('viewer | %s', line)
         proc.wait()
     except KeyboardInterrupt:
         proc.terminate()
