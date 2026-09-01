@@ -89,7 +89,6 @@ def dispatch(streamlit_bin: Path, root_dir: Path, port: int) -> None:
     ]
     lg.info(f"viewer | launching: {' '.join(cmd)}")
     print('Starting EValuator viewer (Ctrl-C to stop)...', flush=True)
-    subprocess.run(cmd)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     opened=False
     try:
