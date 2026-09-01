@@ -130,7 +130,7 @@ with _col_results:
             width='stretch',
             column_config={
                 'Open': st.column_config.ButtonColumn(
-                    'Open', on_click=_on_open_click, key='gallery_open',
+                    'Open', on_click=_on_open_click, key='gallery_open', type='primary',
                 ),
             },
         )
