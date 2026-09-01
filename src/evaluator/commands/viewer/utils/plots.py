@@ -69,17 +69,17 @@ def _style(fig: go.Figure, title: str, x_title: str, y_title: str, dark: bool) -
 
 def _axis_kwargs(series) -> dict:
     '''
-    Derive scale from data (integer column with vals within 0,1 should lock to 0,1)
+    Derive scale from data (integer column with vals within 0,1 should lock to 0,1; integer columns should step as integers; column with only 1 value gets no ticks to avoid duplicates)
     '''
     s = pd.to_numeric(series, errors='coerce').dropna()
-    if s.empty:
+    if s.empty or s.nunique() < 2:
         return {}
-    out: dict = {}
+    lo, hi = float(s.min()), float(s.max())
+    if lo >=0 and hi <= 1:
+        return {'range': [0, 1], 'dtick': 0.2}
     if bool(((s % 1) == 0).all()):
-        out['tickformat'] = 'd'
-    if s.min() >= 0 and s.max() <= 1:  # ratio / fraction / bool
-        out['range'] = [0, 1]
-    return out
+        return {'tickformat': 'd', 'dtick': max(1, int(round((hi - lo) / 6)))}
+    return {}
 
 def _apply_axes(fig: go.Figure, x=None, y=None) -> go.Figure:
     if x is not None:
@@ -107,9 +107,14 @@ def feature_scatter(df: pd.DataFrame, x: str, y: str, selected: set[int], dark: 
     _style(fig, f'{pretty_column(y)} vs {pretty_column(x)}', pretty_column(x), pretty_column(y), dark)
     return _apply_axes(fig, x=df[x], y=df[y])
 
-def distribution(df: pd.DataFrame, feature: str, selected: set[int], dark: bool, nbins: int = 30) -> go.Figure:
+def distribution(df: pd.DataFrame, feature: str, selected: set[int], dark: bool, bin_size: float | None = None) -> go.Figure:
     vals = pd.to_numeric(df[feature], errors='coerce')
-    fig = go.Figure(go.Histogram(x=vals, marker_color=BASE, nbinsx=max(1, int(nbins))))
+    hist = go.Histogram(x=vals, marker_color=BASE)
+    if bin_size and bin_size > 0:
+        hist.xbins = dict(start=0, size=bin_size)  # fixed-width bins anchored at 0: (0, w], (w, 2w], ...
+    else:
+        hist.nbinsx = 30
+    fig = go.Figure(hist)
     labs = _labels(df)
     for l, v in zip(labs, vals):
         if not np.isnan(l) and int(l) in selected and pd.notna(v):
