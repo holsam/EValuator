@@ -31,7 +31,7 @@ def analyse(
             help="Path to either a single labelled MRC file (output of [bold]label[/bold]) or a directory of labelled MRC files",
             exists=True,
             file_okay=True,
-            dir_okay=False,
+            dir_okay=True,
             readable=True,
         )
     ],
