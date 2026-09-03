@@ -18,6 +18,24 @@ from PIL import Image
 from evaluator.commands.viewer.utils.gallery import STAGES, default_stage_dirs, midslice_preview, scan_stage_dirs
 
 # ====================
+# Cached scan: re-run only when a stage dir path or its mtime changes
+# ====================
+def _stage_sig(stage_dirs: dict) -> tuple:
+    out = []
+    for _s in STAGES:
+        _d = stage_dirs.get(_s)
+        try:
+            _m = _d.stat().st_mtime if _d else None
+        except OSError:
+            _m = None
+        out.append((_s, str(_d) if _d else None, _m))
+    return tuple(out)
+
+@st.cache_data(show_spinner='Scanning stage directories...')
+def _scan_cached(sig: tuple, _stage_dirs: dict):
+    return scan_stage_dirs(_stage_dirs)
+
+# ====================
 # Define helper functions
 # ====================
 def _open_result(index: int) -> None:
@@ -91,7 +109,8 @@ with _col_dirs:
                     st.rerun()
 
         if st.button('Scan', type='primary', icon=':material/search:'):
-            st.session_state.result_sets = scan_stage_dirs(st.session_state.stage_dirs)
+            _sd = st.session_state.stage_dirs
+            st.session_state.result_sets = _scan_cached(_stage_sig(_sd), _sd)
 
 result_sets = st.session_state.result_sets
 
@@ -153,6 +172,7 @@ _STAGE_ATTR = {
 _stage = st.segmented_control('Show', list(_STAGE_ATTR), default='Labelled', key='gallery_stage') or 'Labelled'
 _attr, _is_label = _STAGE_ATTR[_stage]
 
+@st.cache_data(max_entries=4096, show_spinner=False)
 def _card_data_uri(path_str: str, mtime: float, is_label: bool) -> str:
     arr = midslice_preview(Path(path_str), is_label=is_label)
     buf = io.BytesIO()
@@ -163,8 +183,20 @@ _shown = [(i, rs) for i, rs in enumerate(result_sets) if getattr(rs, _attr) is n
 if not _shown:
     st.caption(f'No {_stage.lower()} volumes found.')
 else:
+    # Paginate: only build previews/CSS for the current page
+    _PER_PAGE = 60
+    _n_pages = (len(_shown) + _PER_PAGE - 1) // _PER_PAGE
+    if _n_pages > 1:
+        _page = st.number_input(
+            f'Page (of {_n_pages}, {_PER_PAGE} per page)',
+            min_value=1, max_value=_n_pages, value=1, step=1, key='gallery_page',
+        ) - 1
+    else:
+        _page = 0
+    _page_items = _shown[_page * _PER_PAGE:(_page + 1) * _PER_PAGE]
+
     _cards, _bg_rules = [], []
-    for _idx, rs in _shown:
+    for _idx, rs in _page_items:
         path = getattr(rs, _attr)
         try:
             uri = _card_data_uri(str(path), path.stat().st_mtime, _is_label)

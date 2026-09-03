@@ -15,7 +15,6 @@ from pathlib import Path
 # Import EValuator utilities
 # ====================
 from evaluator.utils import io as ioutil
-from evaluator.utils import mrc as mrcutil
 
 # ====================
 # Pipeline stages
@@ -52,10 +51,13 @@ def _first_existing(*paths: Path | None) -> Path | None:
 
 def _count_labels(labelled_mrc: Path) -> int:
     '''
-    Returns the number of distinct non-zero label ids in a labelled MRC
+    Returns the number of distinct non-zero label ids in a labelled MRC using mmap + np.unique
     '''
-    data, _ = mrcutil.readMRCFile(labelled_mrc)
-    return int(len({v for v in data.reshape(-1) if v != 0}))
+    import mrcfile
+
+    with mrcfile.mmap(str(labelled_mrc), mode='r', permissive=True) as f:
+        ids = np.unique(np.asarray(f.data))
+    return int((ids != 0).sum())
 
 def _stem_of_source_file(source_file: str) -> str:
     '''
@@ -63,19 +65,33 @@ def _stem_of_source_file(source_file: str) -> str:
     '''
     return Path(source_file).stem.removesuffix('_labelled')
 
-def _stems_from_dir(directory: Path | None, strip: tuple[str, ...] = ()) -> set[str]:
+def _names_in_dir(directory: Path | None, pattern: str = '*.mrc') -> frozenset[str]:
     '''
-    Returns the set of stems of *.mrc files in a directory, with known suffixes stripped
+    Returns the set of filenames matching pattern in a directory, or an empty set if the directory is missing
     '''
     if directory is None or not directory.is_dir():
-        return set()
+        return frozenset()
+    return frozenset(p.name for p in directory.glob(pattern))
+
+def _stems_from_names(names: frozenset[str], strip: tuple[str, ...] = ()) -> set[str]:
+    '''
+    Returns the stems of a set of *.mrc filenames, with known suffixes stripped
+    '''
     stems = set()
-    for p in directory.glob('*.mrc'):
-        stem = p.stem
+    for name in names:
+        stem = name[:-4] if name.endswith('.mrc') else name
         for suffix in strip:
             stem = stem.removesuffix(suffix)
         stems.add(stem)
     return stems
+
+def _pick(directory: Path | None, names: frozenset[str], *candidates: str) -> Path | None:
+    '''
+    Returns directory / first candidate filename present in names, else None
+    '''
+    if directory is None:
+        return None
+    return next((directory / c for c in candidates if c in names), None)
 
 # ====================
 # Default stage directories
@@ -126,28 +142,27 @@ def scan_stage_dirs(stage_dirs: dict[str, Path | None]) -> list[ResultSet]:
         *([ana_d / 'evaluator-analyse_results.csv'] if ana_d else []),
     )
 
+    # List each directory once; resolve per-stem paths by membership
+    raw_names = _names_in_dir(raw_d)
+    seg_names = _names_in_dir(seg_d)
+    lab_names = _names_in_dir(lab_d)
+    mod_names = _names_in_dir(mod_d)
+    ana_names = _names_in_dir(ana_d, '*.csv')
+
     stems = sorted(
-        _stems_from_dir(raw_d)
-        | _stems_from_dir(seg_d, strip=('_seg', '_segmented'))
-        | _stems_from_dir(lab_d, strip=('_labelled',))
+        _stems_from_names(raw_names)
+        | _stems_from_names(seg_names, strip=('_seg', '_segmented'))
+        | _stems_from_names(lab_names, strip=('_labelled',))
         | set(records_by_stem),
     )
 
     result_sets: list[ResultSet] = []
     for stem in stems:
-        raw_mrc = _first_existing(raw_d / f'{stem}.mrc') if raw_d else None
-        binary_mrc = _first_existing(
-            *([seg_d / f'{stem}.mrc', seg_d / f'{stem}_seg.mrc', seg_d / f'{stem}_segmented.mrc'] if seg_d else []),
-        )
-        labelled_mrc = _first_existing(
-            *([lab_d / f'{stem}_labelled.mrc', lab_d / f'{stem}.mrc'] if lab_d else []),
-        )
-        fitted_mrc = _first_existing(
-            *([mod_d / 'model_fitted.mrc', mod_d / f'{stem}_fitted.mrc'] if mod_d else []),
-        )
-        analyse_csv = shared_analyse or (
-            _first_existing(ana_d / f'{stem}_analyse.csv', ana_d / f'{stem}.csv') if ana_d else None
-        )
+        raw_mrc = _pick(raw_d, raw_names, f'{stem}.mrc')
+        binary_mrc = _pick(seg_d, seg_names, f'{stem}.mrc', f'{stem}_seg.mrc', f'{stem}_segmented.mrc')
+        labelled_mrc = _pick(lab_d, lab_names, f'{stem}_labelled.mrc', f'{stem}.mrc')
+        fitted_mrc = _pick(mod_d, mod_names, 'model_fitted.mrc', f'{stem}_fitted.mrc')
+        analyse_csv = shared_analyse or _pick(ana_d, ana_names, f'{stem}_analyse.csv', f'{stem}.csv')
 
         stem_records = records_by_stem.get(stem, [])
         has_model_output = bool(stem_records) and fitted_mrc is not None

@@ -7,7 +7,7 @@ EValuator: VIEWER STREAMLIT DISPATCH
 # ====================
 # Import external dependencies
 # ====================
-import re, shutil, subprocess, webbrowser
+import re, shutil, subprocess, sys, webbrowser
 from importlib.resources import files as pkg_files
 from pathlib import Path
 
@@ -48,7 +48,11 @@ def resolve_streamlit(streamlit_bin: Path | None) -> Path:
         return streamlit_bin
     found = shutil.which('streamlit')
     if found is None:
-        raise StreamlitNotFoundError('streamlit not found on PATH. Ensure evaluator was installed with its viewer dependencies, or pass --streamlit-bin.')
+        local = Path(sys.executable) / 'streamlit'
+        if local.exists():
+            return local
+        else:
+            raise StreamlitNotFoundError('streamlit not found on PATH. Ensure evaluator was installed with its viewer dependencies, or pass --streamlit-bin.')
     return Path(found)
 
 def _app_path() -> Path:
