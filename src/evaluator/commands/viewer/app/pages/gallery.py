@@ -31,9 +31,38 @@ def _stage_sig(stage_dirs: dict) -> tuple:
         out.append((_s, str(_d) if _d else None, _m))
     return tuple(out)
 
-@st.cache_data(show_spinner='Scanning stage directories...')
-def _scan_cached(sig: tuple, _stage_dirs: dict):
-    return scan_stage_dirs(_stage_dirs)
+@st.cache_data(show_spinner=False)
+def _scan_cached(sig: tuple, _stage_dirs: dict, _progress=None):
+    return scan_stage_dirs(_stage_dirs, progress=_progress)
+
+
+def _run_scan(stage_dirs: dict):
+    '''
+    Run the (cached) scan inside an st.status panel that lists each step and
+    tracks progress, so a slow scan shows what it is actually doing.
+    '''
+    with st.status('Scanning stage directories...', expanded=True) as status:
+        bar = st.progress(0.0)
+        last = ['']
+
+        def _progress(key, message, current=None, total=None):
+            status.update(label=message)
+            if message != last[0]:
+                last[0] = message
+                st.write(message)
+            if current is not None and total:
+                bar.progress(min(1.0, current / total))
+
+        try:
+            result = _scan_cached(_stage_sig(stage_dirs), stage_dirs, _progress)
+        except Exception as exc:
+            status.update(label=f'Scan failed: {exc}', state='error')
+            raise
+        bar.progress(1.0)
+        status.update(
+            label=f'Scan complete: {len(result)} results', state='complete', expanded=False,
+        )
+        return result
 
 # ====================
 # Define helper functions
@@ -109,8 +138,7 @@ with _col_dirs:
                     st.rerun()
 
         if st.button('Scan', type='primary', icon=':material/search:'):
-            _sd = st.session_state.stage_dirs
-            st.session_state.result_sets = _scan_cached(_stage_sig(_sd), _sd)
+            st.session_state.result_sets = _run_scan(st.session_state.stage_dirs)
 
 result_sets = st.session_state.result_sets
 

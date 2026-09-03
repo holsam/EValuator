@@ -7,9 +7,13 @@ EValuator: VIEWER GALLERY SCANNING UTILITIES
 # ====================
 # Import external dependencies
 # ====================
+import csv, os
 import numpy as np
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 # ====================
 # Import EValuator utilities
@@ -51,13 +55,60 @@ def _first_existing(*paths: Path | None) -> Path | None:
 
 def _count_labels(labelled_mrc: Path) -> int:
     '''
-    Returns the number of distinct non-zero label ids in a labelled MRC using mmap + np.unique
+    Returns the number of distinct non-zero label ids in a labelled MRC.
+
+    Reads the mmap slab by slab and unions per-slice uniques so the whole
+    volume is never materialised in memory at once (the old np.asarray(f.data)
+    copy was the scan bottleneck for large tomograms).
     '''
     import mrcfile
 
+    seen: set[int] = set()
     with mrcfile.mmap(str(labelled_mrc), mode='r', permissive=True) as f:
-        ids = np.unique(np.asarray(f.data))
-    return int((ids != 0).sum())
+        data = f.data
+        if data is None:
+            return 0
+        if data.ndim < 3:
+            seen.update(int(v) for v in np.unique(data))
+        else:
+            for z in range(data.shape[0]):
+                seen.update(int(v) for v in np.unique(data[z]))
+    seen.discard(0)
+    return len(seen)
+
+def _count_labels_worker(item: tuple[str, str]) -> tuple[str, int]:
+    '''
+    Pool worker: (stem, path) -> (stem, label count). Never raises.
+    '''
+    stem, path = item
+    try:
+        return stem, _count_labels(Path(path))
+    except Exception:
+        return stem, 0
+
+def _counts_from_analyse_csv(path: Path) -> dict[str, int]:
+    '''
+    Returns {stem: row count} from a combined analyse results CSV, keyed by the
+    'tomogram' column (a segmentation filename) with known suffixes stripped.
+    Empty dict if the file is unreadable or has no 'tomogram' column.
+    '''
+    counts: Counter[str] = Counter()
+    try:
+        with path.open(newline='') as fh:
+            reader = csv.DictReader(fh)
+            if not reader.fieldnames or 'tomogram' not in reader.fieldnames:
+                return {}
+            for row in reader:
+                name = (row.get('tomogram') or '').strip()
+                if not name:
+                    continue
+                stem = name[:-4] if name.endswith('.mrc') else name
+                for suffix in ('_seg', '_segmented', '_labelled'):
+                    stem = stem.removesuffix(suffix)
+                counts[stem] += 1
+    except OSError:
+        return {}
+    return dict(counts)
 
 def _stem_of_source_file(source_file: str) -> str:
     '''
@@ -116,10 +167,20 @@ def default_stage_dirs(root: Path) -> dict[str, Path | None]:
 # ====================
 # Define scan function
 # ====================
-def scan_stage_dirs(stage_dirs: dict[str, Path | None]) -> list[ResultSet]:
+ProgressFn = Callable[..., None]
+
+def scan_stage_dirs(
+    stage_dirs: dict[str, Path | None],
+    progress: ProgressFn | None = None,
+) -> list[ResultSet]:
     '''
-    Scan stage directories and return one ResultSet per stem
+    Scan stage directories and return one ResultSet per stem.
+
+    progress(key, message, current=None, total=None) is called at each step so
+    the caller can surface a verbose status; label counting for volumes with no
+    cheaper vesicle count is done in parallel.
     '''
+    _emit: ProgressFn = progress or (lambda *a, **k: None)
 
     raw_d = stage_dirs.get('raw')
     seg_d = stage_dirs.get('segmentations')
@@ -128,6 +189,7 @@ def scan_stage_dirs(stage_dirs: dict[str, Path | None]) -> list[ResultSet]:
     ana_d = stage_dirs.get('analyse')
 
     # Shared model results file (records keyed per stem by their source_file)
+    _emit('model', 'Reading model results file...')
     model_results_path = _first_existing(
         *([mod_d / 'model_results.csv', mod_d / 'model_results.json'] if mod_d else []),
     )
@@ -137,12 +199,20 @@ def scan_stage_dirs(stage_dirs: dict[str, Path | None]) -> list[ResultSet]:
             source_file = record.get('source_file')
             if source_file:
                 records_by_stem.setdefault(_stem_of_source_file(source_file), []).append(record)
+    _emit('model', f'Model results: {len(records_by_stem)} stems with records')
 
+    # Per-stem vesicle counts from a combined analyse CSV (cheap: one file read)
     shared_analyse = _first_existing(
         *([ana_d / 'evaluator-analyse_results.csv'] if ana_d else []),
     )
+    analyse_counts: dict[str, int] = {}
+    if shared_analyse:
+        _emit('analyse', 'Reading analyse results CSV...')
+        analyse_counts = _counts_from_analyse_csv(shared_analyse)
+        _emit('analyse', f'Analyse results: {len(analyse_counts)} stems with rows')
 
     # List each directory once; resolve per-stem paths by membership
+    _emit('list', 'Listing stage directories...')
     raw_names = _names_in_dir(raw_d)
     seg_names = _names_in_dir(seg_d)
     lab_names = _names_in_dir(lab_d)
@@ -155,9 +225,12 @@ def scan_stage_dirs(stage_dirs: dict[str, Path | None]) -> list[ResultSet]:
         | _stems_from_names(lab_names, strip=('_labelled',))
         | set(records_by_stem),
     )
+    _emit('resolve', f'Resolving paths for {len(stems)} stems...', 0, len(stems))
 
-    result_sets: list[ResultSet] = []
-    for stem in stems:
+    # First pass: resolve paths and any count we can get without reading a volume
+    partials: list[dict] = []
+    need_count: list[tuple[str, str]] = []  # (stem, labelled_mrc path) for parallel counting
+    for i, stem in enumerate(stems):
         raw_mrc = _pick(raw_d, raw_names, f'{stem}.mrc')
         binary_mrc = _pick(seg_d, seg_names, f'{stem}.mrc', f'{stem}_seg.mrc', f'{stem}_segmented.mrc')
         labelled_mrc = _pick(lab_d, lab_names, f'{stem}_labelled.mrc', f'{stem}.mrc')
@@ -170,24 +243,71 @@ def scan_stage_dirs(stage_dirs: dict[str, Path | None]) -> list[ResultSet]:
             sum(1 for r in stem_records if r.get('reliability', {}).get('is_reliable'))
             if stem_records else None
         )
+
+        n_vesicles: int | None
         if stem_records:
             n_vesicles = len(stem_records)
-        elif labelled_mrc is not None:
-            n_vesicles = _count_labels(labelled_mrc)
+        elif stem in analyse_counts:
+            n_vesicles = analyse_counts[stem]
+        elif labelled_mrc is not None and labelled_mrc.exists():
+            n_vesicles = None  # filled in by the parallel label count below
+            need_count.append((stem, str(labelled_mrc)))
         else:
             n_vesicles = 0
 
-        result_sets.append(ResultSet(
-            stem=stem,
-            labelled_mrc=labelled_mrc,
-            fitted_mrc=fitted_mrc if has_model_output else None,
-            raw_mrc=raw_mrc,
-            binary_mrc=binary_mrc,
-            analyse_csv=analyse_csv,
-            model_results_path=model_results_path if has_model_output else None,
-            n_vesicles=n_vesicles,
-            n_reliable=n_reliable,
-        ))
+        partials.append({
+            'stem': stem,
+            'labelled_mrc': labelled_mrc,
+            'fitted_mrc': fitted_mrc if has_model_output else None,
+            'raw_mrc': raw_mrc,
+            'binary_mrc': binary_mrc,
+            'analyse_csv': analyse_csv,
+            'model_results_path': model_results_path if has_model_output else None,
+            'n_vesicles': n_vesicles,
+            'n_reliable': n_reliable,
+        })
+        if (i + 1) % 200 == 0 or i + 1 == len(stems):
+            _emit('resolve', f'Resolved {i + 1}/{len(stems)} stems...', i + 1, len(stems))
+
+    # Second pass: count labels for the remaining volumes in parallel
+    counts: dict[str, int] = {}
+    total = len(need_count)
+    if total:
+        workers = min(total, max(1, (os.cpu_count() or 2)))
+        _emit('count', f'Counting labels in {total} volume(s) using {workers} worker(s)...', 0, total)
+        done = 0
+        try:
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                for stem, count in pool.map(_count_labels_worker, need_count, chunksize=4):
+                    counts[stem] = count
+                    done += 1
+                    if done % 25 == 0 or done == total:
+                        _emit('count', f'Counted labels in {done}/{total} volume(s)...', done, total)
+        except Exception as exc:  # pool unavailable -> fall back to sequential
+            _emit('count', f'Parallel count unavailable ({exc}); counting sequentially...', done, total)
+            for stem, path in need_count:
+                if stem in counts:
+                    continue
+                counts[stem] = _count_labels_worker((stem, path))[1]
+                done += 1
+                if done % 25 == 0 or done == total:
+                    _emit('count', f'Counted labels in {done}/{total} volume(s)...', done, total)
+
+    result_sets = [
+        ResultSet(
+            stem=p['stem'],
+            labelled_mrc=p['labelled_mrc'],
+            fitted_mrc=p['fitted_mrc'],
+            raw_mrc=p['raw_mrc'],
+            binary_mrc=p['binary_mrc'],
+            analyse_csv=p['analyse_csv'],
+            model_results_path=p['model_results_path'],
+            n_vesicles=p['n_vesicles'] if p['n_vesicles'] is not None else counts.get(p['stem'], 0),
+            n_reliable=p['n_reliable'],
+        )
+        for p in partials
+    ]
+    _emit('done', f'{len(result_sets)} results resolved')
     return result_sets
 
 # ====================
