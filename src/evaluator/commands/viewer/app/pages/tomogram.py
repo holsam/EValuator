@@ -9,7 +9,7 @@ EValuator: VIEWER TOMOGRAM PAGE
 # ====================
 
 # Import external dependencies
-import pandas as pd, plotly.graph_objects as go, streamlit as st, tempfile
+import pandas as pd, plotly.graph_objects as go, streamlit as st
 from pathlib import Path
 
 # Import EValuator utilities
@@ -24,6 +24,29 @@ from evaluator.commands.viewer.utils.export import export_filtered_csv
 from evaluator.commands.viewer.utils.format import pretty_column
 from evaluator.commands.viewer.utils.join import join_analyse_model
 from evaluator.commands.viewer.utils.mesh import build_label_mesh_traces, build_point_cloud_trace, dim_trace
+
+# ====================
+# Define helper functions
+# ====================
+def _native_open_dialog(title: str, mrc_only: bool) -> str | None:
+    '''
+    Open 'open file' dialog and return selected path or  '' if the dialog was cancelled or None if no GUI toolkit is available
+    '''
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception:
+        return None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes('-topmost', 1)
+        filetypes = [('MRC volume', '*.mrc')] if mrc_only else [('All files', '*.*')]
+        path = filedialog.askopenfilename(title=title, filetypes=filetypes)
+        root.destroy()
+        return path or ''
+    except Exception:
+        return None
 
 # ====================
 # Set guard for open result set (if session state is gone eg from hard refresh, send back to the Gallery)
@@ -69,26 +92,33 @@ with st.container():
             st.session_state._edit_field = (_fname, _fattr)
             st.rerun()
 
-# Inline form for adding entries
+# Inline controls for adding entries
 if st.session_state.get('_edit_field'):
     _fname, _fattr = st.session_state._edit_field
-    with st.form('path_edit'):
-        _up = st.file_uploader(
-            f'Upload {_fname}',
-            type=['mrc'] if _fattr.endswith('_mrc') else None,
-            accept_multiple_files=False,
-        )
-        _save_col, _cancel_col = st.columns(2)
-        if _save_col.form_submit_button('Save', type='primary', width='stretch'):
-            if _up is not None:
-                _dest = Path(tempfile.gettempdir()) / f'evaluator_viewer_{result.stem}_{_up.name}'
-                _dest.write_bytes(_up.getbuffer())
-                setattr(result, _fattr, _dest)
+    _mrc_only = _fattr.endswith('_mrc')
+    st.write(f'**Set {_fname}**')
+    _browse_col, _cancel_col = st.columns(2)
+    if _browse_col.button('Browse…', icon=':material/folder_open:', type='primary', width='stretch'):
+        _picked = _native_open_dialog(f'Select {_fname}', _mrc_only)
+        if _picked is None:
+            st.session_state._edit_no_dialog = True
+        elif _picked:
+            setattr(result, _fattr, Path(_picked))
             del st.session_state._edit_field
+            st.session_state.pop('_edit_no_dialog', None)
             st.rerun()
-        if _cancel_col.form_submit_button('Cancel', width='stretch'):
-            del st.session_state._edit_field
-            st.rerun()
+    if _cancel_col.button('Cancel', width='stretch'):
+        del st.session_state._edit_field
+        st.session_state.pop('_edit_no_dialog', None)
+        st.rerun()
+    if st.session_state.get('_edit_no_dialog'):
+        st.info('No file dialog available on this machine; paste a path instead.')
+    _typed = st.text_input('…or paste a path', key='_edit_path')
+    if _typed.strip():
+        setattr(result, _fattr, Path(_typed).expanduser())
+        del st.session_state._edit_field
+        st.session_state.pop('_edit_no_dialog', None)
+        st.rerun()
 
 # ====================
 # Load volumes & build traces for viewer section

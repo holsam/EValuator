@@ -19,6 +19,7 @@ from typing import Callable
 # Import EValuator utilities
 # ====================
 from evaluator.utils import io as ioutil
+from evaluator.commands.viewer.utils.stems import tomo_stem
 
 # ====================
 # Pipeline stages
@@ -102,19 +103,10 @@ def _counts_from_analyse_csv(path: Path) -> dict[str, int]:
                 name = (row.get('tomogram') or '').strip()
                 if not name:
                     continue
-                stem = name[:-4] if name.endswith('.mrc') else name
-                for suffix in ('_seg', '_segmented', '_labelled'):
-                    stem = stem.removesuffix(suffix)
-                counts[stem] += 1
+                counts[tomo_stem(name)] += 1
     except OSError:
         return {}
     return dict(counts)
-
-def _stem_of_source_file(source_file: str) -> str:
-    '''
-    Returns the stem that a model MRC file refers to
-    '''
-    return Path(source_file).stem.removesuffix('_labelled')
 
 def _names_in_dir(directory: Path | None, pattern: str = '*.mrc') -> frozenset[str]:
     '''
@@ -124,17 +116,11 @@ def _names_in_dir(directory: Path | None, pattern: str = '*.mrc') -> frozenset[s
         return frozenset()
     return frozenset(p.name for p in directory.glob(pattern))
 
-def _stems_from_names(names: frozenset[str], strip: tuple[str, ...] = ()) -> set[str]:
+def _stem_map(names: frozenset[str]) -> dict[str, str]:
     '''
-    Returns the stems of a set of *.mrc filenames, with known suffixes stripped
+    Maps each file's canonical tomogram stem to its filename (last write wins)
     '''
-    stems = set()
-    for name in names:
-        stem = name[:-4] if name.endswith('.mrc') else name
-        for suffix in strip:
-            stem = stem.removesuffix(suffix)
-        stems.add(stem)
-    return stems
+    return {tomo_stem(name): name for name in names}
 
 def _pick(directory: Path | None, names: frozenset[str], *candidates: str) -> Path | None:
     '''
@@ -188,17 +174,26 @@ def scan_stage_dirs(
     mod_d = stage_dirs.get('model')
     ana_d = stage_dirs.get('analyse')
 
-    # Shared model results file (records keyed per stem by their source_file)
-    _emit('model', 'Reading model results file...')
-    model_results_path = _first_existing(
-        *([mod_d / 'model_results.csv', mod_d / 'model_results.json'] if mod_d else []),
-    )
+    # Model results files: per-file '<stem>_model_results.{csv,json}' (as written by
+    # the model command) plus the legacy shared 'model_results.{csv,json}'. Records
+    # are keyed per stem by their source_file, and the file each stem came from is
+    # kept so the tomogram page can load just that stem's results.
+    _emit('model', 'Reading model results files...')
     records_by_stem: dict[str, list[dict]] = {}
-    if model_results_path:
-        for record in ioutil.read_results(model_results_path)[0]:
-            source_file = record.get('source_file')
-            if source_file:
-                records_by_stem.setdefault(_stem_of_source_file(source_file), []).append(record)
+    results_path_by_stem: dict[str, Path] = {}
+    if mod_d and mod_d.is_dir():
+        results_files = sorted(
+            {p for pat in ('*_model_results.csv', '*_model_results.json',
+                           'model_results.csv', 'model_results.json')
+             for p in mod_d.glob(pat)}
+        )
+        for results_path in results_files:
+            for record in ioutil.read_results(results_path)[0]:
+                source_file = record.get('source_file')
+                if source_file:
+                    stem = tomo_stem(source_file)
+                    records_by_stem.setdefault(stem, []).append(record)
+                    results_path_by_stem.setdefault(stem, results_path)
     _emit('model', f'Model results: {len(records_by_stem)} stems with records')
 
     # Per-stem vesicle counts from a combined analyse CSV (cheap: one file read)
@@ -219,10 +214,16 @@ def scan_stage_dirs(
     mod_names = _names_in_dir(mod_d)
     ana_names = _names_in_dir(ana_d, '*.csv')
 
+    # Canonical stem -> actual filename for each stage that names files per tomogram
+    raw_map = _stem_map(raw_names)
+    seg_map = _stem_map(seg_names)
+    lab_map = _stem_map(lab_names)
+
     stems = sorted(
-        _stems_from_names(raw_names)
-        | _stems_from_names(seg_names, strip=('_seg', '_segmented'))
-        | _stems_from_names(lab_names, strip=('_labelled',))
+        set(raw_map)
+        | set(seg_map)
+        | set(lab_map)
+        | {tomo_stem(name) for name in mod_names}
         | set(records_by_stem),
     )
     _emit('resolve', f'Resolving paths for {len(stems)} stems...', 0, len(stems))
@@ -231,10 +232,14 @@ def scan_stage_dirs(
     partials: list[dict] = []
     need_count: list[tuple[str, str]] = []  # (stem, labelled_mrc path) for parallel counting
     for i, stem in enumerate(stems):
-        raw_mrc = _pick(raw_d, raw_names, f'{stem}.mrc')
-        binary_mrc = _pick(seg_d, seg_names, f'{stem}.mrc', f'{stem}_seg.mrc', f'{stem}_segmented.mrc')
-        labelled_mrc = _pick(lab_d, lab_names, f'{stem}_labelled.mrc', f'{stem}.mrc')
-        fitted_mrc = _pick(mod_d, mod_names, 'model_fitted.mrc', f'{stem}_fitted.mrc')
+        raw_mrc = (raw_d / raw_map[stem]) if stem in raw_map else None
+        binary_mrc = (seg_d / seg_map[stem]) if stem in seg_map else None
+        labelled_mrc = (lab_d / lab_map[stem]) if stem in lab_map else None
+        fitted_mrc = _pick(
+            mod_d, mod_names,
+            f'{stem}_labelled_model_fitted.mrc', f'{stem}_model_fitted.mrc',
+            f'{stem}_fitted.mrc', 'model_fitted.mrc',
+        )
         analyse_csv = shared_analyse or _pick(ana_d, ana_names, f'{stem}_analyse.csv', f'{stem}.csv')
 
         stem_records = records_by_stem.get(stem, [])
@@ -262,7 +267,7 @@ def scan_stage_dirs(
             'raw_mrc': raw_mrc,
             'binary_mrc': binary_mrc,
             'analyse_csv': analyse_csv,
-            'model_results_path': model_results_path if has_model_output else None,
+            'model_results_path': results_path_by_stem.get(stem) if has_model_output else None,
             'n_vesicles': n_vesicles,
             'n_reliable': n_reliable,
         })

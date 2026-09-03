@@ -17,6 +17,7 @@ from evaluator.commands.viewer.utils import dispatch as dispatchutil
 from evaluator.commands.viewer.utils import gallery as galleryutil
 from evaluator.commands.viewer.utils import mesh as meshutil
 from evaluator.commands.viewer.utils import plots as plotsutil
+from evaluator.commands.viewer.utils import stems as stemutil
 from evaluator.commands.viewer.utils import theme as themeutil
 from evaluator.commands.viewer.utils.export import export_filtered_csv
 from evaluator.commands.viewer.utils.format import pretty_column
@@ -316,6 +317,25 @@ class TestMesh:
         assert trace.color == meshutil.HIGHLIGHT_COLOR
 
 # ====================
+# Define tests for viewer/utils/stems.py
+# ====================
+class TestCanonicalStem:
+    @pytest.mark.parametrize('name, expected', [
+        ('t1_denoised.mrc', 't1'),
+        ('t1.denoised.mrc', 't1'),
+        ('t1_labelled.mrc', 't1'),
+        ('t1_seg.mrc', 't1'),
+        ('t1_labelled_model_fitted.mrc', 't1'),
+        ('t1_labelled_model_results.json', 't1'),
+        ('TS_01_binned_denoised.mrc', 'TS_01'),
+        ('/data/runs/TS_01_labelled.mrc', 'TS_01'),
+        ('plain.mrc', 'plain'),
+    ])
+    def test_tomo_stem_strips_known_suffix_runs(self, name, expected):
+        assert stemutil.tomo_stem(name) == expected
+
+
+# ====================
 # Define tests for viewer/utils/gallery.py
 # ====================
 class TestGalleryScan:
@@ -326,8 +346,8 @@ class TestGalleryScan:
         labelled = np.zeros((16, 16, 16), dtype=np.int16)
         labelled[_hollow_sphere(labelled.shape, (8, 8, 8), 6, 3)] = 1
         _write_mrc(root / 'labelled' / 't1_labelled.mrc', labelled)
-        _write_mrc(root / 'model' / 'model_fitted.mrc', labelled.astype(np.uint16))
-        (root / 'model' / 'model_results.json').write_text(
+        _write_mrc(root / 'model' / 't1_labelled_model_fitted.mrc', labelled.astype(np.uint16))
+        (root / 'model' / 't1_labelled_model_results.json').write_text(
             '{"parameters": {"n_vesicles_fitted": 1}, "results": ['
             '{"source_file": "t1_labelled.mrc", "label_id": 1, "radius": 6.0, '
             '"reliability": {"is_reliable": true}}]}'
@@ -369,6 +389,19 @@ class TestGalleryScan:
 
     def test_scan_empty_root_returns_nothing(self, tmp_path):
         assert galleryutil.scan_stage_dirs(galleryutil.default_stage_dirs(tmp_path)) == []
+
+    def test_scan_denoised_raw_attaches_to_same_stem(self, tmp_path):
+        (tmp_path / 'raw').mkdir()
+        (tmp_path / 'labelled').mkdir()
+        vol = np.zeros((16, 16, 16), dtype=np.int16)
+        vol[_hollow_sphere(vol.shape, (8, 8, 8), 6, 3)] = 1
+        _write_mrc(tmp_path / 'raw' / 't1_denoised.mrc', vol.astype(np.float32))
+        _write_mrc(tmp_path / 'labelled' / 't1_labelled.mrc', vol)
+        results = galleryutil.scan_stage_dirs(galleryutil.default_stage_dirs(tmp_path))
+        assert [r.stem for r in results] == ['t1']
+        rs = results[0]
+        assert rs.raw_mrc and rs.raw_mrc.name == 't1_denoised.mrc'
+        assert rs.labelled_mrc and rs.labelled_mrc.name == 't1_labelled.mrc'
 
     def test_midslice_preview_is_uint8_2d(self, tmp_path):
         vol = np.random.default_rng(0).random((12, 20, 24)).astype(np.float32)

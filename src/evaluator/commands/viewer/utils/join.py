@@ -7,9 +7,12 @@ EValuator: VIEWER ANALYSE/MODEL JOIN UTILITIES
 # ====================
 # Import external dependencies
 # ====================
-from pathlib import Path
-
 import pandas as pd
+
+# ====================
+# Import EValuator viewer utilities
+# ====================
+from evaluator.commands.viewer.utils.stems import tomo_stem
 
 # ====================
 # Define join function
@@ -17,11 +20,11 @@ import pandas as pd
 # join_analyse_model: returns one row per label id for the given stem, merging analyse's morphology columns with model's fit/reliability columns
 def join_analyse_model(analyse_df: pd.DataFrame | None, model_df: pd.DataFrame | None, stem: str) -> tuple[pd.DataFrame, set[str], set[str]]:
     analyse_subset = (
-        analyse_df[analyse_df['tomogram'].map(lambda t: Path(t).stem.removesuffix('_labelled')) == stem]
+        analyse_df[analyse_df['tomogram'].map(tomo_stem) == stem]
         if analyse_df is not None else pd.DataFrame()
     )
     model_subset = (
-        model_df[model_df['source_file'].map(lambda s: Path(s).stem.removesuffix('_labelled')) == stem]
+        model_df[model_df['source_file'].map(tomo_stem) == stem]
         if model_df is not None else pd.DataFrame()
     )
     a_src = set(analyse_subset.columns)
