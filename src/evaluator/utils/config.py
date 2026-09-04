@@ -47,12 +47,19 @@ class ModelConfig(_Section):
     '''Configuration parameters for `evaluator model` command'''
     rmse_relative_max: float = Field(0.15, description='Maximum relative RMSE for reliability check')
     min_points: int = Field(20, description='Minimum surface points for a reliable fit')
+    min_latitude_span_deg: float = Field(60, description='Minimum latitude span (deg) of surviving surface points for a reliable fit', gt=0, le=180)
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
     fill_threshold: float = Field(..., description='Fill ratio threshold for labelling')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
+    # Vesicle-vs-debris QC thresholds
+    qc_max_sphere_rmse_rel: float = Field(0.25, description='Max best-fit-sphere relative RMSE for a vesicle-like component', gt=0)
+    qc_max_aspect_ratio: float = Field(2.5, description='Max major/minor axis ratio for a vesicle-like component', ge=1)
+    qc_min_solidity: float = Field(0.10, description='Min voxel-count / convex-hull-volume ratio for a vesicle-like component', ge=0, le=1)
+    qc_min_arc_coverage: float = Field(0.50, description='Min fitted-sphere surface coverage for a non-enclosed component to still count as vesicle-like', gt=0, le=1)
+    qc_max_fit_points: int = Field(4000, description='Random-subsample size of component voxels used for the QC sphere fit / convex hull / arc grid', ge=4)
 
 class PlotConfig(_Section):
     '''Configuration parameters for `evaluator plot` command'''

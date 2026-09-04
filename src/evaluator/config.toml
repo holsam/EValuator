@@ -21,12 +21,18 @@ max_workers = 0
 [model]
 rmse_relative_max = 0.15
 min_points = 20
+min_latitude_span_deg = 60
 max_workers = 0
 
 # Analyse command default configuration parameters
 [analyse]
 fill_threshold = 0.05
 max_workers = 0
+qc_max_sphere_rmse_rel = 0.25
+qc_max_aspect_ratio = 2.5
+qc_min_solidity = 0.10
+qc_min_arc_coverage = 0.50
+qc_max_fit_points = 4000
 
 # Plot command default configuration parameters
 [plot]

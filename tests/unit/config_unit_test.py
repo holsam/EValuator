@@ -19,6 +19,7 @@ from evaluator.utils.config import (
     ConfigNotFoundError,
     create_default_config,
     AnalyseConfig,
+    ModelConfig,
     PlotConfig,
     load_config,
     read_config,
@@ -455,3 +456,30 @@ class TestPlotConfig:
         config = Config.model_validate(data)
         assert config.plot.default_sections == ['distributions', 'qc', 'scatter']
     
+class TestQCAndReliabilityConfig:
+    def test_analyse_qc_defaults(self):
+        cfg = AnalyseConfig(fill_threshold=0.05)
+        assert cfg.qc_max_sphere_rmse_rel == 0.25
+        assert cfg.qc_max_aspect_ratio == 2.5
+        assert cfg.qc_min_solidity == 0.10
+        assert cfg.qc_min_arc_coverage == 0.50
+        assert cfg.qc_max_fit_points == 4000
+
+    def test_qc_max_fit_points_lower_bound(self):
+        with pytest.raises(ValidationError):
+            AnalyseConfig(fill_threshold=0.05, qc_max_fit_points=3)
+
+    def test_model_min_latitude_span_default_and_bounds(self):
+        assert ModelConfig().min_latitude_span_deg == 60
+        with pytest.raises(ValidationError):
+            ModelConfig(min_latitude_span_deg=0)
+        with pytest.raises(ValidationError):
+            ModelConfig(min_latitude_span_deg=200)
+
+    def test_packaged_config_toml_round_trips_new_keys(self):
+        from importlib.resources import files
+        import tomllib
+        data = tomllib.loads((files('evaluator') / 'config.toml').read_text(encoding='utf-8'))
+        config = Config.model_validate(data)
+        assert config.analyse.qc_max_fit_points == 4000
+        assert config.model.min_latitude_span_deg == 60
