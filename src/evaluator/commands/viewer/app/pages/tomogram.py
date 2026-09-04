@@ -210,22 +210,20 @@ _THEME = themeutil.active()
 plotutil.use_theme(_THEME)
 
 # Highlight helper — funnels both selection directions through one function
-def _figure_for(view_name: str, selected_labels: set[int]) -> go.Figure:
+def _figure_for(view_name: str, selected_labels: set[int], visible_labels: set[int] | None = None) -> go.Figure:
     traces = views[view_name]
     fig = go.Figure()
+    _sel_str = {str(l) for l in selected_labels}
+    _vis_str = None if visible_labels is None else {str(l) for l in visible_labels}
     for trace in traces:
-        if view_name in ('labelled', 'fitted') and isinstance(trace, go.Mesh3d) and selected_labels:
-            trace = go.Mesh3d(trace)  # copy so recolouring one view doesn't mutate the cached original
-            dim_trace(trace, dim=(trace.name not in {str(l) for l in selected_labels}), highlight=_THEME['highlight'])
+        if view_name in ('labelled', 'fitted') and isinstance(trace, go.Mesh3d):
+            # Vesicle-like filter: drop debris meshes from the figure entirely
+            if _vis_str is not None and trace.name not in _vis_str:
+                continue
+            if selected_labels:
+                trace = go.Mesh3d(trace)  # copy so recolouring one view doesn't mutate the cached original
+                dim_trace(trace, dim=(trace.name not in _sel_str), highlight=_THEME['highlight'])
         fig.add_trace(trace)
-    axis = dict(backgroundcolor=_THEME['scene_bg'], gridcolor=_THEME['grid'], showbackground=True)
-    # Same box for every view/panel so meshes and point clouds are spatially comparable at a glance
-    ax = lambda n: {**axis, 'range': [0, scene_bounds[n]]} if scene_bounds else axis
-    fig.update_layout(
-        showlegend=False,
-        paper_bgcolor=_THEME['paper_bg'],
-        scene=dict(aspectmode='data', xaxis=ax(0), yaxis=ax(1), zaxis=ax(2), bgcolor=_THEME['scene_bg']),
-    )
     return fig
 
 # ====================
@@ -252,6 +250,24 @@ if not available_views:
     st.warning('No volumes to display for this result. Set a path in Metadata above.')
     st.stop()
 
+# Add toggle for 'vesicle-like data only'
+_has_vlike = 'is_vesicle_like' in joined_df.columns
+_vesicle_only = st.checkbox(
+    'Vesicle-like only', value=False, key='vesicle_like_only', disabled=not _has_vlike,
+    help='Hide components flagged as debris (is_vesicle_like = False) from tables, plots and 3D views.'
+         if _has_vlike else 'Run `evaluator analyse` to populate the is_vesicle_like QC column.',
+)
+_visible_labels: set[int] | None = None
+if _has_vlike and _vesicle_only:
+    _visible_labels = {int(l) for l, v in zip(joined_df['label'], joined_df['is_vesicle_like']) if pd.notna(l) and bool(v)}
+    joined_df = joined_df[joined_df['label'].isin(_visible_labels)].reset_index(drop=True)
+    def _filter_display(disp):
+        if disp is None:
+            return None
+        _df, _cfg = disp
+        return _df[_df['label'].isin(_visible_labels)].reset_index(drop=True), _cfg
+    _results = {'joined': joined_df, 'analyse': _filter_display(_results['analyse']), 'model': _filter_display(_results['model'])}
+
 _sel_labels = st.session_state.selected_labels
 _col_main, _col_side = st.columns([3, 2])
 
@@ -261,7 +277,7 @@ with _col_main:
         default=available_views[0], key='active_view', label_visibility='collapsed',
     ) or available_views[0]
     main_event = plotly_view(
-        _figure_for(active_view, _sel_labels),
+        _figure_for(active_view, _sel_labels, _visible_labels),
         interactive=True,
         camera=st.session_state.camera,
         key='main_view',
@@ -274,7 +290,7 @@ with _col_side:
             with _c:
                 st.markdown(f'#### {VIEW_LABELS[_vn]}')
                 plotly_view(
-                    _figure_for(_vn, _sel_labels),
+                    _figure_for(_vn, _sel_labels, _visible_labels),
                     interactive=False,
                     camera=st.session_state.camera,
                     key=f'mini_{_vn}',
@@ -397,6 +413,15 @@ else:
         else:
             _plot_cross_filter(st.plotly_chart(_fig, key='plot_conc', on_select='rerun'), 'conc')
     with _tab_reliab:
+        _counts = []
+        if 'is_reliable' in joined_df.columns:
+            _rel = joined_df['is_reliable'].fillna(False).astype(bool)
+            _counts.append(f'Reliable fits: {int(_rel.sum())} / {len(_rel)}')
+        if 'is_vesicle_like' in joined_df.columns:
+            _vl = joined_df['is_vesicle_like'].fillna(False).astype(bool)
+            _counts.append(f'Vesicle-like: {int(_vl.sum())} / {len(_vl)}')
+        if _counts:
+            st.caption(' · '.join(_counts))
         _fig = plotutil.reliability(joined_df, _sel_now)
         if _fig is None:
             st.caption('Needs model RMSE and analyse closure/enclosed columns.')

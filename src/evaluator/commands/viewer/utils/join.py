@@ -41,7 +41,11 @@ def join_analyse_model(analyse_df: pd.DataFrame | None, model_df: pd.DataFrame |
         joined = model_subset.rename(columns={'label_id': 'label'}).copy()
     m_src.discard('label_id')
     m_src.add('label')
-    joined['include'] = True
+    # Seed `include`` column from analyse's QC when present
+    if 'is_vesicle_like' in joined.columns:
+        joined['include'] = joined['is_vesicle_like'].fillna(False).astype(bool)
+    else:
+        joined['include'] = True
     joined = joined.reset_index(drop=True)
     analyse_names: set[str] = set()
     model_names: set[str] = set()
