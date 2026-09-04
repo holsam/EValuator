@@ -208,6 +208,12 @@ class TestFitVesicleReliability:
         rel = result['reliability']
         assert rel['span_ok'] is False
         assert rel['is_reliable'] is False
+    def test_span_threshold_is_configurable(self):
+        '''Lowering min_latitude_span_deg lets a narrow band through the span check.'''
+        pts = _narrow_band_points(n=200, seed=11)
+        assert fit_vesicle(pts)['reliability']['span_ok'] is False
+        loosened = fit_vesicle(pts, min_latitude_span_deg=5.0)['reliability']
+        assert loosened['span_ok'] is True
     def test_noisy_points_fail_rmse_gate(self):
         '''Noise comparable to the radius pushes relative RMSE over threshold.'''
         pts = _sphere_points(radius=20.0, n=800, noise=6.0, seed=12)

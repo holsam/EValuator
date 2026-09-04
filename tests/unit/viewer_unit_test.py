@@ -128,6 +128,14 @@ class TestJoinAnalyseModel:
         joined, _, _ = join_analyse_model(self._analyse(), self._model(), 't1')
         assert joined['include'].all()
 
+    def test_include_seeded_from_is_vesicle_like(self):
+        analyse = self._analyse()
+        analyse['is_vesicle_like'] = [True, False, True]
+        joined, _, _ = join_analyse_model(analyse, self._model(), 't1')
+        by_label = dict(zip(joined['label'], joined['include']))
+        assert by_label[1] is True or by_label[1] == True
+        assert by_label[2] == False
+
     def test_analyse_only(self):
         joined, analyse_names, model_names = join_analyse_model(self._analyse(), None, 't2')
         assert len(joined) == 1 and joined.iloc[0]['equiv_diameter_nm'] == 55.0

@@ -106,6 +106,23 @@ class TestAnalyseCLI:
             evaluator, ["analyse", str(fake), "--fill-threshold", "1.5"]
         )
         assert result.exit_code != 0
+    def test_qc_aspect_ratio_below_one_exits_nonzero(self, tmp_path):
+        fake = tmp_path / "seg.mrc"
+        fake.touch()
+        result = runner.invoke(evaluator, ["analyse", str(fake), "--qc-max-aspect-ratio", "0.5"])
+        assert result.exit_code != 0
+    def test_qc_max_fit_points_below_min_exits_nonzero(self, tmp_path):
+        fake = tmp_path / "seg.mrc"
+        fake.touch()
+        result = runner.invoke(evaluator, ["analyse", str(fake), "--qc-max-fit-points", "2"])
+        assert result.exit_code != 0
+    def test_qc_override_reflected_in_params_toml(self, labelled_path, tmp_path):
+        import tomllib
+        result = runner.invoke(evaluator, ["analyse", str(labelled_path), "-o", str(tmp_path), "--qc-max-aspect-ratio", "1.3", "--qc-max-fit-points", "1500"])
+        assert result.exit_code == 0
+        params = tomllib.loads((tmp_path / "evaluator" / "analyse" / "params.toml").read_text())
+        assert params["qc_max_aspect_ratio"] == pytest.approx(1.3)
+        assert params["qc_max_fit_points"] == 1500
 
 class TestPlotCLI:
     '''Plot command CLI tests'''
