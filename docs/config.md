@@ -92,15 +92,41 @@ The default `config.toml` is shown below with all available keys and their defau
 verbose = false
 debug = false
 
+# Output format configuration default
+[output] 
+format = "json"
+
 # Label command default configuration parameters
 [label]
+min_arc_coverage = 0.30
+merge_centre_tol_factor = 1.5
+merge_radius_tol_pct = 0.30
+maximum_diameter_nm = 500.0
+minimum_diameter_nm = 20.0
+membrane_thickness_nm = 7
+max_workers = 0
+
+# Model command default configuration parameters
+[model]
+rmse_relative_max = 0.15
+min_points = 20
+min_latitude_span_deg = 60
+max_workers = 0
 
 # Analyse command default configuration parameters
 [analyse]
 fill_threshold = 0.05
-maximum_diameter_nm = 500.0
-minimum_diameter_nm = 20.0
-membrane_thickness_nm = 7
+max_workers = 0
+qc_max_sphere_rmse_rel = 0.25
+qc_max_aspect_ratio = 2.5
+qc_min_solidity = 0.10
+qc_min_arc_coverage = 0.50
+qc_max_fit_points = 4000
+
+# Plot command default configuration parameters
+[plot]
+default_sections = ["distributions", "qc", "scatter"]
+fill_ratio_flag_threshold = 0.05
 
 # Visualise command default configuration parameters
 [visualise]
@@ -113,13 +139,15 @@ alpha_fill = 0.35               # opacity of filled overlay regions
 contour_linewidth = 1.0         # line width for contour overlays
 label_fontsize = 6              # font size for component label text annotations
 figure_dpi = 300                # output image resolution in dots per inch
+max_workers = 0
 ```
 
 Section reference:
 
 - **`[log]`**: verbosity and debug output, applied across all commands.
-- **`[label]`**: default values for `label` command (empty)
-- **`[analyse]`**: — default values for `analyse` filtering options (`--min-diam`, `--max-diam`, `--fill-threshold`) and the membrane thickness assumption used to convert diameter limits to voxel-count limits.
+- **`[label]`**: default values for `label` command filtering options (`--min-diam`, `--max-diam`), the membrane thickness assumption used to convert diameter limits to voxel-count limits.
+- **`[analyse]`**: — default values for `analyse` filtering options (`--fill-threshold`), and the vesicle-vs-debris QC thresholds (`qc_max_sphere_rmse_rel`, `qc_max_aspect_ratio`, `qc_min_solidity`, `qc_min_arc_coverage`, `qc_max_fit_points`).
+- **`[model]`**: default values for the `model` reliability gate (`rmse_relative_max`, `min_points`, `min_latitude_span_deg`).
 - **`[label]`**: default values for `visualise` commands: overlay styles, panel tiling, appearance of all matplotlib-generated outputs (overlay images, Z-stack movies), frame rate for Z-stack movies and downsampling factor for isometric renders.
 
 Unknown keys in any section are rejected at load time, and EValuator will raise a `ConfigError` naming the unknown key. `evaluator config` can then be run to reopen the file and correct it.

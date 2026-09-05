@@ -119,6 +119,7 @@ def _assess_reliability(
     rmse: float,
     rmse_relative_max: float = _MAX_RELATIVE_RMSE,
     min_points: int = _MIN_POINT_COUNT,
+    min_latitude_span_deg: float = _MIN_LATITUDE_SPAN_DEG,
 ) -> dict:
     n = len(points)
     relative_rmse = rmse / radius_or_mean_radius if radius_or_mean_radius > 0 else np.inf
@@ -130,7 +131,7 @@ def _assess_reliability(
     with np.errstate(invalid='ignore'):
         latitudes = np.degrees(np.arcsin(np.clip(vecs[:, 2] / norms, -1, 1)))
     lat_span = float(latitudes.max() - latitudes.min()) if n > 0 else 0.0
-    span_ok = lat_span >= _MIN_LATITUDE_SPAN_DEG
+    span_ok = lat_span >= min_latitude_span_deg
     return {
         'is_reliable': rmse_ok and count_ok and span_ok,
         'relative_rmse': float(relative_rmse),
@@ -166,6 +167,7 @@ def fit_vesicle(
     beam_axis_tol_deg: float = _DEFAULT_BEAM_AXIS_TOL_DEG,
     rmse_relative_max: float = _MAX_RELATIVE_RMSE,
     min_points: int = _MIN_POINT_COUNT,
+    min_latitude_span_deg: float = _MIN_LATITUDE_SPAN_DEG,
 ) -> dict:
     pts = np.asarray(points, dtype=float)
     if pts.ndim != 2 or pts.shape[1] != 3:
@@ -240,7 +242,7 @@ def fit_vesicle(
         out_radii = ell_radii_nm
         out_orientation = ell_evecs
         out_rmse = ell_rmse_nm
-        reliability = _assess_reliability(pts, ell_centre, float(np.mean(ell_radii)), ell_rmse_vox, rmse_relative_max=rmse_relative_max, min_points=min_points)
+        reliability = _assess_reliability(pts, ell_centre, float(np.mean(ell_radii)), ell_rmse_vox, rmse_relative_max=rmse_relative_max, min_points=min_points, min_latitude_span_deg=min_latitude_span_deg)
         beam_axis_out = beam_info
     else:
         out_centre = sph_centre_nm
@@ -248,7 +250,7 @@ def fit_vesicle(
         out_radii = None
         out_orientation = None
         out_rmse = sph_rmse_nm
-        reliability = _assess_reliability(pts, sph_centre, sph_radius, sph_rmse_vox, rmse_relative_max=rmse_relative_max, min_points=min_points)
+        reliability = _assess_reliability(pts, sph_centre, sph_radius, sph_rmse_vox, rmse_relative_max=rmse_relative_max, min_points=min_points, min_latitude_span_deg=min_latitude_span_deg)   
         beam_axis_out = None
     # Create output dictionary
     return {

@@ -5,9 +5,9 @@ import pandas as pd
 
 # -- Import internal dependencies ------
 from evaluator.commands.analyse.utils.filtering import checkEnclosed, morphologicalDilation
-from evaluator.commands.analyse.utils.geometry import deriveAxes, measureAxes, shellVolume
+from evaluator.commands.analyse.utils.geometry import arcCoverage, deriveAxes, measureAxes, shellVolume, sphereFitResidual
 from evaluator.commands.analyse.utils.io import saveResultsCSV
-from evaluator.commands.analyse.utils.measurement import computeSurfaceArea, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter
+from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter
 from tests.unit.conftest import R_INNER, R_OUTER, VOX_NM_SMALL
 
 # -- Define shell volume test ----------
@@ -243,6 +243,70 @@ class TestMeasureEccentricityAspectRatio:
     def test_zero_major_axis_gives_nan_eccentricity(self):
         ecc, _ = measureEccentricityAspectRatio(0.0, 10.0)
         assert np.isnan(ecc)
+
+# -- Vesicle-vs-debris discrimination tests --------
+_QC_DEFAULTS = {
+    "qc_max_sphere_rmse_rel": 0.25,
+    "qc_max_aspect_ratio": 2.5,
+    "qc_min_solidity": 0.10,
+    "qc_min_arc_coverage": 0.50,
+}
+
+def _sphere_surface_coords(radius=15.0, n=2000):
+    rng = np.random.default_rng(0)
+    v = rng.normal(size=(n, 3))
+    v /= np.linalg.norm(v, axis=1, keepdims=True)
+    return v * radius + 50.0
+
+class TestSphereFitResidual:
+    def test_round_shell_low_residual(self, sphere_regionprops):
+        assert sphereFitResidual(sphere_regionprops.coords) < 0.15
+    def test_flat_sheet_high_residual(self):
+        zz, yy, xx = np.indices((3, 60, 60))
+        coords = np.argwhere(np.ones((3, 60, 60), dtype=bool))
+        assert sphereFitResidual(coords) > 0.25
+    def test_degenerate_returns_nan(self):
+        assert np.isnan(sphereFitResidual(np.array([[0, 0, 0], [1, 1, 1]])))
+    def test_max_fit_points_subsamples_but_stays_accurate(self):
+        pts = _sphere_surface_coords(radius=15.0, n=50000)
+        full = sphereFitResidual(pts, max_fit_points=50000)
+        capped = sphereFitResidual(pts, max_fit_points=500)
+        assert capped < 0.05
+        assert abs(capped - full) < 0.05
+
+class TestArcCoverage:
+    def test_full_sphere_high_coverage(self):
+        assert arcCoverage(_sphere_surface_coords()) > 0.8
+    def test_small_patch_low_coverage(self):
+        pts = _sphere_surface_coords()
+        patch = pts[(pts[:, 2] > 63)]  # a polar cap only
+        assert arcCoverage(patch) < 0.5
+    def test_degenerate_returns_nan(self):
+        assert np.isnan(arcCoverage(np.array([[0, 0, 0], [1, 0, 0]])))
+
+class TestClassifyVesicle:
+    def test_clean_round_component(self):
+        ok, flags = classifyVesicle(5000, 0.05, 1.1, 0.4, 0.9, True, _QC_DEFAULTS)
+        assert ok is True and flags == ""
+    def test_elongated_tube_flagged(self):
+        ok, flags = classifyVesicle(5000, 0.1, 6.0, 0.3, 0.9, True, _QC_DEFAULTS)
+        assert ok is False and "aspect_ratio" in flags
+    def test_open_low_coverage_flagged(self):
+        ok, flags = classifyVesicle(5000, 0.1, 1.2, 0.3, 0.2, False, _QC_DEFAULTS)
+        assert ok is False and flags == "open_shell"
+    def test_open_but_high_coverage_passes(self):
+        ok, flags = classifyVesicle(5000, 0.1, 1.2, 0.3, 0.7, False, _QC_DEFAULTS)
+        assert ok is True and flags == ""
+    def test_too_small(self):
+        ok, flags = classifyVesicle(3, np.nan, np.nan, np.nan, np.nan, False, _QC_DEFAULTS)
+        assert ok is False and flags == "too_small"
+    def test_nan_metric_is_flagged_not_passed(self):
+        ok, flags = classifyVesicle(5000, np.nan, 1.2, 0.3, 0.9, True, _QC_DEFAULTS)
+        assert ok is False and "sphere_rmse" in flags
+    def test_threshold_override_flips_result(self):
+        args = (5000, 0.1, 2.0, 0.3, 0.9, True)
+        assert classifyVesicle(*args, _QC_DEFAULTS)[0] is True
+        assert classifyVesicle(*args, {**_QC_DEFAULTS, "qc_max_aspect_ratio": 1.5})[0] is False
 
 # -- Define results saving test --------
 class TestSaveResultsCSV:

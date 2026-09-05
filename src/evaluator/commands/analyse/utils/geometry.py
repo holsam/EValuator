@@ -7,6 +7,67 @@ EValuator: GEOMETRIC ANALYSIS UTILITIES
 # Import external dependencies
 # ====================
 import numpy
+from scipy.spatial import ConvexHull
+
+# ====================
+# Import shared EValuator fit/proxy maths
+# ====================
+from evaluator.commands.model.utils.least_squares_fit import fit_sphere_least_squares, _sphere_geometric_residuals
+from evaluator.commands.label.utils.geometric_proxies import estimateCentroidRadius, estimateArcCoverage
+
+# Default value for `qc_max_fit_points` config parameter
+_QC_MAX_FIT_POINTS = 4000
+
+def _subsample(pts: numpy.ndarray, max_points: int = _QC_MAX_FIT_POINTS) -> numpy.ndarray:
+    if len(pts) <= max_points:
+        return pts
+    rng = numpy.random.default_rng(0)  # deterministic: same rows every run
+    return pts[rng.choice(len(pts), max_points, replace=False)]
+
+# =========================
+# DEFINE FUNCTION: sphereFitResidual
+# =========================
+def sphereFitResidual(coords: numpy.ndarray, max_fit_points: int = _QC_MAX_FIT_POINTS) -> float:
+    '''
+    Relative RMSE (RMSE/fitted radius) of best-fit sphere over component surface voxels
+    '''
+    pts = _subsample(numpy.asarray(coords, dtype=float), max_fit_points)
+    if len(pts) < 4:
+        return numpy.nan
+    centre, radius, _ = fit_sphere_least_squares(pts)
+    if not radius > 0:
+        return numpy.nan
+    residuals = _sphere_geometric_residuals(pts, centre, radius)
+    return float(numpy.sqrt(numpy.mean(residuals ** 2)) / radius)
+
+# =========================
+# DEFINE FUNCTION: solidity
+# =========================
+def solidity(coords: numpy.ndarray, n_voxels: int, max_fit_points: int = _QC_MAX_FIT_POINTS) -> float:
+    '''
+    Voxel count/convex-hull volume
+    '''
+    pts = _subsample(numpy.asarray(coords, dtype=float), max_fit_points)
+    if len(pts) < 4:
+        return numpy.nan
+    try:
+        hull_volume = ConvexHull(pts).volume
+    except Exception:
+        return numpy.nan
+    return n_voxels / hull_volume if hull_volume > 0 else numpy.nan
+
+# =========================
+# DEFINE FUNCTION: arcCoverage
+# =========================
+def arcCoverage(coords: numpy.ndarray, max_fit_points: int = _QC_MAX_FIT_POINTS) -> float:
+    '''
+    Fraction of the fitted sphere's surface occupied by component's voxels
+    '''
+    pts = _subsample(numpy.asarray(coords, dtype=float), max_fit_points)
+    if len(pts) < 4:
+        return numpy.nan
+    centroid, radius_estimate = estimateCentroidRadius(pts)
+    return estimateArcCoverage(pts, centroid, radius_estimate)
 
 # =========================
 # DEFINE FUNCTION: deriveAxes

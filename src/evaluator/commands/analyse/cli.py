@@ -51,6 +51,26 @@ def analyse(
         Optional[float],
         typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run', min=0, max=1)
     ] = None,
+    qc_max_sphere_rmse_rel: Annotated[
+        Optional[float],
+        typer.Option('--qc-max-sphere-rmse-rel', help='Max best-fit-sphere relative RMSE for a vesicle-like component', min=0, rich_help_panel='Vesicle-Like Check Overrides')
+    ] = None,
+    qc_max_aspect_ratio: Annotated[
+        Optional[float],
+        typer.Option('--qc-max-aspect-ratio', help='Max major/minor axis ratio for a vesicle-like component', min=1, rich_help_panel='Vesicle-Like Check Overrides')
+    ] = None,
+    qc_min_solidity: Annotated[
+        Optional[float],
+        typer.Option('--qc-min-solidity', help='Min voxel-count / convex-hull-volume ratio for a vesicle-like component', min=0, max=1, rich_help_panel='Vesicle-Like Check Overrides')
+    ] = None,
+    qc_min_arc_coverage: Annotated[
+        Optional[float],
+        typer.Option('--qc-min-arc-coverage', help='Min fitted-sphere surface coverage for a non-enclosed component to still count as vesicle-like', min=0, max=1, rich_help_panel='Vesicle-Like Check Overrides')
+    ] = None,
+    qc_max_fit_points: Annotated[
+        Optional[int],
+        typer.Option('--qc-max-fit-points', help='Random-subsample size of component voxels used for the QC sphere fit / convex hull / arc grid', min=4, rich_help_panel='Vesicle-Like Check Overrides')
+    ] = None,
     jobs: Annotated[
         Optional[int],
         typer.Option('-j', '--jobs', help='Maximum parallel worker processes (default: CPU count)', min=1, rich_help_panel='Batch Options')
@@ -63,5 +83,10 @@ def analyse(
         input,
         output,
         fill_threshold=fill_threshold,
+        qc_max_sphere_rmse_rel=qc_max_sphere_rmse_rel,
+        qc_max_aspect_ratio=qc_max_aspect_ratio,
+        qc_min_solidity=qc_min_solidity,
+        qc_min_arc_coverage=qc_min_arc_coverage,
+        qc_max_fit_points=qc_max_fit_points,
         max_workers=jobs,
     )

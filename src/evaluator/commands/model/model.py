@@ -67,6 +67,7 @@ def model_evs(
                 voxel_size_nm=voxel_size_nm,
                 rmse_relative_max=params.rmse_relative_max,
                 min_points=params.min_points,
+                min_latitude_span_deg=params.min_latitude_span_deg,
             )
         except ValueError as exc:
             lg.warning("model | Fit failed for label {}: {}", int(label_id), exc)

@@ -60,9 +60,17 @@ def analyse(
     print(f"\nEV post-processing pipeline started: {START_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
     # Run pipeline
     lg.debug(f"analyse | Starting pipeline...")
+    qc_params = {
+        "qc_max_sphere_rmse_rel": params.qc_max_sphere_rmse_rel,
+        "qc_max_aspect_ratio": params.qc_max_aspect_ratio,
+        "qc_min_solidity": params.qc_min_solidity,
+        "qc_min_arc_coverage": params.qc_min_arc_coverage,
+        "qc_max_fit_points": params.qc_max_fit_points,
+    }
     worker = partial(
         processSegmentation,
         fill_threshold=params.fill_threshold,
+        qc_params=qc_params,
     )
     per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed", max_workers=params.max_workers)
     analyse_results = [row for file_results in per_file_results for row in file_results]
@@ -80,7 +88,7 @@ def analyse(
 # =========================
 # DEFINE FUNCTION: processSegmentation
 # =========================
-def processSegmentation(seg_path: Path, fill_threshold):
+def processSegmentation(seg_path: Path, fill_threshold, qc_params):
     '''
     Process a given labelled segmentation file by calling the component processing
     function for each component.
@@ -110,7 +118,7 @@ def processSegmentation(seg_path: Path, fill_threshold):
     with logging_redirect_tqdm():
         for component in tqdm(component_list, desc="Components processed"):
             lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Measuring component features...")
-            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold)
+            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold, qc_params)
             if component_data is None:
                 lg.warning(f"analyse | {seg_path.name} | Component {component.label} | Component processing failed — skipping.")
                 continue
@@ -123,7 +131,7 @@ def processSegmentation(seg_path: Path, fill_threshold):
 # =========================
 # DEFINE FUNCTION: processComponent
 # =========================
-def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold):
+def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold, qc_params):
     '''
     For a given component, make all defined measurements and return as a dictionary.
     '''
@@ -145,6 +153,15 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     major_axis_diameter, minor_axis_diameter = geometry.measureAxes(component=component_properties, equiv_diameter_nm=equiv_diameter_nm)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring eccentricity and aspect ratio...")
     eccentricity, aspect_ratio = measurement.measureEccentricityAspectRatio(major_axis_diameter=major_axis_diameter, minor_axis_diameter=minor_axis_diameter)
+    lg.debug(f"analyse | {filename} | Component {component_label} | Computing shape-quality (vesicle-vs-debris) metrics...")
+    n_voxels = int(component_properties.area)
+    coords = component_properties.coords
+    _max_fit_points = qc_params["qc_max_fit_points"]
+    sphere_rmse_rel = geometry.sphereFitResidual(coords, _max_fit_points)
+    arc_coverage = geometry.arcCoverage(coords, _max_fit_points)
+    solidity = geometry.solidity(coords, n_voxels, _max_fit_points)
+    bbox_extent = float(component_properties.extent)
+    is_vesicle_like, qc_flags = measurement.classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, enclosed, qc_params)
     return {
         "tomogram": filename,
         "label": component_label,
@@ -158,6 +175,18 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
         "surface_area": round(surface_area, 2) if not numpy.isnan(surface_area) else numpy.nan,
         "is_enclosed": enclosed,
         "closure_fill_ratio": round(fill_ratio, 4),
+        "sphere_rmse_rel": _r(sphere_rmse_rel, 4),
+        "solidity": _r(solidity, 4),
+        "arc_coverage": _r(arc_coverage, 4),
+        "bbox_extent": _r(bbox_extent, 4),
+        "is_vesicle_like": is_vesicle_like,
+        "qc_flags": qc_flags,
         "voxel_size_nm": round(scale, 4) if voxel_size_nm is not None else None,
         "measurement_units": scale_label,
     }
+
+# =========================
+# DEFINE HELPER FUNCTION: _r
+# =========================
+def _r(value, ndigits):
+    return round(value, ndigits) if value is not None and not numpy.isnan(value) else numpy.nan

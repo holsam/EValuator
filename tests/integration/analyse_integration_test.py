@@ -16,6 +16,8 @@ EXPECTED_COLUMNS = [
     "aspect_ratio", "eccentricity",
     "membrane_volume", "lumen_volume", "surface_area",
     "is_enclosed", "closure_fill_ratio",
+    "sphere_rmse_rel", "solidity", "arc_coverage", "bbox_extent",
+    "is_vesicle_like", "qc_flags",
     "voxel_size_nm", "measurement_units",
 ]
 
@@ -111,6 +113,22 @@ class TestAnalyseMeasurements:
         df = pd.read_csv(analyse_csv)
         assert (df["aspect_ratio"] > 0.5).all()
         assert (df["aspect_ratio"] < 2.0).all()
+    def test_qc_metric_columns_finite(self, analyse_csv):
+        df = pd.read_csv(analyse_csv)
+        for col in ["sphere_rmse_rel", "solidity", "arc_coverage", "bbox_extent"]:
+            assert np.isfinite(df[col]).all(), f"Non-finite value in '{col}'"
+    def test_synthetic_spheres_are_vesicle_like(self, analyse_csv):
+        """The synthetic perfect shells must all pass the (permissive) QC gate."""
+        df = pd.read_csv(analyse_csv)
+        assert df["is_vesicle_like"].all()
+        assert (df["qc_flags"].fillna("") == "").all()
+    def test_strict_threshold_flags_debris(self, labelled_path, tmp_path):
+        """An impossibly strict solidity bound (>1, unreachable) flags every component."""
+        analyse(labelled_path, tmp_path, qc_min_solidity=1.0)
+        csvs = list((tmp_path / "evaluator" / "analyse").glob("*.csv"))
+        df = pd.read_csv(csvs[0])
+        assert not df["is_vesicle_like"].any()
+        assert df["qc_flags"].str.contains("solidity").all()
 
 # -- Define filtering behaviour test ---
 class TestAnalyseFiltering:

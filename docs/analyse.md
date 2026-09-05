@@ -32,6 +32,13 @@ Options:
 
 Batch Options:
   -j, --jobs INTEGER      [x>=1]  Maximum parallel worker processes (default: CPU count).
+
+Vesicle QC:
+  --qc-max-sphere-rmse-rel FLOAT  [x>=0]  Max best-fit-sphere relative RMSE for a vesicle-like component.
+  --qc-max-aspect-ratio FLOAT     [x>=1]  Max major/minor axis ratio for a vesicle-like component.
+  --qc-min-solidity FLOAT         [0-1]   Min voxel-count/convex-hull-volume ratio for a vesicle-like component.
+  --qc-min-arc-coverage FLOAT     [0-1]   Min fitted-sphere surface coverage for a non-enclosed component to still count as vesicle-like.
+  --qc-max-fit-points INTEGER     [x>=4]  Random-subsample size of component voxels used for the QC sphere fit/convex hull/arc grid.
 ```
 
 Global verbosity options (`-v` / `-vv`) are set on the `evaluator` command itself, and should be included before the `analyse` subcommand:
@@ -51,6 +58,22 @@ fill_ratio = (filled_volume - original_volume) / filled_volume
 ```
 
 A component is classified as enclosed (`is_enclosed = True`) if `fill_ratio > fill_threshold`. The default of `0.05` is deliberately permissive, to accommodate incomplete segmentations where a small fraction of the membrane may not have been captured. Decreasing this threshold includes more components as enclosed; increasing it requires a larger enclosed cavity relative to the membrane.
+
+#### `--qc-max-sphere-rmse-rel`, `--qc-max-aspect-ratio`, `--qc-min-solidity`, `--qc-min-arc-coverage`
+These four thresholds underpin the vesicle-vs-debris QC flag included in results (`is_vesicle_like` / `qc_flags`, see [Output CSV columns](#output-csv-columns)). 
+
+This is explicitly designed as a non-destructive check: no components are dropped and each component row remains in the output CSV. Instead it reports whether a component resembles a vesicle, or may be 'debris' (e.g. irregular clumps, elongated sheets, crescent fragments). Each value can be configured using the CLI or `config.toml` file, however default values are relatively permissive so components can be manually checked rather than excluding all but spherical membrane components.
+
+For `is_vesicle_like` to be `True`, all of the below checks must pass. If any fail, `is_vesicle_like` is flipped to `False`, and `qc_flags` has the failing test(s) added. Any components that have fewer than four voxels will not be checked, with `is_vesicle_like=False` and `qc_flags=too_small` (each metric column will show `NaN`).
+
+Check | Fails when | Default | `config.toml` key | CLI flag
+--|--|--|--
+best-fit-sphere relative RMSE | `sphere_rmse_rel > qc_max_sphere_rmse_rel` | `0.25` | `qc_max_sphere_rmse_rel` | `--qc-max-sphere-rmse-rel`
+axis aspect ratio | `aspect_ratio > qc_max_aspect_ratio` | `2.5` | `qc_max_aspect_ratio` | `--qc-max-aspect-ratio`
+solidity | `solidity < qc_min_solidity` | `0.10` | `qc_min_solidity` | `--qc-min-solidity`
+open shell | not `is_enclosed` **and** `arc_coverage < qc_min_arc_coverage` | `0.50` | `qc_min_arc_coverage` | `--qc-min-arc-coverage`
+
+Each metric is computed on a random subsample of each component's voxels, set by the CLI flag `--qc-max-fit-points`/`config.toml` key `qc_max_fit_points`. This defaults to `4000` for performance, but can be raised if a metric appears noisy. The subsampling used is deterministic with a fixed seed, to allow reproducible selections across different configurations.
 
 ## Output
 
@@ -74,6 +97,12 @@ Column | Description | Units[^units]
 `surface_area`[^surfacearea] | Estimated membrane surface area | nm² (rounded to 2 d.p.)
 `is_enclosed` | Whether the component forms a closed membrane structure | boolean (True/False)
 `closure_fill_ratio` | Fill ratio used to determine `is_enclosed`. Values closer to 1.0 indicate a more completely enclosed membrane | unitless (0 < r ≤ 1; rounded to 4 d.p.)
+`sphere_rmse_rel` | Best-fit-sphere RMSE ÷ fitted radius over the component's voxels. Low for round shells, high for sheets/crescents/blobs | unitless (rounded to 4 d.p.; `NaN` if < 4 voxels)
+`solidity` | Voxel count ÷ convex-hull volume (QuickHull over the component's voxels; ~1 for a solid convex blob, low for sprawling/concave debris) | unitless (0 < s ≲ 1; rounded to 4 d.p.)
+`arc_coverage` | Fraction of the fitted sphere's surface (18×36 grid) occupied by the component | unitless (0 ≤ c ≤ 1; rounded to 4 d.p.; `NaN` if < 4 voxels)
+`bbox_extent` | Bounding-box fill ratio (`skimage` `regionprops.extent`) | unitless (0 < e ≤ 1; rounded to 4 d.p.)
+`is_vesicle_like` | Composite QC flag — `True` unless a vesicle-vs-debris check fails (see [`--qc-*` options](#--qc-max-sphere-rmse-rel---qc-max-aspect-ratio---qc-min-solidity---qc-min-arc-coverage)) | boolean (True/False)
+`qc_flags` | Comma-joined names of failed QC checks (`sphere_rmse`, `aspect_ratio`, `solidity`, `open_shell`, `too_small`); empty when clean | string
 `voxel_size_nm` | Voxel size in nanometres as read from MRC file header, or None if not present | nm (rounded to 4 d.p.)
 `measurement_units` | Units used for measurements | nm if voxel size was available, otherwise vox
 
@@ -90,6 +119,7 @@ Pipeline run summary
 - EVs processed: 87
 - Number of enclosed EVs: 71 (81.6%)
 - Equivalent diameters: 112.4 ± 48.3 nm (mean ± SD)
+- Vesicle-like components: 63 / 87 (72.4%)
 Results saved to: .../evaluator/analyse/evaluator-analyse_results.csv
 ```
 
