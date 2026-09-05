@@ -43,12 +43,11 @@ evaluator -vv model evaluator/label/tomo_seg_labelled.mrc
 ```
 
 ### Reliability thresholds
-Two of the three reliability criteria are configuration-only; `model` does not currently expose them as command-line flags (unlike `analyse`'s `--min-diam`/`--max-diam`/`--fill-threshold`). Set them under `[model]` in your configuration file — see the [`config` documentation](config.md):
+All three reliability criteria are editable using a configuration file, but are not currently exposed as command-line flags. Set them under `[model]` in your configuration file (see the [`config` documentation](config.md) for more information):
 
 - `rmse_relative_max` (default `0.15`): maximum allowed ratio of fit RMSE to fitted radius. Fits at or above this ratio fail the reliability gate.
 - `min_points` (default `20`): minimum number of surviving surface points required for a fit to be considered reliable.
-
-The third criterion, minimum latitude span (default 60°: surface points must span at least 60° of pole-to-pole coverage), is currently fixed and not user-configurable.
+- `min_latitude_span_deg` (default `60`): minimum pole-to-pole coverage, in degrees, that the surviving surface points must span. Fits below this fail the reliability gate.
 
 ## Output
 
