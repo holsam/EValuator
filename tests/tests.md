@@ -6,7 +6,7 @@
 - [Test data](#test-data)
 - [Running the tests](#running-the-tests)
     - [Running with coverage report](#running-with-coverage-report)
-- [Test inventory](#test-inventory)
+- [Test suite files](#test-suite-files)
   - [conftest.py — shared session fixtures](#conftestpy--shared-session-fixtures)
   - [unit/conftest.py — shared unit fixtures](#unitconftestpy--shared-unit-fixtures)
   - [unit/analyse\_unit\_test.py](#unitanalyse_unit_testpy)
@@ -25,8 +25,6 @@
   - [integration/model\_integration\_test.py](#integrationmodel_integration_testpy)
   - [integration/plot\_integration\_test.py](#integrationplot_integration_testpy)
   - [cli/cli\_test.py](#clicli_testpy)
-- [Known expected failures](#known-expected-failures)
-- [Coverage exclusions](#coverage-exclusions)
 
 ## Overview
 The EValuator test suite uses [pytest](https://docs.pytest.org) and [pytest-cov](https://pytest-cov.readthedocs.io) and is organised into three sections:
@@ -165,7 +163,7 @@ Module-level constants `VOX_NM_SMALL`, `SMALL_VOL_SHAPE`, `CENTRE`, `R_OUTER`, `
 <br>
 
 ### `unit/analyse_unit_test.py`
-Tests for functions in `evaluator.commands.analyse.utils.filtering`, `evaluator.commands.analyse.utils.geometry`, `evaluator.commands.analyse.utils.io`, and `evaluator.commands.analyse.utils.measurement`.
+Tests for functions in `evaluator.commands.analyse.utils.filtering`, `evaluator.commands.analyse.utils.geometry`, `evaluator.commands.analyse.utils.io`, `evaluator.commands.analyse.utils.measurement`, and the vesicle-vs-debris QC helpers.
 
 <details>
 <summary>Test Descriptions</summary>
@@ -248,6 +246,32 @@ Tests for functions in `evaluator.commands.analyse.utils.filtering`, `evaluator.
 | `test_aspect_ratio_exact_value` | major=30, minor=10 → aspect_ratio=3.0. |
 | `test_zero_minor_axis_gives_nan_aspect_ratio` | Division by zero → NaN. |
 | `test_zero_major_axis_gives_nan_eccentricity` | Zero major axis → NaN. |
+
+#### `TestSphereFitResidual`
+| Test | What it checks |
+|---|---|
+| `test_round_shell_low_residual` | A clean spherical shell's fit residual is < 0.15. |
+| `test_flat_sheet_high_residual` | A flat sheet of points (non-spherical) gives residual > 0.25. |
+| `test_degenerate_returns_nan` | Fewer than the minimum required points returns NaN rather than raising. |
+| `test_max_fit_points_subsamples_but_stays_accurate` | Subsampling via `max_fit_points` on a large point cloud stays low-residual and within 0.05 of the unsampled result. |
+
+#### `TestArcCoverage`
+| Test | What it checks |
+|---|---|
+| `test_full_sphere_high_coverage` | A full-sphere point cloud gives arc coverage > 0.8. |
+| `test_small_patch_low_coverage` | A single polar-cap patch gives arc coverage < 0.5. |
+| `test_degenerate_returns_nan` | A near-empty point set returns NaN rather than raising. |
+
+#### `TestClassifyVesicle`
+| Test | What it checks |
+|---|---|
+| `test_clean_round_component` | A component with good metrics passes with no flags. |
+| `test_elongated_tube_flagged` | An aspect ratio above threshold fails with an `aspect_ratio` flag. |
+| `test_open_low_coverage_flagged` | A non-enclosed component with low arc coverage fails with `open_shell`. |
+| `test_open_but_high_coverage_passes` | A non-enclosed component with high arc coverage still passes. |
+| `test_too_small` | A component below the minimum voxel count fails with `too_small`. |
+| `test_nan_metric_is_flagged_not_passed` | A NaN sphere-fit RMSE metric fails (flagged) rather than passing silently. |
+| `test_threshold_override_flips_result` | Tightening `qc_max_aspect_ratio` flips a previously-passing component to fail. |
 
 #### `TestSaveResultsCSV`
 | Test | What it checks |
@@ -380,6 +404,14 @@ Tests for `evaluator.utils.config`, `evaluator.commands.config.utils.edit.edit_c
 | `test_invalid_section_name_rejected` | An unrecognised section name in `default_sections` raises `ValidationError`. |
 | `test_packaged_config_toml_has_plot_section` | The packaged `config.toml`'s `[plot]` table round-trips through `Config.model_validate`. |
 
+#### `TestQCAndReliabilityConfig`
+| Test | What it checks |
+|---|---|
+| `test_analyse_qc_defaults` | `AnalyseConfig` defaults: `qc_max_sphere_rmse_rel=0.25`, `qc_max_aspect_ratio=2.5`, `qc_min_solidity=0.10`, `qc_min_arc_coverage=0.50`, `qc_max_fit_points=4000`. |
+| `test_qc_max_fit_points_lower_bound` | `qc_max_fit_points` below its minimum raises `ValidationError`. |
+| `test_model_min_latitude_span_default_and_bounds` | `ModelConfig().min_latitude_span_deg` defaults to 60; values outside (0, 180) raise `ValidationError`. |
+| `test_packaged_config_toml_round_trips_new_keys` | The packaged `config.toml`'s `qc_max_fit_points` and `min_latitude_span_deg` round-trip through `Config.model_validate`. |
+
 </details>
 <br>
 
@@ -495,6 +527,7 @@ Tests for `evaluator.commands.model.utils.least_squares_fit` and `evaluator.comm
 | `test_good_sphere_passes_gate` | A well-sampled, low-noise sphere passes all reliability sub-checks (`rmse_ok`, `count_ok`, `span_ok`) and is `is_reliable=True`. |
 | `test_low_point_count_fails_gate` | Fewer than 20 points fails `count_ok` and therefore `is_reliable`. |
 | `test_narrow_latitude_band_fails_gate` | A ~20° latitude band of points fails `span_ok` (under the 60° span threshold). |
+| `test_span_threshold_is_configurable` | Lowering `min_latitude_span_deg` lets a narrow band that would otherwise fail `span_ok` pass. |
 | `test_noisy_points_fail_rmse_gate` | Noise comparable to the sphere radius fails `rmse_ok`. |
 
 #### `TestBuildFittedMRC`
@@ -507,6 +540,10 @@ Tests for `evaluator.commands.model.utils.least_squares_fit` and `evaluator.comm
 | `test_sphere_voxel_count_matches_analytic` | Rasterised sphere voxel count ≈ (4/3)πr³ within 10%. |
 | `test_ellipsoid_voxel_count_matches_analytic` | Rasterised ellipsoid voxel count ≈ (4/3)π·a·b·c within 10%. |
 | `test_empty_records_returns_all_zero_volume` | An empty records list returns an all-zero volume of the requested shape. |
+| `test_vesicle_crossing_volume_edge_is_clipped` | A sphere centred near the volume boundary is rasterised but clipped to fewer voxels than its full analytic volume. |
+| `test_vesicle_entirely_outside_volume_is_skipped` | A centre far outside the volume bounds is skipped, leaving an all-zero volume. |
+| `test_non_finite_centre_is_skipped_not_raised` | A NaN centre coordinate is skipped rather than raising. |
+| `test_rotated_ellipsoid_bounding_box_not_clipped` | An arbitrarily-rotated ellipsoid's bounding box is sized correctly so its rasterised voxel count matches the analytic volume within 10%. |
 
 </details>
 <br>
@@ -640,7 +677,7 @@ Tests for `evaluator.commands.plot.plot.run_plot`, `evaluator.commands.plot.util
 <br>
 
 ### `unit/viewer_unit_test.py`
-Tests for the pure helpers behind the Streamlit viewer: `evaluator.commands.viewer.utils.format`, `.join`, `.theme`, `.plots`, `.mesh`, `.gallery`, `.export`, and `.dispatch`. The Streamlit UI code under `commands/viewer/app/*` is excluded from coverage (visual inspection only) and is not exercised here.
+Tests for `evaluator.commands.viewer.utils.*`.
 
 <details>
 <summary>Test Descriptions</summary>
@@ -661,6 +698,7 @@ Tests for the pure helpers behind the Streamlit viewer: `evaluator.commands.view
 | `test_stem_filter_selects_only_matching_rows` | Only rows whose tomogram/`source_file` stem (minus `_labelled`) matches the requested stem are kept. |
 | `test_outer_merge_on_label` | `analyse.label` joins `model.label_id` correctly. |
 | `test_include_column_added_true` | The join adds an `include` column defaulting to `True`. |
+| `test_include_seeded_from_is_vesicle_like` | When present, an `is_vesicle_like` analyse column seeds the `include` flag instead of defaulting to `True`. |
 | `test_analyse_only` | With no model frame, analyse rows pass through and `label` is in both name sets. |
 | `test_model_only_renames_label_id_to_label` | With no analyse frame, `label_id` is renamed to `label`. |
 | `test_no_match_returns_empty_frame` | A stem matching neither side returns an empty frame. |
@@ -715,6 +753,11 @@ Tests for the pure helpers behind the Streamlit viewer: `evaluator.commands.view
 | `test_label_mesh_vertices_in_xyz_order` | Vertices are reordered from (Z, Y, X) array order to (X, Y, Z) screen order. |
 | `test_dim_trace_recolours_only_when_highlighted` | `dim_trace` recolours to the highlight colour only when not dimmed. |
 
+#### `TestCanonicalStem`
+| Test | What it checks |
+|---|---|
+| `test_tomo_stem_strips_known_suffix_runs` | `tomo_stem` strips known `_denoised`/`.denoised`/`_labelled`/`_seg`/`_labelled_model_fitted`/`_labelled_model_results` suffixes (and directory prefixes) down to the bare tomogram stem, across a range of filenames. |
+
 #### `TestGalleryScan`
 | Test | What it checks |
 |---|---|
@@ -722,6 +765,7 @@ Tests for the pure helpers behind the Streamlit viewer: `evaluator.commands.view
 | `test_scan_returns_one_result_set_per_stem` | `scan_stage_dirs` returns one `ResultSet` per discovered stem. |
 | `test_scan_populates_paths_and_counts` | Labelled/fitted/analyse paths and `n_vesicles`/`n_reliable` are populated from a full result tree. |
 | `test_scan_counts_labels_when_no_model` | With no model output, `n_vesicles` is counted from the labelled MRC and `n_reliable` is `None`. |
+| `test_scan_denoised_raw_attaches_to_same_stem` | A `raw/<stem>_denoised.mrc` file is attached to the same result set as `labelled/<stem>_labelled.mrc` via the shared canonical stem. |
 | `test_scan_empty_root_returns_nothing` | An empty root yields no result sets. |
 | `test_midslice_preview_is_uint8_2d` | The mid-slice preview is a 2D `uint8` image in [0, 255]. |
 | `test_midslice_preview_label_mode_normalises_by_max` | Label mode normalises by the max label id rather than a percentile stretch. |
@@ -793,12 +837,15 @@ Integration tests for `evaluator.commands.analyse.analyse.analyse`. A module-sco
 | `test_voxel_size_correct` | `voxel_size_nm` matches the generator value (0.536 nm) within 0.1%. |
 | `test_measurement_units_are_nm` | `measurement_units` column is `'nm'` for all rows. |
 | `test_aspect_ratio_near_one_for_spheres` | Aspect ratios lie in [0.5, 2.0] for near-spherical EVs. |
+| `test_qc_metric_columns_finite` | `sphere_rmse_rel`, `solidity`, `arc_coverage`, and `bbox_extent` are all finite. |
+| `test_synthetic_spheres_are_vesicle_like` | The clean synthetic shells all pass the (permissive default) QC gate: `is_vesicle_like=True` and empty `qc_flags`. |
 
 #### `TestAnalyseFiltering`
 
 | Test | What it checks |
 |---|---|
 | `test_high_fill_threshold_excludes_all_evs` | `fill_threshold=1.0` results in `is_enclosed=False` for all rows (if any are written). |
+| `test_strict_threshold_flags_debris` | An unreachable `qc_min_solidity=1.0` override flags every component (`is_vesicle_like=False`, `qc_flags` containing `solidity`). |
 
 #### `TestAnalyseInputTypes`
 
@@ -983,6 +1030,9 @@ CLI tests using `typer.testing.CliRunner`.
 | `test_missing_argument_exits_nonzero` | Missing `INPUT` argument exits non-zero. |
 | `test_negative_min_diam_exits_nonzero` | `--min-diam -1` (below 0 minimum) exits non-zero. |
 | `test_fill_threshold_above_one_exits_nonzero` | `--fill-threshold 1.5` (above 1.0 maximum) exits non-zero. |
+| `test_qc_aspect_ratio_below_one_exits_nonzero` | `--qc-max-aspect-ratio 0.5` (below the 1.0 minimum) exits non-zero. |
+| `test_qc_max_fit_points_below_min_exits_nonzero` | `--qc-max-fit-points 2` (below the minimum point count) exits non-zero. |
+| `test_qc_override_reflected_in_params_toml` | `--qc-max-aspect-ratio`/`--qc-max-fit-points` overrides run successfully and are captured in the written `params.toml`. |
 
 #### `TestPlotCLI`
 
