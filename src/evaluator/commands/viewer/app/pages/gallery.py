@@ -31,10 +31,15 @@ def _stage_sig(stage_dirs: dict) -> tuple:
         out.append((_s, str(_d) if _d else None, _m))
     return tuple(out)
 
-@st.cache_data(show_spinner=False)
 def _scan_cached(sig: tuple, _stage_dirs: dict, _progress=None):
-    return scan_stage_dirs(_stage_dirs, progress=_progress)
-
+    '''
+    Re-run scan_stage_dirs only when `sig` changes
+    '''
+    cache = st.session_state.setdefault('_scan_cache', {})
+    if sig not in cache:
+        cache.clear()
+        cache[sig] = scan_stage_dirs(_stage_dirs, progress=_progress)
+    return cache[sig]
 
 def _run_scan(stage_dirs: dict):
     '''
