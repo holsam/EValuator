@@ -123,8 +123,6 @@ if st.session_state.get('_edit_field'):
 # ====================
 # Load volumes & build traces for viewer section
 # ====================
-DOWNSAMPLE = 2
-
 # Load volumes and build traces (cached per result-set  downsample so drags don't re-run marching_cubes)
 @st.cache_data(show_spinner=False)
 def _load_traces(labelled_mrc: Path | None, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int, palette: tuple[str, ...], points_colour: str):
@@ -232,10 +230,19 @@ def _figure_for(view_name: str, selected_labels: set[int], visible_labels: set[i
 st.divider()
 st.header('Viewer')
 
+_downsample = st.number_input(
+    '3D downsample',
+    min_value=1,
+    max_value=8,
+    value=2,
+    step=1,
+    help='Downsampling to use for volume rendering. Higher: reduced resolution but increased performance; lower: increased resolution but decreased performance.',
+)
+
 # Load data here so nav/title/metadata render immediately with a spinner in their place
 with st.spinner('Loading volumes and results...'):
     views, trace_index_to_label, scene_bounds = _load_traces(
-        result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE, tuple(_THEME['palette']), _THEME['points'],
+        result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, _downsample, tuple(_THEME['palette']), _THEME['points'],
     )
     available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
 
