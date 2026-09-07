@@ -229,6 +229,21 @@ class TestPlotHelpers:
         event = {'selection': {'points': [{'customdata': [float('nan')]}, {'customdata': [2]}]}}
         assert plotsutil.selected_labels_from_event(event) == {2}
 
+    def test_fit_line_recovers_slope_and_r2(self):
+        x = np.arange(50, dtype=float)
+        df = pd.DataFrame({'x': x, 'y': 2 * x + 1})
+        fit = plotsutil._fit_line(df['x'], df['y'])
+        assert abs(fit['slope'] - 2) < 1e-9
+        assert abs(fit['r2'] - 1) < 1e-12
+        assert fit['n'] == 50
+
+    def test_fit_line_ignores_nan_pairs(self):
+        df = pd.DataFrame({'x': [1, 2, 3, 4, np.nan], 'y': [2, 4, 6, np.nan, 10]})
+        assert plotsutil._fit_line(df['x'], df['y'])['n'] == 3
+
+    def test_fit_line_needs_three_points(self):
+        df = pd.DataFrame({'x': [1.0, 2.0], 'y': [1.0, 2.0]})
+        assert plotsutil._fit_line(df['x'], df['y']) is None
 
 class TestPlotBuilders:
     def test_feature_scatter_highlights_selection(self):
@@ -274,6 +289,41 @@ class TestPlotBuilders:
             assert fig.layout.paper_bgcolor == '#222222'
         finally:
             plotsutil.use_theme({'highlight': '#FFD400', 'paper_bg': '#FFFFFF'})
+
+    def test_bland_altman_difference_matches_constant_offset(self):
+        a = np.linspace(10, 20, 25)
+        df = pd.DataFrame({'label': range(25), 'a': a, 'b': a + 5})
+        fig = plotsutil.bland_altman(df, 'a', 'b', set())
+        assert np.allclose(fig.data[0].y, -5)          # y = a - b
+        assert fig.data[0].x[0] == (a[0] + (a[0] + 5)) / 2
+
+    def test_bland_altman_returns_none_without_pairs(self):
+        df = pd.DataFrame({'label': [0, 1], 'a': [np.nan, np.nan], 'b': [1.0, 2.0]})
+        assert plotsutil.bland_altman(df, 'a', 'b', set()) is None
+
+    def test_correlation_matrix_diagonal_is_one(self):
+        rng = np.random.default_rng(0)
+        df = pd.DataFrame({c: rng.normal(size=100) for c in ('p', 'q', 'r')})
+        z = np.array(plotsutil.correlation_matrix(df, ['p', 'q', 'r'], method='pearson').data[0].z)
+        assert np.allclose(np.diag(z), 1.0)
+        assert z.shape == (3, 3)
+
+    def test_feature_scatter_adds_trend_trace(self):
+        x = np.arange(30, dtype=float)
+        df = pd.DataFrame({'label': range(30), 'x': x, 'y': 0.5 * x + np.sin(x)})
+        fig = plotsutil.feature_scatter(df, 'x', 'y', set())
+        assert 'lines' in [t.mode for t in fig.data]   # dashed OLS trend present
+
+    def test_feature_scatter_categorical_colour_by_splits_traces(self):
+        df = pd.DataFrame({
+            'label': range(10),
+            'x': np.arange(10, dtype=float),
+            'y': np.arange(10, dtype=float),
+            'is_reliable': [True, False] * 5,
+        })
+        fig = plotsutil.feature_scatter(df, 'x', 'y', set(), colour_by='is_reliable')
+        marker_traces = [t for t in fig.data if t.mode == 'markers']
+        assert len(marker_traces) >= 2               # one per level
 
 # ====================
 # Define tests for viewer/utils/mesh.py
