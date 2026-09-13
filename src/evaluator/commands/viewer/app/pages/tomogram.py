@@ -9,7 +9,7 @@ EValuator: VIEWER TOMOGRAM PAGE
 # ====================
 
 # Import external dependencies
-import pandas as pd, plotly.graph_objects as go, streamlit as st
+import pandas as pd, plotly.graph_objects as go, streamlit as st, subprocess, sys
 from pathlib import Path
 
 # Import EValuator utilities
@@ -35,23 +35,23 @@ CHART_CONFIG = {'displaylogo': False, 'toImageButtonOptions': {'format': 'png', 
 # ====================
 def _native_open_dialog(title: str, mrc_only: bool) -> str | None:
     '''
-    Open 'open file' dialog and return selected path or  '' if the dialog was cancelled or None if no GUI toolkit is available
+    Open 'open file' dialog in a subprocess and return the selected path, '' if cancelled, or None if no GUI toolkit is available / the dialog failed
     '''
+    filetypes = "[('MRC volume', '*.mrc')]" if mrc_only else "[('All files', '*.*')]"
+    script = (
+        'import tkinter as tk\n'
+        'from tkinter import filedialog\n'
+        'root = tk.Tk(); root.withdraw(); root.wm_attributes("-topmost", 1)\n'
+        f'print(filedialog.askopenfilename(title={title!r}, filetypes={filetypes}))\n'
+        'root.destroy()\n'
+    )
     try:
-        import tkinter as tk
-        from tkinter import filedialog
+        proc = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, timeout=120)
     except Exception:
         return None
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes('-topmost', 1)
-        filetypes = [('MRC volume', '*.mrc')] if mrc_only else [('All files', '*.*')]
-        path = filedialog.askopenfilename(title=title, filetypes=filetypes)
-        root.destroy()
-        return path or ''
-    except Exception:
+    if proc.returncode != 0:
         return None
+    return proc.stdout.strip()
 
 # ====================
 # Set guard for open result set (if session state is gone eg from hard refresh, send back to the Gallery)
