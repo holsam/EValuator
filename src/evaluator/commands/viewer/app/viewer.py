@@ -14,6 +14,7 @@ from pathlib import Path
 # Import EValuator viewer utilities
 # ====================
 from evaluator.commands.viewer.app.settings_pane import render as _render_settings
+from evaluator.commands.viewer.app.settings_pane import render_downsample as _render_downsample
 from evaluator.commands.viewer.utils.gallery import default_stage_dirs
 
 # ====================
@@ -48,5 +49,6 @@ gallery_page = st.Page('pages/gallery.py', title='Gallery', icon=':material/grid
 tomogram_page = st.Page('pages/tomogram.py', title='Tomogram', icon=':material/image:')
 
 nav = st.navigation([gallery_page, tomogram_page], position='hidden')
-_render_settings()  # render settings dropup at bottom of each page
+_render_settings()  # render settings sidebar
+_render_downsample()  # render sidebar slider
 nav.run()

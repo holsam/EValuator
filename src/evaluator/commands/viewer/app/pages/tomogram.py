@@ -235,14 +235,7 @@ def _figure_for(view_name: str, selected_labels: set[int], visible_labels: set[i
 st.divider()
 st.header('Viewer')
 
-_downsample = st.number_input(
-    '3D downsample',
-    min_value=1,
-    max_value=8,
-    value=2,
-    step=1,
-    help='Downsampling to use for volume rendering. Higher: reduced resolution but increased performance; lower: increased resolution but decreased performance.',
-)
+_downsample = st.session_state['_downsample']
 
 # Load data here so nav/title/metadata render immediately with a spinner in their place
 with st.spinner('Loading volumes and results...'):
