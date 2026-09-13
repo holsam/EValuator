@@ -29,6 +29,9 @@ from evaluator.commands.viewer.utils.mesh import build_label_mesh_traces, build_
 # Define constants
 # ====================
 CHART_CONFIG = {'displaylogo': False, 'toImageButtonOptions': {'format': 'png', 'scale': 3}}
+def chart_config(name: str) -> dict:
+    '''Per-chart CHART_CONFIG with a filename instead of default newplot.png'''
+    return {**CHART_CONFIG, 'toImageButtonOptions': {**CHART_CONFIG['toImageButtonOptions'], 'filename': name}}
 
 # ====================
 # Define helper functions
@@ -424,7 +427,7 @@ else:
         if _fig is None:
             st.caption('Needs model fitted radius and an analyse diameter column.')
         else:
-            _plot_cross_filter(st.plotly_chart(_fig, key='plot_conc', on_select='rerun', config=CHART_CONFIG), 'conc')
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_conc', on_select='rerun', config=chart_config(f'{result.stem}_concordance')), 'conc')
             _plotted_caption(_diam_col, plotutil.find_col(joined_df, 'radius'))
     with _tab_reliab:
         _counts = []
@@ -440,7 +443,7 @@ else:
         if _fig is None:
             st.caption('Needs model RMSE and analyse closure/enclosed columns.')
         else:
-            _plot_cross_filter(st.plotly_chart(_fig, key='plot_reliab', on_select='rerun', config=CHART_CONFIG), 'reliab')
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_reliab', on_select='rerun', config=chart_config(f'{result.stem}_reliability')), 'reliab')
             _plotted_caption(plotutil.find_col(joined_df, 'closure_fill_ratio', 'is_enclosed'), plotutil.find_col(joined_df, 'rmse_nm', 'relative_rmse', 'rmse'))
     with _tab_dist:
         if not _num_cols:
@@ -450,7 +453,7 @@ else:
             _dc1, _dc2 = st.columns([3, 1])
             _f = _dc1.selectbox('Feature', _num_cols, index=_di, format_func=pretty_column, key='dist_feature')
             _bw = _dc2.number_input('Bin width', min_value=0.0, value=25.0, step=5.0, key='dist_bin_width', help='In feature units, anchored at 0: (0, w], (w, 2w], … Set 0 for auto bins.')
-            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, bin_size=_bw or None), key='plot_dist', config=CHART_CONFIG)
+            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, bin_size=_bw or None), key='plot_dist', config=chart_config(f'{result.stem}_distribution'))
             _plotted_caption(_f)
     with _tab_scatter:
         if len(_num_cols) < 2:
@@ -465,7 +468,7 @@ else:
             _lx = _clx.checkbox('log X', key='scatter_log_x')
             _ly = _cly.checkbox('log Y', key='scatter_log_y')
             _fig = plotutil.feature_scatter(joined_df, _x, _y, _sel_now, colour_by=None if _cb == '(none)' else _cb, log_x=_lx, log_y=_ly)
-            _plot_cross_filter(st.plotly_chart(_fig, key='plot_scatter', on_select='rerun', config=CHART_CONFIG), 'scatter')
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_scatter', on_select='rerun', config=chart_config(f'{result.stem}_feature_scatter')), 'scatter')
             st.caption(plotutil.fit_summary(joined_df, _x, _y) or 'Not enough points for a trend fit.')
             _plotted_caption(_x, _y)
     with _tab_ba:
@@ -483,14 +486,14 @@ else:
             if _fig is None:
                 st.caption('Not enough paired values.')
             else:
-                _plot_cross_filter(st.plotly_chart(_fig, key='plot_ba', on_select='rerun', config=CHART_CONFIG), 'ba')
+                _plot_cross_filter(st.plotly_chart(_fig, key='plot_ba', on_select='rerun', config=chart_config(f'{result.stem}_agreement')), 'ba')
                 _plotted_caption(_a_col, _b_col)
     with _tab_corr:
         if len(_num_cols) < 2:
             st.caption('Need at least two numeric columns.')
         else:
             _method = st.segmented_control('Method', ['spearman', 'pearson'], default='spearman', format_func=str.title, key='corr_method') or 'spearman'
-            st.plotly_chart(plotutil.correlation_matrix(joined_df, _num_cols, method=_method), key='plot_corr', config=CHART_CONFIG)
+            st.plotly_chart(plotutil.correlation_matrix(joined_df, _num_cols, method=_method), key='plot_corr', config=chart_config(f'{result.stem}_correlations'))
 
     # results export
     st.subheader('Export')

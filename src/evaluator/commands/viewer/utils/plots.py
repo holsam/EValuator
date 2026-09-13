@@ -147,7 +147,7 @@ def _annotate(fig: go.Figure, text: str) -> None:
         y=0.98,
         xanchor='left',
         yanchor='top',
-        text=text,
+        text=text.replace('; ', '<br>')
         showarrow=False,
         align='left',
         font=dict(color=ACTIVE['font'], size=12),
