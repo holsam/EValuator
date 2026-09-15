@@ -45,7 +45,7 @@ def visualise(
         Path | None,
         typer.Option(
             "-o", "--out-dir",
-            help="Path to output directory. Output files will be written under '.../evaluator/results/visualise/'.",
+            help="Path to output directory. Output files will be written under '.../evaluator/visualise/'.",
             file_okay=False,
             dir_okay=True,
             writable=True,
@@ -87,7 +87,7 @@ def movie(
         Path | None,
         typer.Option(
             "-o", "--out-dir",
-            help="Path to output directory. Output files will be written under '.../evaluator/results/visualise/'.",
+            help="Path to output directory. Output files will be written under '.../evaluator/visualise/'.",
             file_okay=False,
             dir_okay=True,
             writable=True,
@@ -151,7 +151,7 @@ def overlay(
         Path | None,
         typer.Option(
             "-o", "--out-dir",
-            help="Path to output directory. Output files will be written under '.../evaluator/results/visualise/'.",
+            help="Path to output directory. Output files will be written under '.../evaluator/visualise/'.",
             file_okay=False,
             dir_okay=True,
             writable=True,
