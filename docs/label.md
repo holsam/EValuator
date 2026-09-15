@@ -47,7 +47,7 @@ evaluator -vv label segmentation.mrc
 
 ### Options
 #### `--min-arc-coverage`
-After merging, each component's coverage of the surface of its best-fit sphere is estimated (via coarse latitude/longitude binning). Components covering less than this fraction of the sphere are excluded. The default (`0.40`) is set in `config.toml` under `[label]`.
+After merging, each component's coverage of the surface of its best-fit sphere is estimated (via coarse latitude/longitude binning). Components covering less than this fraction of the sphere are excluded. The default (`0.30`) is set in `config.toml` under `[label]`.
 
 #### `--min-diameter` and `--max-diameter`
 These options filter components by their equivalent sphere diameter, using the configured membrane thickness to convert diameter to an expected voxel count range. The default range (`20`-`500` nm, set in `config.toml`) is appropriate for typical EV preparations, which include small exosomes (~30-150 nm) through to larger MVB-derived vesicles (~200-500 nm). If no voxel size is present in the input MRC header, this filter is skipped and all components pass.
