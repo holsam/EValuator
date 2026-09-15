@@ -122,7 +122,7 @@ def _stem_map(names: frozenset[str]) -> dict[str, str]:
     '''
     return {tomo_stem(name): name for name in names}
 
-def _pick(directory: Path | None, names: frozenset[str], *candidates: str) -> Path | None:
+def _pick(directory: Path | None, names: frozenset[str], *candidates: str, glob_fallback: str | None = None) -> Path | None:
     '''
     Returns directory / first candidate filename present in names, else None
     '''
