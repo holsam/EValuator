@@ -21,6 +21,10 @@ from rich import print
 DEFAULT_LOG_NAME = Path('evaluator.log')
 LOG_FORMAT = '<dim>{time:YYYY-MM-DD HH:mm:ss}</> <lvl>[{level}]</> {message}'
 
+# Level/path set by configure_logging(), read by configure_worker_logging() in pool workers
+_worker_log_level: str | None = None
+_worker_log_path: Path | None = None
+
 # ====================
 # Define class for logger, to proxy standard log methods with colours set to True
 # ====================
@@ -107,8 +111,23 @@ def configure_logging(level: str) -> Path:
         f.writelines(buffer)
     # Set up actual log file sink
     logger.add(log_path, format=LOG_FORMAT, level=level, colorize=False, mode='a')
+    # Record level/path so worker processes can mirror setup
+    global _worker_log_level, _worker_log_path
+    _worker_log_level = level
+    _worker_log_path = log_path
     # Return log file path
     return log_path
+
+# ====================
+# Define function: configure_worker_logging
+# ====================
+def configure_worker_logging(level: str, log_path: Path) -> None:
+    '''
+    Initialise ProcessPoolExecutor worker process logging sinks
+    '''
+    logger.remove()
+    logger.add(sys.stderr, format=LOG_FORMAT, level=level, colorize=True)
+    logger.add(log_path, format=LOG_FORMAT, level=level, colorize=False, mode='a')
 
 # ====================
 # Define function: initEvaluator

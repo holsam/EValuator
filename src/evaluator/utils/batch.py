@@ -17,7 +17,8 @@ from typing import Callable, TypeVar
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.utils.settings import lg
+from evaluator.utils import settings
+from evaluator.utils.settings import configure_worker_logging, lg
 from evaluator.utils import mrc as mrcutil
 
 T = TypeVar('T')
@@ -56,7 +57,12 @@ def run_batch(
     if max_workers is not None and max_workers <= 0:
         max_workers = None
     results: dict[Path, T] = {}
-    with ProcessPoolExecutor(max_workers=max_workers) as pool, logging_redirect_tqdm():
+    # Only mirror logging sinks into workers if configure_logging() has run in this process (eg. not under test)
+    pool_kwargs = {}
+    if settings._worker_log_level is not None:
+        pool_kwargs['initializer'] = configure_worker_logging
+        pool_kwargs['initargs'] = (settings._worker_log_level, settings._worker_log_path)
+    with ProcessPoolExecutor(max_workers=max_workers, **pool_kwargs) as pool, logging_redirect_tqdm():
         futures = {pool.submit(worker, f): f for f in files}
         for future in tqdm(as_completed(futures), total=len(files), desc=desc):
             f = futures[future]
