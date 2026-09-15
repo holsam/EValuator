@@ -32,10 +32,26 @@ _DOC_FILES: list[tuple[str, str]] = [
 _BADGE_LINE = re.compile(r'^!?\[!\[.*$|^!\[.*\]\[.*\]$', re.MULTILINE)
 # _DIV_WRAPPER: div wrapper lines
 _DIV_WRAPPER = re.compile(r'^</?div.*>$', re.MULTILINE)
+_FOOTNOTE_DEF = re.compile(r'^\[\^(\w+)\]:\s*(.*)$', re.MULTILINE)
+_FOOTNOTE_REF = re.compile(r'\[\^(\w+)\]')
+_SUP_MARKER = re.compile(r'<sup>\*\*(\d+)\*\*</sup>')
 
 # ====================
 # Define functions
 # ====================
+# _numberFootnotes: markdown-it [^name] refs/defs -> plain numbered _(N)_ markers, numbered by reference order
+def _numberFootnotes(text: str) -> str:
+    if not _FOOTNOTE_DEF.search(text):
+        return text
+    order = {name: i + 1 for i, name in enumerate(dict.fromkeys(_FOOTNOTE_REF.findall(text)))}
+    text = _FOOTNOTE_DEF.sub(lambda m: f'_({order[m.group(1)]})_ {m.group(2)}' if m.group(1) in order else '', text)
+    return _FOOTNOTE_REF.sub(lambda m: f' _({order[m.group(1)]})_', text)
+
+# _numberSupMarkers: docs/model.md uses <sup>**N**</sup> for both the inline ref and the
+# line-leading definition (e.g. "<sup>**4**</sup> `reliability` contains: ...") -> the same _(N)_ style
+def _numberSupMarkers(text: str) -> str:
+    return _SUP_MARKER.sub(lambda m: f'_({m.group(1)})_', text)
+
 # _readDoc: read a doc file
 def _readDoc(relPath: str) -> str:
     with pkg_files('evaluator').joinpath(relPath).open('r') as f:
@@ -44,7 +60,7 @@ def _readDoc(relPath: str) -> str:
         text = _BADGE_LINE.sub('', text)
         text = _DIV_WRAPPER.sub('', text)
         text = text.lstrip('\n')
-    return text
+    return _numberSupMarkers(_numberFootnotes(text))
 
 # showHelp: entry point
 def showHelp(topic: str | None = None) -> None:
