@@ -8,6 +8,7 @@ EValuator: VIEW DOCUMENTATION
 # Import external dependencies
 # ====================
 import typer
+from typing import Annotated
 
 # ====================
 # Import internal dependencies
@@ -26,8 +27,13 @@ evaluatorHelp = typer.Typer(
 # Define command: help
 # ====================
 @evaluatorHelp.command(help='View EValuator documentation', rich_help_panel='Utilities')
-def help():
+def help(
+    topic: Annotated[
+        str | None,
+        typer.Argument(help='Documentation tab to launch into. Defaults to README if excluded.')
+    ] = None,
+):
     '''
     View EValuator documentation.
     '''
-    helpFuncs.showHelp()
+    helpFuncs.showHelp(topic)
