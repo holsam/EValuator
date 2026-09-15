@@ -122,13 +122,16 @@ def _stem_map(names: frozenset[str]) -> dict[str, str]:
     '''
     return {tomo_stem(name): name for name in names}
 
-def _pick(directory: Path | None, names: frozenset[str], *candidates: str) -> Path | None:
+def _pick(directory: Path | None, names: frozenset[str], *candidates: str, glob_fallback: str | None = None) -> Path | None:
     '''
     Returns directory / first candidate filename present in names, else None
     '''
     if directory is None:
         return None
-    return next((directory / c for c in candidates if c in names), None)
+    exact = next((directory / c for c in candidates if c in names), None)
+    if exact is not None or glob_fallback is None:
+        return exact
+    return next(iter(sorted(directory.glob(glob_fallback))), None)
 
 # ====================
 # Default stage directories
@@ -239,6 +242,7 @@ def scan_stage_dirs(
             mod_d, mod_names,
             f'{stem}_labelled_model_fitted.mrc', f'{stem}_model_fitted.mrc',
             f'{stem}_fitted.mrc', 'model_fitted.mrc',
+            glob_fallback=f'{stem}*fitted*.mrc',
         )
         analyse_csv = shared_analyse or _pick(ana_d, ana_names, f'{stem}_analyse.csv', f'{stem}.csv')
 

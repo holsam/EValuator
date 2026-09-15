@@ -107,7 +107,7 @@ def dispatch(streamlit_bin: Path, root_dir: Path, port: int) -> None:
                     opened = True
                     webbrowser.open(m.group(0))
             else:
-                (lg.debug if _NOISE.search(line) else lg.info)('viewer | %s', line)
+                (lg.debug if _NOISE.search(line) else lg.info)(f'viewer | {line}')
         proc.wait()
     except KeyboardInterrupt:
         proc.terminate()

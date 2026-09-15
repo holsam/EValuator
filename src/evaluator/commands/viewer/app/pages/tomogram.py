@@ -9,7 +9,7 @@ EValuator: VIEWER TOMOGRAM PAGE
 # ====================
 
 # Import external dependencies
-import pandas as pd, plotly.graph_objects as go, streamlit as st
+import pandas as pd, plotly.graph_objects as go, streamlit as st, subprocess, sys
 from pathlib import Path
 
 # Import EValuator utilities
@@ -26,27 +26,35 @@ from evaluator.commands.viewer.utils.join import join_analyse_model
 from evaluator.commands.viewer.utils.mesh import build_label_mesh_traces, build_point_cloud_trace, dim_trace
 
 # ====================
+# Define constants
+# ====================
+CHART_CONFIG = {'displaylogo': False, 'toImageButtonOptions': {'format': 'png', 'scale': 3}}
+def chart_config(name: str) -> dict:
+    '''Per-chart CHART_CONFIG with a filename instead of default newplot.png'''
+    return {**CHART_CONFIG, 'toImageButtonOptions': {**CHART_CONFIG['toImageButtonOptions'], 'filename': name}}
+
+# ====================
 # Define helper functions
 # ====================
 def _native_open_dialog(title: str, mrc_only: bool) -> str | None:
     '''
-    Open 'open file' dialog and return selected path or  '' if the dialog was cancelled or None if no GUI toolkit is available
+    Open 'open file' dialog in a subprocess and return the selected path, '' if cancelled, or None if no GUI toolkit is available / the dialog failed
     '''
+    filetypes = "[('MRC volume', '*.mrc')]" if mrc_only else "[('All files', '*.*')]"
+    script = (
+        'import tkinter as tk\n'
+        'from tkinter import filedialog\n'
+        'root = tk.Tk(); root.withdraw(); root.wm_attributes("-topmost", 1)\n'
+        f'print(filedialog.askopenfilename(title={title!r}, filetypes={filetypes}))\n'
+        'root.destroy()\n'
+    )
     try:
-        import tkinter as tk
-        from tkinter import filedialog
+        proc = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, timeout=120)
     except Exception:
         return None
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes('-topmost', 1)
-        filetypes = [('MRC volume', '*.mrc')] if mrc_only else [('All files', '*.*')]
-        path = filedialog.askopenfilename(title=title, filetypes=filetypes)
-        root.destroy()
-        return path or ''
-    except Exception:
+    if proc.returncode != 0:
         return None
+    return proc.stdout.strip()
 
 # ====================
 # Set guard for open result set (if session state is gone eg from hard refresh, send back to the Gallery)
@@ -123,8 +131,6 @@ if st.session_state.get('_edit_field'):
 # ====================
 # Load volumes & build traces for viewer section
 # ====================
-DOWNSAMPLE = 2
-
 # Load volumes and build traces (cached per result-set  downsample so drags don't re-run marching_cubes)
 @st.cache_data(show_spinner=False)
 def _load_traces(labelled_mrc: Path | None, fitted_mrc: Path | None, raw_mrc: Path | None, binary_mrc: Path | None, downsample: int, palette: tuple[str, ...], points_colour: str):
@@ -232,10 +238,12 @@ def _figure_for(view_name: str, selected_labels: set[int], visible_labels: set[i
 st.divider()
 st.header('Viewer')
 
+_downsample = st.session_state['_downsample']
+
 # Load data here so nav/title/metadata render immediately with a spinner in their place
 with st.spinner('Loading volumes and results...'):
     views, trace_index_to_label, scene_bounds = _load_traces(
-        result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, DOWNSAMPLE, tuple(_THEME['palette']), _THEME['points'],
+        result.labelled_mrc, result.fitted_mrc, result.raw_mrc, result.binary_mrc, _downsample, tuple(_THEME['palette']), _THEME['points'],
     )
     available_views = [v for v in ('raw', 'binary', 'labelled', 'fitted') if v in views]
 
@@ -395,6 +403,14 @@ else:
     _sel_now = set(st.session_state.selected_labels)
     _num_cols = plotutil.numeric_columns(joined_df)
 
+    def _plotted_caption(*cols):
+        _cols = [c for c in cols if c and c in joined_df.columns]
+        if not _cols:
+            return
+        _ok = joined_df[_cols].apply(lambda s: pd.to_numeric(s, errors='coerce')).dropna().shape[0]
+        _tot = len(joined_df)
+        st.caption(f'{_ok} plotted / {_tot} total · {_tot - _ok} dropped (missing values)')
+
     def _plot_cross_filter(event, tag: str):
         picked = plotutil.selected_labels_from_event(event)
         seen_key = f'_last_plot_{tag}'
@@ -403,7 +419,7 @@ else:
             st.session_state.selected_labels = picked
             st.rerun()
 
-    _tab_conc, _tab_reliab, _tab_dist, _tab_scatter = st.tabs(['Concordance', 'Reliability', 'Distribution', 'Feature scatter'])
+    _tab_conc, _tab_reliab, _tab_dist, _tab_scatter, _tab_ba, _tab_corr = st.tabs(['Concordance', 'Reliability', 'Distribution', 'Feature scatter', 'Agreement', 'Correlations'])
     with _tab_conc:
         _diam_opts = plotutil.concordance_analyse_options(joined_df)
         _diam_col = st.selectbox('Analyse diameter', _diam_opts, format_func=pretty_column, key='conc_diam') if _diam_opts else None
@@ -411,7 +427,8 @@ else:
         if _fig is None:
             st.caption('Needs model fitted radius and an analyse diameter column.')
         else:
-            _plot_cross_filter(st.plotly_chart(_fig, key='plot_conc', on_select='rerun'), 'conc')
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_conc', on_select='rerun', config=chart_config(f'{result.stem}_concordance')), 'conc')
+            _plotted_caption(_diam_col, plotutil.find_col(joined_df, 'radius'))
     with _tab_reliab:
         _counts = []
         if 'is_reliable' in joined_df.columns:
@@ -426,7 +443,8 @@ else:
         if _fig is None:
             st.caption('Needs model RMSE and analyse closure/enclosed columns.')
         else:
-            _plot_cross_filter(st.plotly_chart(_fig, key='plot_reliab', on_select='rerun'), 'reliab')
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_reliab', on_select='rerun', config=chart_config(f'{result.stem}_reliability')), 'reliab')
+            _plotted_caption(plotutil.find_col(joined_df, 'closure_fill_ratio', 'is_enclosed'), plotutil.find_col(joined_df, 'rmse_nm', 'relative_rmse', 'rmse'))
     with _tab_dist:
         if not _num_cols:
             st.caption('No numeric columns to plot.')
@@ -435,7 +453,8 @@ else:
             _dc1, _dc2 = st.columns([3, 1])
             _f = _dc1.selectbox('Feature', _num_cols, index=_di, format_func=pretty_column, key='dist_feature')
             _bw = _dc2.number_input('Bin width', min_value=0.0, value=25.0, step=5.0, key='dist_bin_width', help='In feature units, anchored at 0: (0, w], (w, 2w], … Set 0 for auto bins.')
-            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, bin_size=_bw or None), key='plot_dist')
+            st.plotly_chart(plotutil.distribution(joined_df, _f, _sel_now, bin_size=_bw or None), key='plot_dist', config=chart_config(f'{result.stem}_distribution'))
+            _plotted_caption(_f)
     with _tab_scatter:
         if len(_num_cols) < 2:
             st.caption('Need at least two numeric columns.')
@@ -443,10 +462,38 @@ else:
             _cx, _cy = st.columns(2)
             _x = _cx.selectbox('X', _num_cols, index=0, format_func=pretty_column, key='scatter_x')
             _y = _cy.selectbox('Y', _num_cols, index=min(1, len(_num_cols) - 1), format_func=pretty_column, key='scatter_y')
-            _plot_cross_filter(
-                st.plotly_chart(plotutil.feature_scatter(joined_df, _x, _y, _sel_now), key='plot_scatter', on_select='rerun'),
-                'scatter',
-            )
+            _cc, _clx, _cly = st.columns([2, 1, 1])
+            _colour_opts = ['(none)'] + [c for c in joined_df.columns if c not in ('label', 'include', 'source_file')]
+            _cb = _cc.selectbox('Colour by', _colour_opts, index=0, format_func=lambda c: 'None' if c == '(none)' else pretty_column(c), key='scatter_colour')
+            _lx = _clx.checkbox('log X', key='scatter_log_x')
+            _ly = _cly.checkbox('log Y', key='scatter_log_y')
+            _fig = plotutil.feature_scatter(joined_df, _x, _y, _sel_now, colour_by=None if _cb == '(none)' else _cb, log_x=_lx, log_y=_ly)
+            _plot_cross_filter(st.plotly_chart(_fig, key='plot_scatter', on_select='rerun', config=chart_config(f'{result.stem}_feature_scatter')), 'scatter')
+            st.caption(plotutil.fit_summary(joined_df, _x, _y) or 'Not enough points for a trend fit.')
+            _plotted_caption(_x, _y)
+    with _tab_ba:
+        if len(_num_cols) < 2:
+            st.caption('Need at least two numeric columns.')
+        else:
+            _pref = plotutil.concordance_analyse_options(joined_df)
+            _radius = plotutil.find_col(joined_df, 'radius')
+            _ai = _num_cols.index(_pref[0]) if _pref and _pref[0] in _num_cols else 0
+            _bi = _num_cols.index(_radius) if _radius in _num_cols else min(1, len(_num_cols) - 1)
+            _b1, _b2 = st.columns(2)
+            _a_col = _b1.selectbox('Measurement A', _num_cols, index=_ai, format_func=pretty_column, key='ba_a')
+            _b_col = _b2.selectbox('Measurement B', _num_cols, index=_bi, format_func=pretty_column, key='ba_b')
+            _fig = plotutil.bland_altman(joined_df, _a_col, _b_col, _sel_now)
+            if _fig is None:
+                st.caption('Not enough paired values.')
+            else:
+                _plot_cross_filter(st.plotly_chart(_fig, key='plot_ba', on_select='rerun', config=chart_config(f'{result.stem}_agreement')), 'ba')
+                _plotted_caption(_a_col, _b_col)
+    with _tab_corr:
+        if len(_num_cols) < 2:
+            st.caption('Need at least two numeric columns.')
+        else:
+            _method = st.segmented_control('Method', ['spearman', 'pearson'], default='spearman', format_func=str.title, key='corr_method') or 'spearman'
+            st.plotly_chart(plotutil.correlation_matrix(joined_df, _num_cols, method=_method), key='plot_corr', config=chart_config(f'{result.stem}_correlations'))
 
     # results export
     st.subheader('Export')
