@@ -87,6 +87,7 @@ Use `evaluator COMMAND --help` for detailed usage information for each command o
 - [`docs/label.md`](docs/label.md)
 - [`docs/model.md`](docs/model.md)
 - [`docs/plot.md`](docs/plot.md)
+- [`docs/tools.md`](docs/tools.md)
 - [`docs/viewer.md`](docs/viewer.md)
 - [`docs/visualise.md`](docs/visualise.md)
 
