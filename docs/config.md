@@ -8,8 +8,9 @@ The configuration file is located at `evaluator/config.toml` where `evaluator/` 
 evaluator/
   config.toml
   label/
-  repair/
+  model/
   analyse/
+  plot/
   visualise/
 ```
 
@@ -148,7 +149,7 @@ Section reference:
 - **`[label]`**: default values for `label` command filtering options (`--min-diam`, `--max-diam`), the membrane thickness assumption used to convert diameter limits to voxel-count limits.
 - **`[analyse]`**: — default values for `analyse` filtering options (`--fill-threshold`), and the vesicle-vs-debris QC thresholds (`qc_max_sphere_rmse_rel`, `qc_max_aspect_ratio`, `qc_min_solidity`, `qc_min_arc_coverage`, `qc_max_fit_points`).
 - **`[model]`**: default values for the `model` reliability gate (`rmse_relative_max`, `min_points`, `min_latitude_span_deg`).
-- **`[label]`**: default values for `visualise` commands: overlay styles, panel tiling, appearance of all matplotlib-generated outputs (overlay images, Z-stack movies), frame rate for Z-stack movies and downsampling factor for isometric renders.
+- **`[visualise]`**: default values for `visualise` commands: overlay styles, panel tiling, appearance of all matplotlib-generated outputs (overlay images, Z-stack movies), frame rate for Z-stack movies and downsampling factor for isometric renders.
 
 Unknown keys in any section are rejected at load time, and EValuator will raise a `ConfigError` naming the unknown key. `evaluator config` can then be run to reopen the file and correct it.
 
