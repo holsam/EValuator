@@ -25,18 +25,26 @@ _OVERRIDES = 'viewer_theme_overrides'
 # ====================
 _CUSTOM = 'Custom'
 _EDITABLE = (*themeutil.ROLE_KEYS, *themeutil.UI_KEYS)
-_DOWNSAMPLE = '_downsample'
+_DOWNSAMPLE = '_downsample'  # persisted value, read by gallery and tomogram pages
+_DOWNSAMPLE_WIDGET = '_downsample_widget'  # slider's own key, can be dropped by streamlit across page switches
+
+# _sync_downsample: copies the slider's widget state into the persisted key, called on_change
+def _sync_downsample() -> None:
+    st.session_state[_DOWNSAMPLE] = st.session_state[_DOWNSAMPLE_WIDGET]
 
 # render_downsample: sidebar slider for 3D volume downsample, shared session key so gallery and tomogram pages agree
 def render_downsample() -> int:
     st.session_state.setdefault(_DOWNSAMPLE, 2)
-    return st.sidebar.slider(
+    st.sidebar.slider(
         '3D downsample',
         min_value=1,
         max_value=8,
-        key=_DOWNSAMPLE,
+        value=st.session_state[_DOWNSAMPLE],
+        key=_DOWNSAMPLE_WIDGET,
+        on_change=_sync_downsample,
         help='Downsampling to use for volume rendering. Higher: reduced resolution but increased performance; lower: increased resolution but decreased performance.',
     )
+    return st.session_state[_DOWNSAMPLE]
 
 def render() -> None:
     with st.sidebar, st.expander(':material/palette: Customise theme', expanded=False):
@@ -59,8 +67,11 @@ def render() -> None:
 
         st.caption('Palette')
         pal = list(active['palette'])
-        for slot, col in enumerate(st.columns(len(pal), gap='small')):
-            pal[slot] = col.color_picker(str(slot + 1), value=pal[slot].upper(), key=f'pal_{ns}_{slot}', label_visibility='collapsed', disabled=not is_custom)
+        _ROW = 4  # colour pickers per row, avoids swatches overlapping in the narrow sidebar
+        for row_start in range(0, len(pal), _ROW):
+            row = range(row_start, min(row_start + _ROW, len(pal)))
+            for slot, col in zip(row, st.columns(len(row), gap='small')):
+                pal[slot] = col.color_picker(str(slot + 1), value=pal[slot].upper(), key=f'pal_{ns}_{slot}', label_visibility='collapsed', disabled=not is_custom)
         if is_custom and [c.upper() for c in pal] != [c.upper() for c in active['palette']]:
             overrides['palette'] = pal
 
