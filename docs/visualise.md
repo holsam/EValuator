@@ -30,7 +30,7 @@ Arguments:
 
 Options:
   -o, --out-dir PATH  Path to output directory. Results will be written under
-                      '.../evaluator/results/visualise/'.  [default: .]
+                      '.../evaluator/visualise/'.  [default: .]
   --fps INTEGER       Frame rate for the Z-stack movie.  [default: 45; ≥0]
   -h, --help          Show this message and exit.
 ```
@@ -55,7 +55,7 @@ Frame rate (frames per second) for the Z-stack movie. The default of 45 fps give
 {input filename stem}_Zstack-movie.{mp4|gif}
 
 # Example
-Z-stack movie saved to: .../evaluator/results/visualise/tomo_1_Zstack-movie.mp4
+Z-stack movie saved to: .../evaluator/visualise/tomo_1_Zstack-movie.mp4
 ```
 
 If a file with this name already exists, a numeric suffix is appended. Each frame's title shows the current Z position in nm (if voxel size is available from the MRC header) or in voxels otherwise.
@@ -80,7 +80,7 @@ Arguments:
 
 Options:
   -o, --out-dir PATH    Path to output directory. Results will be written under
-                        '.../evaluator/results/visualise/'.  [default: .]
+                        '.../evaluator/visualise/'.  [default: .]
   --downsample INTEGER  Downsampling factor applied before isometric surface
                         rendering.  [default: 2; ≥1]
   -h, --help            Show this message and exit.
@@ -99,7 +99,7 @@ Integer downsampling factor applied to the volume before computing the isometric
 {input filename stem}_isometric-view.png
 
 # Example
-Isometric render saved to: .../evaluator/results/visualise/tomo_seg_isometric-view.png
+Isometric render saved to: .../evaluator/visualise/tomo_seg_isometric-view.png
 ```
 
 If a file with this name already exists, a numeric suffix is appended.
@@ -131,7 +131,7 @@ Options:
                               output CSV. Only EV components listed in this
                               CSV will be overlaid.  [required]
   -o, --out-dir PATH          Path to output directory. Results will be written
-                              under '.../evaluator/results/visualise/'.
+                              under '.../evaluator/visualise/'.
                               [default: .]
   -f, --out-format [png|jpg|tiff]
                               File format to save the output image as.
@@ -185,14 +185,14 @@ When supplied, renders an additional Z-stack movie of the overlay (saved as `.mp
 
 ### Output
 
-Image files are written in the output directory (default: current working directory) under `evaluator/results/visualise/`, following the naming convention below:
+Image files are written in the output directory (default: current working directory) under `evaluator/visualise/`, following the naming convention below:
 
 ```sh
 # Output naming convention
 {tomogram filename stem}_overlay-{overlay style}.{image format}
 
 # Example: overlaying tomo_denoised_1.mrc with options: -f png -s both
-Image saved to: evaluator/results/visualise/tomo_denoised_1_overlay-both.png
+Image saved to: evaluator/visualise/tomo_denoised_1_overlay-both.png
 ```
 
 If a file with this name already exists, a numeric suffix is appended (`tomo_denoised_1_overlay-both-1.png`, and so on).

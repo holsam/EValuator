@@ -8,7 +8,6 @@ EValuator: FILTERING ANALYSIS UTILITIES
 # Import external dependencies
 # ====================
 import numpy
-from pathlib import Path
 from scipy import ndimage
 from skimage.morphology import ball
 
@@ -17,25 +16,6 @@ from skimage.morphology import ball
 # ====================
 from evaluator.utils.settings import lg
 from evaluator.utils import mrc as mrcutil
-
-# =========================
-# DEFINE FUNCTION: analyseCheckInput
-# =========================
-def analyseCheckInput(analyse_input: Path):
-    '''
-    Given the entered input, check which file(s) are valid MRC files to process.
-    '''
-    if analyse_input.is_file():
-        check_files = [analyse_input]
-    if analyse_input.is_dir():
-        check_files = sorted(analyse_input.glob("*.mrc"))
-    for file in list(check_files):
-        if not mrcutil.validateMRCFile(file):
-            lg.warning(f"{file} is not a valid MRC file and will not be processed.")
-            check_files.remove(file)
-    if not check_files:
-        lg.error(f"No valid MRC files found in input: {analyse_input}.")
-    return check_files
 
 # =========================
 # DEFINE FUNCTION: morphologicalDilation

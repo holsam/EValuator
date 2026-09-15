@@ -1,5 +1,6 @@
-# Local development environment files
+# Local development environment files & outputs
 .local
+out
 
 # MacOS files
 .DS_Store
@@ -16,6 +17,9 @@ wheels/
 .pytest_cache
 .coverage
 test_*.mrc
+
+# Tools command output
+out/
 
 # Virtual environments
 .venv

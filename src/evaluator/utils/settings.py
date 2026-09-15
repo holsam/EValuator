@@ -2,56 +2,132 @@
 =======================================
 EValuator: APPLICATION SETTINGS & STARTUP
 =======================================
-Provides the shared logger instance, config loading utilities,
-and the startup splash function.
-Loaded at import time so that `config` and `lg` can be imported
-directly by command modules.
+Provides the shared logger instance, config loading utilities, and the startup splash function. Loaded at import time so that `config` and `lg` can be imported directly by command modules.
 '''
 
 # ====================
 # Import external dependencies
 # ====================
-import logging, tomllib
-from importlib.resources import files as pkg_files
+import sys, time
+from datetime import datetime
+from loguru import logger as logger
+from os import access, W_OK
 from pathlib import Path
-from platformdirs import user_config_dir
 from rich import print
 
-# =========================
-# INITIALISE LOGGER
-# =========================
-lg = logging.getLogger("__name__")
+# ====================
+# Define constants for logger setup
+# ====================
+DEFAULT_LOG_NAME = Path('evaluator.log')
+LOG_FORMAT = '<dim>{time:YYYY-MM-DD HH:mm:ss}</> <lvl>[{level}]</> {message}'
+
+# Level/path set by configure_logging(), read by configure_worker_logging() in pool workers
+_worker_log_level: str | None = None
+_worker_log_path: Path | None = None
 
 # ====================
-# Define function: userConfigPath
+# Define class for logger, to proxy standard log methods with colours set to True
 # ====================
-def userConfigPath() -> Path:
-    '''
-    Returns the file path <OS config directory>/evaluator/config.toml depending on the OS of running environment:
-        Linux/macOS : ~/.config/evaluator/config.toml
-        Windows     : %APPDATA%\\evaluator\\config.toml
-    '''
-    return Path(user_config_dir("evaluator"), "config.toml")
+class _EvaluatorLogger:
+    def _log(self, level: str, message: str, *args, **kwargs) -> None:
+        logger.opt(colors=True, depth=2).log(level, message, *args, **kwargs)
+
+    def debug(self, message: str, *args, **kwargs) -> None:
+        self._log('DEBUG', message, *args, **kwargs)
+
+    def info(self, message: str, *args, **kwargs) -> None:
+        self._log('INFO', message, *args, **kwargs)
+
+    def warning(self, message: str, *args, **kwargs) -> None:
+        self._log('WARNING', message, *args, **kwargs)
+
+    def error(self, message: str, *args, **kwargs) -> None:
+        self._log('ERROR', message, *args, **kwargs)
+
+    def critical(self, message: str, *args, **kwargs) -> None:
+        self._log('CRITICAL', message, *args, **kwargs)
 
 # ====================
-# Define function: loadDefaultConfig
+# Define helper functions
 # ====================
-def loadDefaultConfig() -> dict:
+def _resolve_log_directory():
     '''
-    Load the bundled default config.toml from the installed package.
+    Returns Path indicating which directory to write the log file within (follows hierarchy: current working directory -> home directory)
     '''
-    with pkg_files('evaluator').joinpath('config.toml').open('rb') as defaultconfig:
-        return tomllib.load(defaultconfig)
+    dirs = [Path.cwd(), Path.home()]
+    for d in dirs:
+        d = d / 'evaluator'
+        # If directory doesn't exist, try to create (logging warning if not possible)
+        if not d.exists():
+            try:
+                d.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                logger.warning(f'Could not create log file parent directory {d}')
+                continue
+        # If directory is writable, return otherwise raise warning
+        if access(d, W_OK):
+            return d
+        logger.warning(f'No write permissions for {d} to create log file')
+    # If all options exhausted, raise an error
+    raise PermissionError('No writable directory found for log file')
+
+def _resolve_log_path(
+    directory: Path,
+) -> tuple[Path, bool]:
+    '''
+    Returns Path for log file avoiding collisions
+    '''
+    path = directory / DEFAULT_LOG_NAME
+    if path.exists():
+        file_counter = 1
+        while True:
+            path = directory / f'{DEFAULT_LOG_NAME.stem}-{file_counter}{DEFAULT_LOG_NAME.suffix}'
+            if path.exists():
+                file_counter += 1
+            else:
+                break
+    return path
 
 # ====================
-# Load config at module import time
+# Define function: initEvaluator
 # ====================
-user_config_path = userConfigPath()
-if user_config_path.exists():
-    with user_config_path.open('rb') as _userconfig:
-        config = tomllib.load(_userconfig)
-else:
-    config = loadDefaultConfig()
+def configure_logging(level: str) -> Path:
+    '''
+    Returns Path to log file after configuring logging sinks
+    '''
+    # Remove default logging handler
+    logger.remove()
+    # Add terminal sink
+    logger.add(sys.stderr, format=LOG_FORMAT, level=level, colorize=True)
+    # Add a temporary buffer sink to catch any warning logs raised during log file directory resolution
+    buffer: list[str] = []
+    buffer_sink = logger.add(buffer.append, format=LOG_FORMAT, level=level, colorize=False)
+    # Resolve log file directory/path and remove buffer sink
+    log_dir = _resolve_log_directory()
+    log_path = _resolve_log_path(log_dir)
+    logger.remove(buffer_sink)
+    # Based on mode, open log file as write or append
+    with open(log_path, 'w', encoding='utf-8') as f:
+        f.writelines(buffer)
+    # Set up actual log file sink
+    logger.add(log_path, format=LOG_FORMAT, level=level, colorize=False, mode='a')
+    # Record level/path so worker processes can mirror setup
+    global _worker_log_level, _worker_log_path
+    _worker_log_level = level
+    _worker_log_path = log_path
+    # Return log file path
+    return log_path
+
+# ====================
+# Define function: configure_worker_logging
+# ====================
+def configure_worker_logging(level: str, log_path: Path) -> None:
+    '''
+    Initialise ProcessPoolExecutor worker process logging sinks
+    '''
+    logger.remove()
+    logger.add(sys.stderr, format=LOG_FORMAT, level=level, colorize=True)
+    logger.add(log_path, format=LOG_FORMAT, level=level, colorize=False, mode='a')
 
 # ====================
 # Define function: initEvaluator
@@ -62,3 +138,8 @@ def initEvaluator():
     '''
     print(f"\n[bold]EValuator[/bold] :microscope-text:")
     print(f"A command line tool for automated morphological analysis and visualisation of extracellular vesicles (EVs) from cryo-electron tomography (cryo-ET) data.")
+
+# =========================
+# INITIALISE LOGGER
+# =========================
+lg = _EvaluatorLogger()

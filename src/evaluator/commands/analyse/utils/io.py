@@ -38,5 +38,7 @@ def printSummaryMessage(results, nfiles: int, startt: datetime.datetime, endt: d
     print(f"- Segmentation files with EVs: {results['tomogram'].nunique()} ({(100 * results['tomogram'].nunique()) / nfiles:.1f}%)")
     print(f"- EVs processed: {len(results)}")
     print(f"- Number of enclosed EVs: {results['is_enclosed'].sum()} ({100 * results['is_enclosed'].mean():.1f}%)")
+    if 'is_vesicle_like' in results:
+        print(f"- Vesicle-like components: {results['is_vesicle_like'].sum()} / {len(results)} ({100 * results['is_vesicle_like'].mean():.1f}%)")
     print(f"- Equivalent diameters: {results['equiv_diameter_nm'].mean():.1f} ± {results['equiv_diameter_nm'].std():.1f} nm (mean ± SD)")
     print(f"Results saved to: {out_path}\n")

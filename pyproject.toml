@@ -1,23 +1,28 @@
 [project]
 name = "EValuator"
-version = "0.7.7"
+version = "1.0.0"
 description = "A command line tool for automated morphological analysis and visualisation of extracellular vesicles (EVs) from cryo-electron tomography (cryo-ET) data."
 authors = [
     { name = "Samuel Holland", email = "hol_sam@icloud.com" }
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "click>=8.3.1",
     "datetime>=6.0",
+    "loguru>=0.7.3",
     "matplotlib>=3.10.8",
     "mrcfile>=1.5.4",
     "numpy>=2.4.3",
     "pandas>=3.0.1",
     "pathlib>=1.0.1",
     "platformdirs>=4.9.4",
+    "pydantic>=2.13.4",
     "rich>=14.3.3",
     "scikit-image>=0.26.0",
     "scipy>=1.17.1",
+    "textual>=8.2.8",
     "tomli-w>=1.2.0",
+    "tomlkit>=0.15.0",
     "tqdm>=4.67.3",
     "typer>=0.24.1",
     "typing>=3.10.0.0",
@@ -25,6 +30,12 @@ dependencies = [
 
 [project.scripts]
 evaluator = "evaluator.cli:evaluator"
+
+[project.optional-dependencies]
+viewer = [
+    "plotly>=6.0",
+    "streamlit>=1.57",
+]
 
 [build-system]
 requires = ["uv_build<0.12"]
@@ -38,11 +49,14 @@ include = [
     "LICENSE",   # Include the LICENSE file
     "README.md", # Include README or other files
     "src/evaluator/config.toml",
+    "src/evaluator/commands/plot/r/**",
+    "src/evaluator/commands/viewer/app/**",
     "docs/*",
 ]
 
 [dependency-groups]
 dev = [
+    "openpyxl>=3.1.5",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
 ]
@@ -56,6 +70,7 @@ omit = [
     "src/evaluator/cli/*",           # Typer wiring; covered by CLI tests
     "src/evaluator/commands/visualise.py",  # rendering functions; visual inspection only
     "src/evaluator/utils/display.py",       # rendering functions; visual inspection only
+    "src/evaluator/commands/viewer/app/*",  # Streamlit UI code; visual inspection only
 ]
 
 [tool.coverage.report]

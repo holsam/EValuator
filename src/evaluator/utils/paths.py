@@ -13,21 +13,12 @@ from pathlib import Path
 from typing import Optional
 
 # =========================
-# DEFINE FUNCTION: generateOutputFileStructure
+# DEFINE FUNCTION: generate_command_output_dir
 # =========================
-def generateOutputFileStructure(out_dir: Path, command: str) -> Path:
-    '''
-    Create and return the expected EValuator output directory structure for a given command.
-    If the supplied out_dir does not already end in the expected structure
-    (.../evaluator/results/<command>/), the structure is appended and created.
-    '''
-    exp_stru = ''.join(["evaluator/results/", command])
-    if not out_dir.match(exp_stru):
-        out_struc = Path(out_dir, exp_stru)
-        out_struc.mkdir(parents=True, exist_ok=True)
-        return out_struc
-    else:
-        return out_dir
+def generate_command_output_dir(evaluator_dir: Path, command: str) -> Path:
+    out_dir = evaluator_dir / command
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
 
 # =========================
 # DEFINE FUNCTION: checkUniqueFileName
@@ -49,18 +40,21 @@ def checkUniqueFileName(
         label    → <orig_name>_overlay-<overlay_style>.<fmt>
         overlay  → <orig_name>_overlay-<overlay_style>.<fmt>
         visualise→ <orig_name>_<vis_out>.<fmt>
+        viewer   → <orig_name>_filtered.csv
     '''
     naming_patterns = {
         "analyse": "evaluator-analyse_results",
         "label": ''.join([orig_name, "_overlay-", overlay_style]),
         "overlay": ''.join([orig_name, "_overlay-", overlay_style]),
         "visualise": ''.join([orig_name, "_", vis_out]),
+        "viewer": ''.join([orig_name, "_filtered"])
     }
     out_fmt = {
         "analyse": ".csv",
         "label": ''.join([".", fmt]),
         "overlay": ''.join([".", fmt]),
         "visualise": ''.join([".", fmt]),
+        "viewer": ".csv"
     }
     out_filepath = Path(out_dir, ''.join([naming_patterns[command], out_fmt[command]]))
     if out_filepath.exists():

@@ -9,6 +9,7 @@ EValuator: TOMOGRAM VISUALISER
 import matplotlib, numpy
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from functools import partial
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from pathlib import Path
 from rich import print
@@ -18,46 +19,67 @@ matplotlib.use("Agg")
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.utils.settings import config, lg
+from evaluator.utils import batch as batchutil
+from evaluator.utils import config as confutil
+from evaluator.utils.settings import lg
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
 from evaluator.commands.visualise.utils import display as displayutil
 
 
-def generate_movie(input, output, fps):
+def generate_movie(input, output, **overrides):
     '''
-    Generate a Z-stack movie from an MRC file
+    Generate a Z-stack movie from an MRC file or directory of MRC files
     '''
-    lg.debug(f"visualise movie | Validating input MRC file...")
-    if not mrcutil.validateMRCFile(input):
-        raise ValueError(f"{input.name} is not a valid MRC file and will not be processed.")
-    lg.debug(f"visualise movie | Reading input MRC file...")
-    mrc_data, voxel_size_nm = mrcutil.readMRCFile(input)
-    lg.debug(f"visualise movie | Creating output directory structure...")
-    out_dir = pathutil.generateOutputFileStructure(output, "visualise")
+    # Load configuration file
+    lg.debug(f"visualise movie | Loading configuration file...")
+    config, evaluator_dir = confutil.load_config(output)
+    # If CLI overrides provided:
+    lg.debug(f"visualise movie | Setting run parameters...")
+    updates = {k: v for k, v in overrides.items() if v is not None}
+    params = config.visualise.model_copy(update=updates)
+    # Validate input files
+    lg.debug(f"visualise movie | Resolving input MRC file(s)...")
+    mrc_files = batchutil.resolve_mrc_inputs(input)
+    out_dir = pathutil.generate_command_output_dir(evaluator_dir, "visualise")
+    confutil.write_params(params, out_dir)
+    worker = partial(_movie_worker, out_dir=out_dir, params=params)
+    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed", max_workers=params.max_workers)
+
+def _movie_worker(mrc_path: Path, out_dir: Path, params) -> None:
+    mrc_data, voxel_size_nm = mrcutil.readMRCFile(mrc_path)
     is_mask = isMask(mrc_data)
     writers = animation.writers.list()
     fmt = "mp4" if "ffmpeg" in writers else "gif"
-    lg.debug(f"visualise movie | Defining output file for Z-stack movie...")
-    out_file_mov = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=input.stem, vis_out="Zstack-movie", fmt=fmt)
-    createMovie(data=mrc_data, out_path=out_file_mov, fps=fps, is_mask=is_mask, voxel_size_nm=voxel_size_nm)
+    out_file_mov = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=mrc_path.stem, vis_out="Zstack-movie", fmt=fmt)
+    createMovie(data=mrc_data, out_path=out_file_mov, fps=params.fps, is_mask=is_mask, voxel_size_nm=voxel_size_nm)
     printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_path_mov=out_file_mov, out_path_iso=None)
 
-def generate_isometric_view(input, output, downsample):
+def generate_isometric_view(input, output, **overrides):
     '''
     Generate an isometric surface render from an MRC file
     '''
-    lg.debug(f"visualise isoview | Validating input MRC file...")
-    if not mrcutil.validateMRCFile(input):
-        raise ValueError(f"{input.name} is not a valid MRC file and will not be processed.")
-    lg.debug(f"visualise isoview | Reading input MRC file...")
-    mrc_data, voxel_size_nm = mrcutil.readMRCFile(input)
-    lg.debug(f"visualise isoview | Creating output directory structure...")
-    out_dir = pathutil.generateOutputFileStructure(output, "visualise")
+    # Load configuration file
+    lg.debug(f"visualise isoview | Loading configuration file...")
+    config, evaluator_dir = confutil.load_config(output)
+    # If CLI overrides provided:
+    lg.debug(f"visualise isoview | Setting run parameters...")
+    updates = {k: v for k, v in overrides.items() if v is not None}
+    params = config.visualise.model_copy(update=updates)
+    # Validate input files
+    lg.debug(f"visualise isoview | Resolving input MRC file(s)...")
+    mrc_files = batchutil.resolve_mrc_inputs(input)
+    out_dir = pathutil.generate_command_output_dir(evaluator_dir, "visualise")
+    confutil.write_params(params, out_dir)
+    worker = partial(_isoview_worker, out_dir=out_dir, params=params)
+    batchutil.run_batch(mrc_files, worker=worker, desc="MRC files processed", max_workers=params.max_workers)
+
+
+def _isoview_worker(mrc_path: Path, out_dir: Path, params) -> None:
+    mrc_data, voxel_size_nm = mrcutil.readMRCFile(mrc_path)
     is_mask = isMask(mrc_data)
-    lg.debug(f"visualise isoview | Defining output file for isometric view...")
-    out_file_iso = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=input.stem, vis_out="isometric-view", fmt="png")
-    createIsometricView(data=mrc_data, out_path=out_file_iso, downsample=downsample, voxel_size_nm=voxel_size_nm)
+    out_file_iso = pathutil.checkUniqueFileName(out_dir=out_dir, command="visualise", orig_name=mrc_path.stem, vis_out="isometric-view", fmt="png")
+    createIsometricView(data=mrc_data, out_path=out_file_iso, downsample=params.downsample, voxel_size_nm=voxel_size_nm)
     printVisualiseSummary(mrc_data, is_mask, voxel_size_nm, out_path_mov=None, out_path_iso=out_file_iso)
 
 # ====================
@@ -69,10 +91,9 @@ def overlay(
         csv,
         output,
         out_format,
-        style,
         slice,
-        n_slices,
-        export_mp4
+        export_mp4,
+        **overrides,
 ):
     '''
     Overlay labelled EV components onto a tomogram and save as an image.
@@ -82,13 +103,19 @@ def overlay(
     colour-coded overlay. Outputs a tiled Z-slice panel by default, or a single
     slice with [bold]--slice[/bold].
     '''
+    # Load configuration file
+    lg.debug(f"visualise isoview | Loading configuration file...")
+    config, evaluator_dir = confutil.load_config(output)
+    # If CLI overrides provided:
+    lg.debug(f"visualise isoview | Setting run parameters...")
+    updates = {k: v for k, v in overrides.items() if v is not None}
+    params = config.visualise.model_copy(update=updates)
     # Validate and read tomogram
     lg.debug(f"overlay | Validating input tomogram file...")
     if not mrcutil.validateMRCFile(tomogram):
         raise ValueError(f"{tomogram.name} is not a valid MRC file and will not be processed.")
     lg.debug(f"overlay | Reading input tomogram file...")
     tomo_data, _ = mrcutil.readMRCFile(tomogram)
-
     # Validate and read labelled MRC
     lg.debug(f"overlay | Validating labelled component file...")
     if not mrcutil.validateMRCFile(labelled):
@@ -96,47 +123,43 @@ def overlay(
     lg.debug(f"overlay | Reading labelled component file...")
     seg_data, voxel_size_nm = mrcutil.readMRCFile(labelled)
     seg_labelled = seg_data.astype(numpy.int32)
-
     # Check shapes match
     lg.debug(f"overlay | Checking tomogram and labelled volume shapes match...")
     if tomo_data.shape != seg_labelled.shape:
         raise ValueError(f"Tomogram shape {tomo_data.shape} and labelled volume shape {seg_labelled.shape} do not match.")
-
     # Get valid labels from CSV
     lg.debug(f"overlay | Reading CSV file...")
     valid_labels = displayutil.getValidLabelsFromCSV(csv, labelled.name)
     if not valid_labels:
         raise ValueError(f"No valid EV components identified in {csv.name}.")
-
     n_components = int(seg_labelled.max())
-    lg.info(f"overlay | {n_components} total components in labelled volume. {len(valid_labels)} EV components will be overlaid using style: '{style}'.")
-
+    lg.info(f"overlay | {n_components} total components in labelled volume. {len(valid_labels)} EV components will be overlaid using style: '{params.overlay_style}'.")
     # Assign colours
     lg.debug(f"overlay | Assigning label colours...")
-    label_colours = displayutil.assignLabelColours(valid_labels)
-
+    label_colours = displayutil.assignLabelColours(valid_labels, params)
     # Create output directory and file path
     lg.debug(f"overlay | Creating output directory structure...")
-    out_dir = pathutil.generateOutputFileStructure(output, "visualise")
+    out_dir = pathutil.generate_command_output_dir(evaluator_dir, "visualise")
+    confutil.write_params(params, out_dir)
     lg.debug(f"overlay | Defining output file...")
-    out_file = pathutil.checkUniqueFileName(out_dir=out_dir, command="overlay", orig_name=tomogram.stem, overlay_style=style, fmt=out_format)
+    out_file = pathutil.checkUniqueFileName(out_dir=out_dir, command="overlay", orig_name=tomogram.stem, overlay_style=params.overlay_style, fmt=out_format)
 
     # Render static image
     if slice is not None:
         lg.debug(f"overlay | Rendering single-slice image...")
-        displayutil.renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours, slice, style, out_file, labelled.name)
+        displayutil.renderSingleSlice(tomo_data, seg_labelled, valid_labels, label_colours, slice, params.overlay_style, out_file, labelled.name, params)
     else:
         lg.debug(f"overlay | Rendering tiled image...")
-        displayutil.renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, n_slices, style, out_file, labelled.name)
+        displayutil.renderTiled(tomo_data, seg_labelled, valid_labels, label_colours, params.n_slices, params.overlay_style, out_file, labelled.name, params)
 
     # Optionally render movie
     if export_mp4:
         writers = animation.writers.list()
         fmt = "mp4" if "ffmpeg" in writers else "gif"
         lg.debug(f"overlay | Defining output file for overlay movie...")
-        out_file_mov = pathutil.checkUniqueFileName(out_dir=out_dir, command="overlay", orig_name=tomogram.stem, overlay_style=style, fmt=fmt)
+        out_file_mov = pathutil.checkUniqueFileName(out_dir=out_dir, command="overlay", orig_name=tomogram.stem, overlay_style=params.overlay_style, fmt=fmt)
         lg.debug(f"overlay | Rendering overlay movie...")
-        displayutil.renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, style, out_file_mov, labelled.name)
+        displayutil.renderOverlayMovie(tomo_data, seg_labelled, valid_labels, label_colours, params.overlay_style, out_file_mov, labelled.name, params)
 
 # =========================
 # DEFINE FUNCTION: isMask

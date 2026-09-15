@@ -14,16 +14,21 @@ from typing import Annotated
 # ====================
 # Import EValuator utilities
 # ====================
-from evaluator.utils.settings import initEvaluator, lg
+from evaluator.utils.settings import configure_logging, initEvaluator, lg
 
 # ====================
 # Import EValuator commands
 # ====================
 from evaluator.commands.config.cli import evaluatorConfig
 from evaluator.commands.analyse.cli import evaluatorAnalyse
+from evaluator.commands.help.cli import evaluatorHelp
 from evaluator.commands.label.cli import evaluatorLabel
 from evaluator.commands.license.cli import evaluatorLicense
+from evaluator.commands.model.cli import evaluatorModel
+from evaluator.commands.plot.cli import evaluatorPlot
+from evaluator.commands.tools.cli import evaluatorTools
 from evaluator.commands.version.cli import evaluatorVersion
+from evaluator.commands.viewer.cli import evaluatorViewer
 from evaluator.commands.visualise.cli import evaluatorVisualise
 
 # ====================
@@ -48,7 +53,16 @@ evaluator.add_typer(
     evaluatorLabel,
 )
 evaluator.add_typer(
+    evaluatorModel,
+)
+evaluator.add_typer(
     evaluatorAnalyse,
+)
+evaluator.add_typer(
+    evaluatorPlot,
+)
+evaluator.add_typer(
+    evaluatorViewer,
 )
 evaluator.add_typer(
     evaluatorVisualise,
@@ -57,11 +71,18 @@ evaluator.add_typer(
     rich_help_panel='Component Visualisation')
 evaluator.add_typer(
     evaluatorConfig,
-    name='config',
-    help='Manage EValuator configuration files',
-    rich_help_panel='Utilities')
+)
+evaluator.add_typer(
+    evaluatorHelp,
+)
 evaluator.add_typer(
     evaluatorLicense,
+)
+evaluator.add_typer(
+    evaluatorTools,
+    name='tools',
+    help='Animation, benchmarking and miscellaneous tools',
+    rich_help_panel='Utilities',
 )
 evaluator.add_typer(
     evaluatorVersion
@@ -81,14 +102,7 @@ def main(
         typer.Option("-v", "--verbose", help="Show progress in terminal.", rich_help_panel="Options")
     ] = False,
 ):
-    if debug:
-        log_level = logging.DEBUG
-    elif verbose:
-        log_level = logging.INFO
-    else:
-        log_level = logging.WARN
-    logging.basicConfig(
-        format='%(asctime)s %(levelname)-10s %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        level=log_level,
-    )
+    level = 'DEBUG' if debug else 'INFO' if verbose else 'WARNING'
+    log_path = configure_logging(level)
+    # Output confirmation message that logging has been set up
+    lg.info(f'Log messages (levels: <yellow><b>warning</b></yellow>{', <b>info</b>, <blue><b>debug</b></blue>' if debug else ', info' if verbose else ''}) will be written to <cyan>{log_path}</cyan>')

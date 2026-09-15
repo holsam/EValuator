@@ -7,6 +7,7 @@ EValuator: SEGMENTATION ANALYSIS
 # Import external dependencies
 # ====================
 import datetime, numpy
+from functools import partial
 from pathlib import Path
 from rich import print
 from skimage import measure
@@ -16,9 +17,11 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 # ====================
 # Import shared EValuator utilities
 # ====================
-from evaluator.utils.settings import config, lg
+from evaluator.utils import batch as batchutil
+from evaluator.utils import config as confutil
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils import paths as pathutil
+from evaluator.utils.settings import lg
 
 # ====================
 # Import EValuator analyse utilities
@@ -31,16 +34,22 @@ from evaluator.commands.analyse.utils import filtering, geometry, io, measuremen
 def analyse(
     input,
     output,
-    mindiam,
-    maxdiam,
-    fillthreshold,
+    **overrides,
 ):
+    # Load configuration file
+    lg.debug(f"analyse | Loading configuration file...")
+    config, evaluator_dir = confutil.load_config(output)
+    # If CLI overrides provided:
+    lg.debug(f"analyse | Setting run parameters...")
+    updates = {k: v for k, v in overrides.items() if v is not None}
+    params = config.analyse.model_copy(update=updates)
     # Validate input file(s)
     lg.debug(f"analyse | Validating input file(s)...")
-    seg_files = filtering.analyseCheckInput(input)
+    seg_files = batchutil.resolve_mrc_inputs(input)
     # Create output directory structure
     lg.debug(f"analyse | Creating output directory structure...")
-    out_dir = pathutil.generateOutputFileStructure(output, "analyse")
+    out_dir = pathutil.generate_command_output_dir(evaluator_dir, "analyse")
+    confutil.write_params(params, out_dir)
     # Define output file path
     lg.debug(f"analyse | Defining output file...")
     out_file = pathutil.checkUniqueFileName(out_dir, "analyse")
@@ -50,16 +59,21 @@ def analyse(
     START_TIME = datetime.datetime.now()
     print(f"\nEV post-processing pipeline started: {START_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
     # Run pipeline
-    analyse_results = []
     lg.debug(f"analyse | Starting pipeline...")
-    with logging_redirect_tqdm():
-        for segfile in tqdm(seg_files, desc="Segmentation files processed"):
-            try:
-                segfile_results = processSegmentation(segfile, mindiam, maxdiam, fillthreshold)
-                analyse_results.extend(segfile_results)
-            except Exception as e:
-                lg.warning(f"Failed to process {segfile.name}: {e}")
-                continue
+    qc_params = {
+        "qc_max_sphere_rmse_rel": params.qc_max_sphere_rmse_rel,
+        "qc_max_aspect_ratio": params.qc_max_aspect_ratio,
+        "qc_min_solidity": params.qc_min_solidity,
+        "qc_min_arc_coverage": params.qc_min_arc_coverage,
+        "qc_max_fit_points": params.qc_max_fit_points,
+    }
+    worker = partial(
+        processSegmentation,
+        fill_threshold=params.fill_threshold,
+        qc_params=qc_params,
+    )
+    per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed", max_workers=params.max_workers)
+    analyse_results = [row for file_results in per_file_results for row in file_results]
     END_TIME = datetime.datetime.now()
     print(f"EV analysis pipeline finished: {END_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
     if not analyse_results:
@@ -74,7 +88,7 @@ def analyse(
 # =========================
 # DEFINE FUNCTION: processSegmentation
 # =========================
-def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill_threshold):
+def processSegmentation(seg_path: Path, fill_threshold, qc_params):
     '''
     Process a given labelled segmentation file by calling the component processing
     function for each component.
@@ -99,28 +113,12 @@ def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill
     lg.info(f"analyse | {seg_path.name} | {n_components} components identified for analysis.")
     lg.debug(f"analyse | {seg_path.name} | Measuring component properties...")
     component_list = measure.regionprops(components)
-    lg.debug(f"analyse | {seg_path.name} | Calculating voxel size limits...")
-    membrane_thickness_vox = config['filter']['membrane_thickness_nm'] / voxel_size_nm if voxel_size_nm else 1.0
-    if voxel_size_nm is not None:
-        min_vox = geometry.shellVolume(minimum_diameter, voxel_size_nm, membrane_thickness_vox)
-        max_vox = geometry.shellVolume(maximum_diameter, voxel_size_nm, membrane_thickness_vox)
-    else:
-        min_vox = 0
-        max_vox = numpy.inf
     file_results = []
     lg.debug(f"analyse | {seg_path.name} | Starting component processing...")
     with logging_redirect_tqdm():
         for component in tqdm(component_list, desc="Components processed"):
-            lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Checking voxel count filter...")
-            if not (min_vox <= component.area <= max_vox):
-                lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Voxel count {component.area} outside filter ({min_vox}≤c≤{max_vox}) — skipping.")
-                continue
-            lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Checking extent filter...")
-            if component.extent < 0.01:
-                lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Extent {component.extent} outside filter (e<0.01) — skipping.")
-                continue
             lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Measuring component features...")
-            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold)
+            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold, qc_params)
             if component_data is None:
                 lg.warning(f"analyse | {seg_path.name} | Component {component.label} | Component processing failed — skipping.")
                 continue
@@ -133,7 +131,7 @@ def processSegmentation(seg_path: Path, minimum_diameter, maximum_diameter, fill
 # =========================
 # DEFINE FUNCTION: processComponent
 # =========================
-def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold):
+def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold, qc_params):
     '''
     For a given component, make all defined measurements and return as a dictionary.
     '''
@@ -155,6 +153,15 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     major_axis_diameter, minor_axis_diameter = geometry.measureAxes(component=component_properties, equiv_diameter_nm=equiv_diameter_nm)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring eccentricity and aspect ratio...")
     eccentricity, aspect_ratio = measurement.measureEccentricityAspectRatio(major_axis_diameter=major_axis_diameter, minor_axis_diameter=minor_axis_diameter)
+    lg.debug(f"analyse | {filename} | Component {component_label} | Computing shape-quality (vesicle-vs-debris) metrics...")
+    n_voxels = int(component_properties.area)
+    coords = component_properties.coords
+    _max_fit_points = qc_params["qc_max_fit_points"]
+    sphere_rmse_rel = geometry.sphereFitResidual(coords, _max_fit_points)
+    arc_coverage = geometry.arcCoverage(coords, _max_fit_points)
+    solidity = geometry.solidity(coords, n_voxels, _max_fit_points)
+    bbox_extent = float(component_properties.extent)
+    is_vesicle_like, qc_flags = measurement.classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, enclosed, qc_params)
     return {
         "tomogram": filename,
         "label": component_label,
@@ -168,6 +175,18 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
         "surface_area": round(surface_area, 2) if not numpy.isnan(surface_area) else numpy.nan,
         "is_enclosed": enclosed,
         "closure_fill_ratio": round(fill_ratio, 4),
+        "sphere_rmse_rel": _r(sphere_rmse_rel, 4),
+        "solidity": _r(solidity, 4),
+        "arc_coverage": _r(arc_coverage, 4),
+        "bbox_extent": _r(bbox_extent, 4),
+        "is_vesicle_like": is_vesicle_like,
+        "qc_flags": qc_flags,
         "voxel_size_nm": round(scale, 4) if voxel_size_nm is not None else None,
         "measurement_units": scale_label,
     }
+
+# =========================
+# DEFINE HELPER FUNCTION: _r
+# =========================
+def _r(value, ndigits):
+    return round(value, ndigits) if value is not None and not numpy.isnan(value) else numpy.nan

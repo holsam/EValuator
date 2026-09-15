@@ -82,3 +82,22 @@ def measureEccentricityAspectRatio(major_axis_diameter, minor_axis_diameter):
     eccentricity = numpy.sqrt(1 - (semiminor / semimajor) ** 2) if semimajor > 0 else numpy.nan
     aspect_ratio = major_axis_diameter / minor_axis_diameter if minor_axis_diameter > 0 else numpy.nan
     return eccentricity, aspect_ratio
+
+# =========================
+# DEFINE FUNCTION: classifyVesicle
+# =========================
+def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, is_enclosed, qc_params):
+    '''
+    Classify component as `is_vesicle_like` unless any enabled check fails'''
+    if n_voxels < 4:
+        return False, 'too_small'
+    flags = []
+    if not (sphere_rmse_rel <= qc_params['qc_max_sphere_rmse_rel']):
+        flags.append('sphere_rmse')
+    if not (aspect_ratio <= qc_params['qc_max_aspect_ratio']):
+        flags.append('aspect_ratio')
+    if not (solidity >= qc_params['qc_min_solidity']):
+        flags.append("solidity")
+    if not (is_enclosed or arc_coverage >= qc_params['qc_min_arc_coverage']):
+        flags.append('open_shell')
+    return len(flags) == 0, ','.join(flags)

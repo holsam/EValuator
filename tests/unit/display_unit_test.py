@@ -87,22 +87,40 @@ class TestGetValidLabelsFromCSV:
 
 # -- Define label colour assignment test
 class TestAssignLabelColours:
+    def _visualise_params(self):
+        from evaluator.utils.config import VisualiseConfig
+        return VisualiseConfig(
+            overlay_style = "both",
+            n_slices = 9,
+            fps = 45,
+            downsample = 2,
+            colourmap = "tab20",
+            alpha_fill = 0.35,
+            contour_linewidth = 1.0,
+            label_fontsize = 6,
+            figure_dpi = 300,
+        ) 
+
     def test_returns_one_colour_per_label(self):
         labels = {1, 3, 7, 9}
-        colours = assignLabelColours(labels)
+        colours = assignLabelColours(labels, self._visualise_params())
         assert len(colours) == len(labels)
+
     def test_keys_match_input_labels(self):
         labels = {2, 5, 11}
-        colours = assignLabelColours(labels)
+        colours = assignLabelColours(labels, self._visualise_params())
         assert set(colours.keys()) == labels
+
     def test_values_are_rgba_tuples(self):
-        colours = assignLabelColours({1, 2, 3})
+        colours = assignLabelColours({1, 2, 3}, self._visualise_params())
         for rgba in colours.values():
             assert len(rgba) == 4, f"Expected RGBA tuple, got length {len(rgba)}"
+    
     def test_single_label(self):
-        colours = assignLabelColours({42})
+        colours = assignLabelColours({42}, self._visualise_params())
         assert 42 in colours
         assert len(colours[42]) == 4
+
 
 # -- Define label centroid calculation test
 class TestGetLabelCentroid2D:
