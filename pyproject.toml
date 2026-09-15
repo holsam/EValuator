@@ -20,6 +20,7 @@ dependencies = [
     "rich>=14.3.3",
     "scikit-image>=0.26.0",
     "scipy>=1.17.1",
+    "textual>=8.2.8",
     "tomli-w>=1.2.0",
     "tomlkit>=0.15.0",
     "tqdm>=4.67.3",

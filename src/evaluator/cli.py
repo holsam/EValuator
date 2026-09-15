@@ -21,6 +21,7 @@ from evaluator.utils.settings import configure_logging, initEvaluator, lg
 # ====================
 from evaluator.commands.config.cli import evaluatorConfig
 from evaluator.commands.analyse.cli import evaluatorAnalyse
+from evaluator.commands.help.cli import evaluatorHelp
 from evaluator.commands.label.cli import evaluatorLabel
 from evaluator.commands.license.cli import evaluatorLicense
 from evaluator.commands.model.cli import evaluatorModel
@@ -70,6 +71,9 @@ evaluator.add_typer(
     rich_help_panel='Component Visualisation')
 evaluator.add_typer(
     evaluatorConfig,
+)
+evaluator.add_typer(
+    evaluatorHelp,
 )
 evaluator.add_typer(
     evaluatorLicense,

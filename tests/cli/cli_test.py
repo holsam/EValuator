@@ -302,6 +302,22 @@ class TestConfigCLI:
             )
         mock_edit.assert_called_once_with(filename=str(cfg))
 
+class TestHelpCLI:
+    '''Help command CLI tests'''
+    def test_help_exits_zero(self):
+        result = runner.invoke(evaluator, ['help', '--help'])
+        assert result.exit_code == 0
+    def test_launches_and_runs_app(self):
+        '''Invoking help should build a HelpApp and call .run() on it, not actually enter the TUI event loop'''
+        with patch('evaluator.commands.help.help.HelpApp.run') as mock_run:
+            result = runner.invoke(evaluator, ["help"])
+        mock_run.assert_called_once()
+        assert result.exit_code == 0
+    def test_all_doc_files_resolve(self):
+        from evaluator.commands.help.help import _DOC_FILES, _readDoc
+        for _, relPath in _DOC_FILES:
+            assert _readDoc(relPath)
+
 class TestViewerCLI:
     '''Viewer command CLI tests (mocked Streamlit launch)'''
     def test_help_exits_zero(self):

@@ -23,6 +23,7 @@ EValuator provides several commands:
 | Component Visualisation| [`visualise`](docs/visualise.md) | Generate various visualisations of tomograms and/or segmentation masks. |
 | Component Visualisation| [`viewer`](docs/viewer.md) | Launch the interactive vesicle viewer. |
 
+EValuator also provides the command `evaluator help` to view documentation (including this README) without leaving the terminal.
 
 ## Installation
 EValuator requires Python 3.14 or later, and uses [uv](https://docs.astral.sh/uv/) as its package manager. If `uv` is not already installed, follow the [installation instructions](https://docs.astral.sh/uv/getting-started/installation/). 
@@ -76,6 +77,7 @@ Component Visualisation:
 
 Utilities:
   config      Create or edit an EValuator configuration file
+  help        View EValuator documentation
   license     Print EValuator license
   tools       Animation, benchmarking and miscellaneous tools
   version     Print current EValuator version
