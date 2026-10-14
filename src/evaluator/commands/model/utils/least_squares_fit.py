@@ -129,7 +129,7 @@ def _assess_reliability(
     vecs = points - centre
     norms = np.linalg.norm(vecs, axis=1)
     with np.errstate(invalid='ignore'):
-        latitudes = np.degrees(np.arcsin(np.clip(vecs[:, 2] / norms, -1, 1)))
+        latitudes = np.degrees(np.arcsin(np.clip(vecs[:, 0] / norms, -1, 1)))
     lat_span = float(latitudes.max() - latitudes.min()) if n > 0 else 0.0
     span_ok = lat_span >= min_latitude_span_deg
     return {
@@ -146,7 +146,7 @@ def _beam_axis_flag(evecs: np.ndarray, radii: np.ndarray, tol_deg: float) -> dic
     major_idx = np.argmax(radii)
     major_axis = evecs[:, major_idx]
     # Angle between major axis and z
-    cos_angle = np.clip(np.abs(major_axis[2]), 0, 1)
+    cos_angle = np.clip(np.abs(major_axis[0]), 0, 1)
     angle_from_z = float(np.degrees(np.arccos(cos_angle)))
     flagged = angle_from_z < tol_deg
     return {
