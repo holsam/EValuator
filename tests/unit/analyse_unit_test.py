@@ -60,6 +60,26 @@ class TestMorphologicalDilation:
     def test_same_shape(self, hollow_sphere_vol):
         closed = morphologicalDilation(hollow_sphere_vol)
         assert closed.shape == hollow_sphere_vol.shape
+    def test_dilation_not_clipped_at_box_face(self):
+        '''
+        Components touching mask boundary should be dilated outward instead of being clipped at the box face.
+        '''
+        vol = np.zeros((10, 10, 10), dtype=bool)
+        vol[0, 5, 5] = True
+        dilated = morphologicalDilation(vol)
+        assert dilated[2, 5, 5], "Inward dilation did not reach the expected extent"
+    def test_symmetric_dilation_extent_matches_interior_point(self):
+        '''
+        The mask boundary should not asymmetrically clip results.
+        '''
+        boundary_vol = np.zeros((10, 10, 10), dtype=bool)
+        boundary_vol[0, 5, 5] = True
+        interior_vol = np.zeros((10, 10, 10), dtype=bool)
+        interior_vol[5, 5, 5] = True
+        dilated_boundary = morphologicalDilation(boundary_vol)
+        dilated_interior = morphologicalDilation(interior_vol)
+        # count of dilated voxels on the non-clipped (y, x) plane through the seed voxel must match
+        assert dilated_boundary[0, :, :].sum() == dilated_interior[5, :, :].sum()
 
 # -- Define check enclosed test --------
 class TestCheckEnclosed:

@@ -144,6 +144,6 @@ Results saved to: .../evaluator/analyse/evaluator-analyse_results.csv
 
 [^eccentricity]: Eccentricity is calculated as `sqrt(1 - (c/a)^2)` where `a` and `c` are the semi-major and semi-minor axes respectively. A perfect sphere would have `eccentricity` approaching 0, whereas an infinitely elongated ellipsoid would have `eccentricity` approaching 1.
 
-[^lumenvol]: This volume is calculated by filling the membrane mask and subtracting all membrane voxels. Non-enclosed components will have `lumen_volume` of 0.
+[^lumenvol]: This volume is calculated by filling the gap-bridged membrane mask (used for is_enclosed check) and subtracting all membrane voxels. Non-enclosed components will have `lumen_volume` of 0.
 
 [^surfacearea]: Surface area is computed using the marching cubes algorithm as implemented by `skimage.measure.marching_cubes`. If the marching cubes algorithm fails (e.g. for very small or degenerate components), `NaN` will be returned.

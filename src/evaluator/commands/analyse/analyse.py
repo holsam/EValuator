@@ -136,9 +136,9 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     '''
     For a given component, make all defined measurements and return as a dictionary.
     '''
-    lg.debug(f"analyse | {filename} | Component {component_label} | Setting scale...")
     scale = voxel_size_nm if voxel_size_nm is not None else 1.0
     scale_label = "nm" if voxel_size_nm is not None else "vox"
+    lg.debug(f"analyse | {filename} | Component {component_label} | Scale set to {scale}{scale_label}")
     lg.debug(f"analyse | {filename} | Component {component_label} | Creating component mask...")
     component_mask = measurement.createComponentMask(component=component_properties, labelled_vol=labelled_volumes, label_val=component_label)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring membrane volume and equivalent diameter...")
@@ -147,7 +147,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     lg.debug(f"analyse | {filename} | Component {component_label} | Checking if component is enclosed...")
     enclosed, fill_ratio = filtering.checkEnclosed(component_mask=component_mask_dilated, threshold=fill_threshold)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring lumen volume...")
-    lumen_vol_nm3 = measurement.measureLumenVolume(component_mask=component_mask, scale=scale)
+    lumen_vol_nm3 = measurement.measureLumenVolume(component_mask=component_mask_dilated, scale=scale)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring surface area...")
     surface_area = measurement.computeSurfaceArea(component_mask, voxel_size_nm)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring major/minor axes diameters...")
