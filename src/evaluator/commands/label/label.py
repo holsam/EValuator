@@ -95,8 +95,12 @@ def label_components(
         membrane_thickness_nm=params.membrane_thickness_nm,
     )
 
-    # Relabel sequentially so downstream commands see a 1..N label range
-    labelled, n_components = mrcutil.labelComponents(labelled.astype(bool))
+    surviving_labels = sorted(int(l) for l in numpy.unique(labelled) if l != 0)
+    remapped = numpy.zeros_like(labelled)
+    for new_id, old_id in enumerate(surviving_labels, start=1):
+        remapped[labelled == old_id] = new_id
+    labelled = remapped
+    n_components = len(surviving_labels)
     lg.info(f"label | {n_components} components retained after merge/filter.")
 
     # Build output path

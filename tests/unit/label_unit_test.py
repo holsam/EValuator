@@ -1,8 +1,7 @@
 # ====================
 # Import external dependencies
 # ====================
-import numpy as np
-import pytest
+import numpy as np, pytest
 
 # ====================
 # Import internal dependencies
@@ -86,8 +85,9 @@ class TestFindMergeGroups:
         assert sorted(groups[0]) == [1, 2]
 
     def test_separate_vesicles_not_merged(self):
-        pts_a = _sphere_points(centre=(0, 0, 0), radius=5.0)
-        pts_b = _sphere_points(centre=(500, 500, 500), radius=20.0)
+        pts_a = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        # centre_tol_factor=1.5 * (10+10) = 30 is the merge boundary
+        pts_b = _sphere_points(centre=(31, 0, 0), radius=10.0)
         groups = findMergeGroups({1: pts_a, 2: pts_b}, centre_tol_factor=1.5, radius_tol_pct=0.30)
         assert sorted(sorted(g) for g in groups) == [[1], [2]]
 
