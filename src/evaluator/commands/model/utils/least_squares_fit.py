@@ -106,6 +106,8 @@ def _ellipsoid_geometric_residuals(
     return np.abs(norm_dist - 1.0) * np.mean(radii)
 
 # _bic: returns a float for the calculated Bayesian Information Criterion for an array of residuals
+#   N.B. sphere residuals are exact orthogonal distances, but ellipsoid residuals are normalised algebraic distance rescaled by the mean radius.
+#   As the two residual sets use different scales, bic_ellipsoid < bic_sphere is not a like-for-like selection test but more of a heuristic.
 def _bic(residuals: np.ndarray, k: int) -> float:
     n = len(residuals)
     rss = np.sum(residuals ** 2)
@@ -129,9 +131,11 @@ def _assess_reliability(
     vecs = points - centre
     norms = np.linalg.norm(vecs, axis=1)
     with np.errstate(invalid='ignore'):
-        latitudes = np.degrees(np.arcsin(np.clip(vecs[:, 2] / norms, -1, 1)))
+        latitudes = np.degrees(np.arcsin(np.clip(vecs[:, 0] / norms, -1, 1)))
     lat_span = float(latitudes.max() - latitudes.min()) if n > 0 else 0.0
     span_ok = lat_span >= min_latitude_span_deg
+    # size_limited: rmse_ok is the only failing criterion
+    size_limited = (not rmse_ok) and count_ok and span_ok
     return {
         'is_reliable': rmse_ok and count_ok and span_ok,
         'relative_rmse': float(relative_rmse),
@@ -139,6 +143,7 @@ def _assess_reliability(
         'count_ok': count_ok,
         'lat_span_deg': lat_span,
         'span_ok': span_ok,
+        'size_limited': size_limited,
     }
 
 # _beam_axis_flag: identifies if an ellipsoid's major axis is close to the z-axis, returning a dictionary containing this check and the angles
@@ -146,7 +151,7 @@ def _beam_axis_flag(evecs: np.ndarray, radii: np.ndarray, tol_deg: float) -> dic
     major_idx = np.argmax(radii)
     major_axis = evecs[:, major_idx]
     # Angle between major axis and z
-    cos_angle = np.clip(np.abs(major_axis[2]), 0, 1)
+    cos_angle = np.clip(np.abs(major_axis[0]), 0, 1)
     angle_from_z = float(np.degrees(np.arccos(cos_angle)))
     flagged = angle_from_z < tol_deg
     return {

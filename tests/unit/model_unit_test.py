@@ -11,6 +11,7 @@ from evaluator.commands.model.utils.least_squares_fit import (
     fit_sphere_least_squares,
     fit_ellipsoid,
     fit_vesicle,
+    _beam_axis_flag,
 )
 from evaluator.commands.model.utils.reconstruction import build_fitted_mrc
 
@@ -23,24 +24,24 @@ def _sphere_points(centre=(50.0, 50.0, 50.0), radius=20.0, n=800, noise=0.0, see
     i = np.arange(n)
     phi = np.arccos(1 - 2 * (i + 0.5) / n)      # polar angle: 0 -> pi (full sphere)
     theta = np.pi * (1 + 5 ** 0.5) * i          # golden angle azimuth
-    x = radius * np.sin(phi) * np.cos(theta)
-    y = radius * np.sin(phi) * np.sin(theta)
     z = radius * np.cos(phi)
-    pts = np.stack([x, y, z], axis=1) + np.asarray(centre)
+    y = radius * np.sin(phi) * np.sin(theta)
+    x = radius * np.sin(phi) * np.cos(theta)
+    pts = np.stack([z, y, x], axis=1) + np.asarray(centre)
     if noise:
         pts = pts + rng.normal(0.0, noise, size=pts.shape)
     return pts
 
-# -- _ellipsoid_points: n points over the full ellipsoid surface, optionally rotated
+# -- _ellipsoid_points: n points over the full ellipsoid surface, optionally rotated. radii is given as (r_z, r_y, r_x).
 def _ellipsoid_points(centre=(50.0, 50.0, 50.0), radii=(10.0, 20.0, 30.0), rotation=None, n=800, noise=0.0, seed=0):
     rng = np.random.default_rng(seed)
     i = np.arange(n)
     phi = np.arccos(1 - 2 * (i + 0.5) / n)
     theta = np.pi * (1 + 5 ** 0.5) * i
     local = np.stack([
-        radii[0] * np.sin(phi) * np.cos(theta),
+        radii[0] * np.cos(phi),
         radii[1] * np.sin(phi) * np.sin(theta),
-        radii[2] * np.cos(phi),
+        radii[2] * np.sin(phi) * np.cos(theta),
     ], axis=1)
     if rotation is not None:
         local = local @ rotation.T
@@ -49,28 +50,17 @@ def _ellipsoid_points(centre=(50.0, 50.0, 50.0), radii=(10.0, 20.0, 30.0), rotat
         pts = pts + rng.normal(0.0, noise, size=pts.shape)
     return pts
 
-# -- _rotation_about_x: right-handed rotation matrix about the x-axis (index 0)
-def _rotation_about_x(angle_deg):
-    a = np.radians(angle_deg)
-    return np.array([
-        [1, 0, 0],
-        [0, np.cos(a), -np.sin(a)],
-        [0, np.sin(a), np.cos(a)],
-    ])
-
-# -- _narrow_band_points: points confined to a ~20 degree latitude band,
-#    simulating a vesicle with most of its surface missing
+# -- _narrow_band_points: points confined to a ~20 degree latitude band about beam, simulating a vesicle with most of its surface missing
 def _narrow_band_points(centre=(50.0, 50.0, 50.0), radius=20.0, n=200, seed=0):
     rng = np.random.default_rng(seed)
     phi = np.radians(rng.uniform(80.0, 100.0, size=n))   # polar angle near equator
     theta = rng.uniform(0.0, 2 * np.pi, size=n)
-    x = radius * np.sin(phi) * np.cos(theta)
-    y = radius * np.sin(phi) * np.sin(theta)
     z = radius * np.cos(phi)
-    return np.stack([x, y, z], axis=1) + np.asarray(centre)
+    y = radius * np.sin(phi) * np.sin(theta)
+    x = radius * np.sin(phi) * np.cos(theta)
+    return np.stack([z, y, x], axis=1) + np.asarray(centre)
 
-# -- _flat_ring_points: points on a flat annulus (constant z), a degenerate
-#    input for ellipsoid fitting
+# -- _flat_ring_points: points on a flat annulus (constant z), a degenerate input for ellipsoid fitting
 def _flat_ring_points(centre=(50.0, 50.0, 50.0), radius=15.0, n=40):
     theta = np.linspace(0.0, 2 * np.pi, n, endpoint=False)
     x = radius * np.cos(theta)
@@ -138,22 +128,16 @@ class TestFitVesicleModelSelection:
         assert result['orientation'] is None
     def test_elongated_off_axis_selects_ellipsoid(self):
         '''
-        Major axis (radius 30) rotated 90 degrees about x so it points
-        along global y, i.e. 90 degrees from the beam (z) axis - well
-        outside the beam-axis guard tolerance.
+        Major axis (radius 30) placed along global x, i.e. 90 degrees from the beam (z) axis - well outside the beam-axis guard tolerance.
         '''
-        pts = _ellipsoid_points(
-            radii=(10.0, 10.0, 30.0),
-            rotation=_rotation_about_x(90.0),
-            noise=0.02, seed=5,
-        )
+        pts = _ellipsoid_points(radii=(10.0, 10.0, 30.0), noise=0.02, seed=5)
         result = fit_vesicle(pts)
         assert result['chosen_model'] == 'ellipsoid'
         assert result['radii'] is not None
         assert result['orientation'] is not None
     def test_elongated_along_beam_axis_selects_sphere_beam_axis(self):
-        '''Major axis (radius 30) left aligned with global z (the beam axis).'''
-        pts = _ellipsoid_points(radii=(10.0, 10.0, 30.0), noise=0.02, seed=6)
+        '''Major axis (radius 30) aligned with global z (beam axis).'''
+        pts = _ellipsoid_points(radii=(30.0, 10.0, 10.0), noise=0.02, seed=6)
         result = fit_vesicle(pts)
         assert result['chosen_model'] == 'sphere (beam-axis)'
         assert result['radii'] is None
@@ -180,6 +164,18 @@ class TestFitVesicleModelSelection:
             'beam_axis', 'sphere_fit', 'ellipsoid_fit',
         }
         assert expected_keys.issubset(result.keys())
+    def test_beam_axis_flag_uses_index_0_not_2(self):
+        '''
+        major_axis_angle_from_z_deg should be measured against column 0 (z), so an ellipsoid genuinely elongated along z should be flagged (angle near 0), while one elongated along x (90 degrees off-beam) should not be.
+        '''
+        result_z = fit_ellipsoid(_ellipsoid_points(radii=(30.0, 10.0, 10.0), noise=0.02, seed=13))
+        flag_z = _beam_axis_flag(result_z['evecs'], result_z['radii'], tol_deg=25.0)
+        assert flag_z['major_axis_angle_from_z_deg'] < 10.0
+        assert flag_z['beam_axis_flagged'] is True
+        result_x = fit_ellipsoid(_ellipsoid_points(radii=(10.0, 10.0, 30.0), noise=0.02, seed=14))
+        flag_x = _beam_axis_flag(result_x['evecs'], result_x['radii'], tol_deg=25.0)
+        assert flag_x['major_axis_angle_from_z_deg'] > 80.0
+        assert flag_x['beam_axis_flagged'] is False
 
 
 # ====================
@@ -214,6 +210,22 @@ class TestFitVesicleReliability:
         assert fit_vesicle(pts)['reliability']['span_ok'] is False
         loosened = fit_vesicle(pts, min_latitude_span_deg=5.0)['reliability']
         assert loosened['span_ok'] is True
+    def test_missing_wedge_caps_fail_span_gate_not_180(self):
+        '''A shell with missing wedge shouldn't report a full 180 degree latitude span.'''
+        rng = np.random.default_rng(15)
+        n = 400
+        phi = np.radians(rng.uniform(70.0, 110.0, size=n))
+        theta = rng.uniform(0.0, 2 * np.pi, size=n)
+        radius = 20.0
+        z = radius * np.cos(phi)
+        y = radius * np.sin(phi) * np.sin(theta)
+        x = radius * np.sin(phi) * np.cos(theta)
+        pts = np.stack([z, y, x], axis=1) + np.array([50.0, 50.0, 50.0])
+        result = fit_vesicle(pts)
+        rel = result['reliability']
+        assert rel['lat_span_deg'] < 179.0
+        assert rel['span_ok'] is False
+        assert rel['is_reliable'] is False
     def test_noisy_points_fail_rmse_gate(self):
         '''Noise comparable to the radius pushes relative RMSE over threshold.'''
         pts = _sphere_points(radius=20.0, n=800, noise=6.0, seed=12)
