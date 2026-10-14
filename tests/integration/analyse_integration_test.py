@@ -110,8 +110,8 @@ class TestAnalyseMeasurements:
     def test_aspect_ratio_near_one_for_spheres(self, analyse_csv):
         """Synthetic perfect spheres must have aspect ratios close to 1.0."""
         df = pd.read_csv(analyse_csv)
-        assert (df["aspect_ratio"] > 0.5).all()
-        assert (df["aspect_ratio"] < 2.0).all()
+        assert (df["aspect_ratio"] > 0.98).all()
+        assert (df["aspect_ratio"] < 1.02).all()
     def test_qc_metric_columns_finite(self, analyse_csv):
         df = pd.read_csv(analyse_csv)
         for col in ["sphere_rmse_rel", "solidity", "arc_coverage", "bbox_extent"]:

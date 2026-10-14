@@ -138,7 +138,7 @@ Results saved to: .../evaluator/analyse/evaluator-analyse_results.csv
 
 [^equivdiameter]: `equiv_diameter_nm` is not the measured diameter of an EV but a derived outer diameter estimate. Given the volume of all membrane voxels (Vm), the equivalent diameter is derived from solving `4π/3·(R^3 - (R-t)**3) = Vm` for the outer radius `R` (which provides equivalent diameter via `equiv_diameter_nm = 2R`). This estimate assumes a fixed membrane thickness and roughly spherical shell, so is unlikely to be a valid model for biological EVs, and is therefore only used as a rough proxy during size filtering and for subsequent axis scaling.
 
-[^diameters]: `major/minor_axis_diameter` are the more accurate measurements of EV size, calculated from the best-fit ellipsoid that matches the EV morphology. Both measurements are derived from the eigenvalues of the component's inertia tensor, which are scaled using `equiv_diameter_nm`.
+[^diameters]: `major/minor_axis_diameter` approximate EV diameters using the best-fit ellipsoid implied by the components inertia tensor eigenvalues after scaling using `equiv_diameter_nm`. They inherit the equivalent diameter's assumptions, but the ratio between diameters reflects the true shape.
 
 [^aspectratio]: A perfect sphere would have an `aspect_ratio` of 1.0. An EV with `aspect_ratio` greater than 1.0 can be described as a prolate ellipsoid (i.e. elongated), whereas an EV with `aspect_ratio` less than 1.0 can be described as an oblate ellipsoid (i.e. flattened).
 

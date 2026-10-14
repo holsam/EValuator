@@ -226,8 +226,6 @@ class TestDeriveAxes:
         result = deriveAxes(tensor)
         assert (result[0] / result[-1]) > 2.0
 
-
-
 # -- Define axes measurements test -----
 class TestMeasureAxes:
     def test_sphere_major_approx_equals_minor(self, sphere_regionprops):
@@ -245,6 +243,36 @@ class TestMeasureAxes:
         _, equiv_diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0)
         major, minor = measureAxes(sphere_regionprops, equiv_diam)
         assert major > 0 and minor > 0
+    def test_known_ellipsoid_axis_ratio_recovered(self):
+        """
+        Measurement of ellipsoid with semi-axes 12, 6, 3 vox recovers major/minor axis ratio close to 4.0.
+        """
+        from skimage import measure as skmeasure
+        shape = (30, 30, 30)
+        zz, yy, xx = np.indices(shape)
+        cz, cy, cx = 15, 15, 15
+        a, b, c = 12.0, 6.0, 3.0
+        vol = (((zz - cz) / a) ** 2 + ((yy - cy) / b) ** 2 + ((xx - cx) / c) ** 2) <= 1.0
+        props = skmeasure.regionprops(vol.astype(np.int32))[0]
+        _, equiv_diam = measureMembraneVolumeDiameter(props, scale=1.0)
+        major, minor = measureAxes(props, equiv_diam)
+        assert np.isclose(major / minor, a / c, rtol=0.15), f"Recovered axis ratio {major / minor:.2f} too far from true ratio {a / c:.2f}"
+    def test_single_voxel_component_returns_nan_not_crash(self):
+        """A degenerate single-voxel component returns NaN."""
+        from skimage import measure as skmeasure
+        vol = np.zeros((5, 5, 5), dtype=np.int32)
+        vol[2, 2, 2] = 1
+        props = skmeasure.regionprops(vol)[0]
+        major, minor = measureAxes(props, equiv_diameter_nm=10.0)
+        assert np.isnan(major) and np.isnan(minor)
+    def test_line_component_returns_nan_not_crash(self):
+        """A 1-voxel-wide line component returns NaN."""
+        from skimage import measure as skmeasure
+        vol = np.zeros((10, 5, 5), dtype=np.int32)
+        vol[2:8, 2, 2] = 1
+        props = skmeasure.regionprops(vol)[0]
+        major, minor = measureAxes(props, equiv_diameter_nm=10.0)
+        assert np.isnan(major) and np.isnan(minor)
 
 # -- Define eccentricity & aspect ratio test
 class TestMeasureEccentricityAspectRatio:
