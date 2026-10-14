@@ -178,35 +178,55 @@ class TestComputeSurfaceArea:
 
 # -- Define axis derivation test -------
 class TestDeriveAxes:
-    def test_identity_tensor_returns_ones(self):
-        """Identity inertia tensor → all eigenvalues=1 → inv_sqrt=[1,1,1]"""
+    def test_identity_tensor_returns_equal_axes(self):
+        """Identity inertia tensor (i.e. isotropic) gives equal relative axis lengths"""
         result = deriveAxes(np.eye(3))
-        assert np.allclose(result, [1.0, 1.0, 1.0])
-    def test_diagonal_tensor_known_values(self):
+        assert np.allclose(result, result[0])
+    def test_known_ellipsoid_semi_axes_recovered(self):
         """
-        Diagonal tensor [1, 4, 9] → eigvalsh ascending [1,4,9]
-        → inv_sqrt = [1/1, 1/2, 1/3].
+        Solid ellipsoid with known semi-axes a=3,b=2,c=1 (mass=1) has principal moments I_a=(b^2+c^2)/5, I_b=(a^2+c^2)/5, I_c=(a^2+b^2)/5.
+        deriveAxes must recover axis lengths proportional to the true (3, 2, 1) ratio.
         """
-        tensor = np.diag([1.0, 4.0, 9.0])
+        a, b, c = 3.0, 2.0, 1.0
+        i_a = (b ** 2 + c ** 2) / 5.0
+        i_b = (a ** 2 + c ** 2) / 5.0
+        i_c = (a ** 2 + b ** 2) / 5.0
+        tensor = np.diag(sorted([i_a, i_b, i_c]))  # eigvalsh returns ascending order
         result = deriveAxes(tensor)
-        assert np.allclose(result, [1.0, 0.5, 1.0 / 3.0], rtol=1e-6)
-    def test_zero_eigenvalue_gives_zero_not_inf(self):
-        """A zero eigenvalue must produce 0.0 in inv_sqrt, not NaN or inf"""
-        tensor = np.diag([0.0, 1.0, 4.0])
+        result_ratio = result / result[-1]
+        true_ratio = np.array([a, b, c]) / c
+        assert np.allclose(result_ratio, true_ratio, rtol=1e-6), f"Recovered axis ratio {result_ratio} does not match true ratio {true_ratio}"
+    def test_zero_eigenvalue_gives_zero_not_nan_or_inf(self):
+        """A zero eigenvalue must produce 0.0, not NaN or inf."""
+        tensor = np.diag([0.0, 4.0, 4.0])
         result = deriveAxes(tensor)
-        assert result[0] == 0.0
         assert not np.any(np.isnan(result))
         assert not np.any(np.isinf(result))
     def test_output_is_descending(self):
-        """inv_sqrt must be in descending order (largest first)"""
-        tensor = np.diag([1.0, 4.0, 9.0])
+        """Axis lengths must be in descending order (largest first)"""
+        a, b, c = 3.0, 2.0, 1.0
+        i_a, i_b, i_c = (b ** 2 + c ** 2) / 5.0, (a ** 2 + c ** 2) / 5.0, (a ** 2 + b ** 2) / 5.0
+        tensor = np.diag(sorted([i_a, i_b, i_c]))
         result = deriveAxes(tensor)
         assert result[0] >= result[1] >= result[2]
     def test_symmetric_tensor_gives_equal_axes(self):
-        """An isotropic (spherical) inertia tensor must give equal inv_sqrt values"""
+        """An isotropic (spherical) inertia tensor must give equal axis lengths"""
         tensor = 5.0 * np.eye(3)
         result = deriveAxes(tensor)
         assert np.allclose(result[0], result[1]) and np.allclose(result[1], result[2])
+    def test_no_artificial_oblate_ceiling(self):
+        """
+        A strongly oblate ellipsoid (a=b=5, c=1) must give an axis ratio beyond inverse square root's ~1.414 ceiling.
+        """
+        a, b, c = 5.0, 5.0, 1.0
+        i_a = (b ** 2 + c ** 2) / 5.0
+        i_b = (a ** 2 + c ** 2) / 5.0
+        i_c = (a ** 2 + b ** 2) / 5.0
+        tensor = np.diag(sorted([i_a, i_b, i_c]))
+        result = deriveAxes(tensor)
+        assert (result[0] / result[-1]) > 2.0
+
+
 
 # -- Define axes measurements test -----
 class TestMeasureAxes:

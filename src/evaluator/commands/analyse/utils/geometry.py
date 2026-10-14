@@ -74,13 +74,16 @@ def arcCoverage(coords: numpy.ndarray, max_fit_points: int = _QC_MAX_FIT_POINTS)
 # =========================
 def deriveAxes(intertia_tensor, voxel_size_nm=None):
     '''
-    Derive semi-axes (a ≥ b ≥ c) of the best-fit ellipsoid from inertia tensor eigenvalues. eigvalsh returns eigenvalues in ascending order (I_a ≤ I_b ≤ I_c).
+    Derive semi-axes (a ≥ b ≥ c) of the best-fit ellipsoid from inertia tensor eigenvalues.
+    eigvalsh returns eigenvalues in ascending order (I_a ≤ I_b ≤ I_c).
+    For ellipsoid with principal moments I_a=(m/5)(b^2+c^2), use inversion a^2 ∝ (I_b + I_c - I_a) instead of 1/sqrt(I_a).
     '''
     eigvals = numpy.linalg.eigvalsh(intertia_tensor)
     eigvals = numpy.clip(eigvals, 0, None)
-    with numpy.errstate(divide="ignore", invalid="ignore"):
-        inv_sqrt = numpy.where(eigvals > 0, 1.0 / numpy.sqrt(eigvals), 0.0)
-    return inv_sqrt
+    ia, ib, ic = eigvals
+    # index 0 pairs with the smallest eigenvalue (ia) -> longest axis; index 2 pairs with ic -> shortest axis
+    sq_lengths = numpy.clip([ib + ic - ia, ia + ic - ib, ia + ib - ic], 0, None)
+    return numpy.sqrt(sq_lengths)
 
 # =========================
 # DEFINE FUNCTION: measureAxes
