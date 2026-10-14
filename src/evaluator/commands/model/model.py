@@ -35,7 +35,7 @@ def model_batch(input_path, output_dir, max_workers=None, **overrides) -> None:
     '''
     mrc_files = batchutil.resolve_mrc_inputs(input_path)
     config, _ = confutil.load_config(output_dir)
-    max_workers = max_workers if max_workers is not None else config.label.max_workers
+    max_workers = max_workers if max_workers is not None else config.model.max_workers
     worker = partial(model_evs, output_dir=output_dir, **overrides)
     batchutil.run_batch(mrc_files, worker=worker, desc="Labelled files processed", max_workers=max_workers)
 
