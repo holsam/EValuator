@@ -1,6 +1,5 @@
 # -- Import external dependencies ------
-import pytest
-import numpy as np
+import mrcfile, numpy as np, pytest
 from pathlib import Path
 
 # -- Import internal dependencies ------
@@ -99,3 +98,36 @@ class TestLabelComponentsFilterOverrides:
         out_file = next(out_dir.glob("*.mrc"))
         data, _ = readMRCFile(out_file)
         assert int(data.max()) == N_EVS
+
+# -- Define merging relabelling tests
+class TestLabelComponentsMergeSurvivesToOutput:
+    @pytest.fixture
+    def split_shell_seg_path(self, tmp_path):
+        # Create a hollow sphere and simulate missing wedge
+        shape = (80, 80, 80)
+        centre = np.array([40.0, 40.0, 40.0])
+        r_outer, r_inner = 20, 12
+        zz, yy, xx = np.indices(shape)
+        dist = np.sqrt((zz - centre[0]) ** 2 + (yy - centre[1]) ** 2 + (xx - centre[2]) ** 2)
+        shell = (dist >= r_inner) & (dist <= r_outer)
+        # Remove the equatorial band to break 6-connectivity
+        band = np.abs(zz - centre[0]) <= 4
+        split = shell & ~band
+        assert split.sum() > 0
+        seg_path = tmp_path / "split_shell_segmentation.mrc"
+        with mrcfile.new(str(seg_path), overwrite=True) as mrc:
+            mrc.set_data(split.astype(np.float32))
+            mrc.voxel_size = 5.36
+        return seg_path
+    def test_split_vesicle_written_as_single_label(self, split_shell_seg_path, tmp_path):
+        label_components(split_shell_seg_path, tmp_path, min_arc_coverage=0.0, minimum_diameter_nm=0.0)
+        out_dir = tmp_path / "evaluator" / "label"
+        out_file = next(out_dir.glob("*.mrc"))
+        data, _ = readMRCFile(out_file)
+        from scipy import ndimage
+        struc = ndimage.generate_binary_structure(3, 1)
+        raw_data, _ = readMRCFile(split_shell_seg_path)
+        _, n_raw_components = ndimage.label(raw_data.astype(bool), structure=struc)
+        assert n_raw_components == 2, "test fixture must produce two disjoint pieces pre-merge"
+        assert int(data.max()) == 1
+        assert sorted(np.unique(data).tolist()) == [0, 1]
