@@ -51,6 +51,10 @@ def analyse(
         Optional[float],
         typer.Option('--fill-threshold', help='Override configuration fill threshold parameter for this run', min=0, max=1)
     ] = None,
+    membrane_thickness_nm: Annotated[
+        Optional[float],
+        typer.Option('--membrane-thickness-nm', help='Override membrane shell thickness (nm) used for diameter derivation', min=0)
+    ] = None,
     qc_max_sphere_rmse_rel: Annotated[
         Optional[float],
         typer.Option('--qc-max-sphere-rmse-rel', help='Max best-fit-sphere relative RMSE for a vesicle-like component', min=0, rich_help_panel='Vesicle-Like Check Overrides')
@@ -83,6 +87,7 @@ def analyse(
         input,
         output,
         fill_threshold=fill_threshold,
+        membrane_thickness_nm=membrane_thickness_nm,
         qc_max_sphere_rmse_rel=qc_max_sphere_rmse_rel,
         qc_max_aspect_ratio=qc_max_aspect_ratio,
         qc_min_solidity=qc_min_solidity,

@@ -53,6 +53,7 @@ class ModelConfig(_Section):
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
     fill_threshold: float = Field(..., description='Fill ratio threshold for labelling')
+    membrane_thickness_nm: float = Field(7, description='Assumed membrane shell thickness (nm), used to derive outer diameter from membrane volume')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
     # Vesicle-vs-debris QC thresholds
     qc_max_sphere_rmse_rel: float = Field(0.25, description='Max best-fit-sphere relative RMSE for a vesicle-like component', gt=0)

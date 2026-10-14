@@ -27,6 +27,7 @@ max_workers = 0
 # Analyse command default configuration parameters
 [analyse]
 fill_threshold = 0.05
+membrane_thickness_nm = 7
 max_workers = 0
 qc_max_sphere_rmse_rel = 0.25
 qc_max_aspect_ratio = 2.5
