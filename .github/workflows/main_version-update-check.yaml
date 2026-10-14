@@ -1,0 +1,66 @@
+name: Main Branch Version Check Workflow
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  version-check:
+    name: Check version incremented
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+
+      - name: Read PR version
+        id: pr_version
+        run: |
+          VERSION=$(grep -m1 '^version *= *' pyproject.toml | sed -E 's/version *= *"([^"]+)"/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "Could not read version from pyproject.toml" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Read main version
+        id: main_version
+        run: |
+          git fetch origin main --depth=1
+          VERSION=$(git show origin/main:pyproject.toml | grep -m1 '^version *= *' | sed -E 's/version *= *"([^"]+)"/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "Could not read version from main's pyproject.toml" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d
+
+      - name: Compare versions
+        run: |
+          PR_VERSION="${{ steps.pr_version.outputs.version }}"
+          MAIN_VERSION="${{ steps.main_version.outputs.version }}"
+          echo "PR version: $PR_VERSION"
+          echo "main version: $MAIN_VERSION"
+          uv run --with packaging python3 - "$PR_VERSION" "$MAIN_VERSION" <<'EOF'
+          import sys
+          from packaging.version import Version, InvalidVersion
+
+          pr_raw, main_raw = sys.argv[1], sys.argv[2]
+
+          try:
+              pr = Version(pr_raw)
+              main = Version(main_raw)
+          except InvalidVersion as e:
+              print(f"Could not parse version as PEP 440: {e}", file=sys.stderr)
+              sys.exit(1)
+
+          if pr <= main:
+              print(f'Version in pyproject.toml ({pr_raw}) is not greater than main ({main_raw}). Versions must strictly increase.', file=sys.stderr)
+              sys.exit(1)
+
+          print(f'OK: {pr_raw} > {main_raw}')
+          EOF
