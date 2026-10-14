@@ -84,13 +84,12 @@ class TestAnalyseEVDetection:
 class TestAnalyseMeasurements:
     def test_equiv_diameter_within_generator_range(self, analyse_csv):
         """
-        Synthetic EVs have outer diameters 42.9–128.6 nm (r_outer 40–120 vox).
-        equiv_diameter is derived from shell volume, not geometric diameter,
-        so it will be somewhat smaller — but must remain within the filter bounds.
+        Synthetic EVs have outer diameters 42.9-128.6 nm (r_outer 40-120 vox).
+        equiv_diameter is derived from shell volume inversion using the default membrane thickness of 7nm (which differs slightly from true shell thickness of 5.4nm).
         """
         df = pd.read_csv(analyse_csv)
-        assert (df["equiv_diameter_nm"] > 20.0).all()
-        assert (df["equiv_diameter_nm"] < 500.0).all()
+        assert (df["equiv_diameter_nm"] > 35.0).all()
+        assert (df["equiv_diameter_nm"] < 105.0).all()
     def test_major_axis_geq_minor_axis(self, analyse_csv):
         df = pd.read_csv(analyse_csv)
         assert (df["major_axis_diameter"] >= df["minor_axis_diameter"]).all()

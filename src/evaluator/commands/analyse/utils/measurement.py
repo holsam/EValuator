@@ -34,13 +34,21 @@ def computeSurfaceArea(component_mask: numpy.ndarray, voxel_size_nm: float):
 # =========================
 # DEFINE FUNCTION: measureMembraneVolumeDiameter
 # =========================
-def measureMembraneVolumeDiameter(component, scale):
+def measureMembraneVolumeDiameter(component, scale, membrane_thickness_nm: float = 7.0):
     '''
-    Measures the volume of membrane components in voxels and converts to nm^3. Calculates the equivalent spherical diameter in nm.
+    Measures the volume of membrane components in voxels and converts to nm^3. Derives the equivalent spherical diameter by treating membrane volume as a spherical shell of known thickness.
     '''
     vol_vox = component.area
     vol_nm3 = vol_vox * (scale ** 3)
-    equiv_diameter_nm = (6 * vol_nm3 / numpy.pi) ** (1 / 3)
+    t = membrane_thickness_nm
+    if t is not None and t > 0:
+        # use the positive root from solving 4/3 pi (R^3 - (R-t)^3) = vol_nm3
+        discriminant = max(vol_nm3 / (numpy.pi * t) - (t ** 2) / 3, 0.0)
+        outer_radius_nm = (t / 2) + (numpy.sqrt(discriminant) / 2)
+        equiv_diameter_nm = 2 * outer_radius_nm
+    else:
+        # no thickness available: fall back to a biased solid-sphere-equivalent diameter
+        equiv_diameter_nm = (6 * vol_nm3 / numpy.pi) ** (1 / 3)
     return vol_nm3, equiv_diameter_nm
 
 # =========================

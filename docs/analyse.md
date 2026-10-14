@@ -28,6 +28,7 @@ Arguments:
 Options:
   -o, --out-dir PATH              Path to output directory. Results will be written under '.../evaluator/analyse/'. [default: .]
   --fill-threshold FLOAT  [0-1]   Override configuration fill threshold parameter for this run.
+  --membrane-thickness-nm FLOAT [x>0] Override membrane shell thickness (nm) used for diameter derivation.
   -h, --help                      Show this message and exit.
 
 Batch Options:
@@ -59,6 +60,9 @@ fill_ratio = (filled_volume - original_volume) / filled_volume
 
 A component is classified as enclosed (`is_enclosed = True`) if `fill_ratio > fill_threshold`. The default of `0.05` is deliberately permissive, to accommodate incomplete segmentations where a small fraction of the membrane may not have been captured. Decreasing this threshold includes more components as enclosed; increasing it requires a larger enclosed cavity relative to the membrane.
 
+#### `--membrane-thickness-nm`
+This option controls the assumed membrane thickness value used during derivation of a vesicle's outer diameter from the meaured membrane volume.
+
 #### `--qc-max-sphere-rmse-rel`, `--qc-max-aspect-ratio`, `--qc-min-solidity`, `--qc-min-arc-coverage`
 These four thresholds underpin the vesicle-vs-debris QC flag included in results (`is_vesicle_like` / `qc_flags`, see [Output CSV columns](#output-csv-columns)). 
 
@@ -87,7 +91,7 @@ Column | Description | Units[^units]
 --|--|--
 `tomogram` | Filename of the input MRC file from which the EV was identified |
 `label` | Unique integer identifier for the EV within its file |
-`equiv_diameter_nm`[^equivdiameter] | Diameter of a sphere with the same volume as the membrane component | nm (rounded to 2 d.p.)
+`equiv_diameter_nm`[^equivdiameter] | Outer diameter of the vesicle, derived from the membrane shell volume and thickness | nm (rounded to 2 d.p.)
 `major_axis_diameter`[^diameters] | Length of the longest axis of the best-fit ellipsoid | nm (rounded to 2 d.p.)
 `minor_axis_diameter`[^diameters] | Length of the shortest axis of the best-fit ellipsoid | nm (rounded to 2 d.p.)
 `aspect_ratio`[^aspectratio] | Ratio of `major_axis_diameter` to `minor_axis_diameter` | unitless (rounded to 2 d.p.)
@@ -118,7 +122,7 @@ Pipeline run summary
 - Segmentation files with EVs: 9 (90.0%)
 - EVs processed: 87
 - Number of enclosed EVs: 71 (81.6%)
-- Equivalent diameters: 112.4 ± 48.3 nm (mean ± SD)
+- Outer diameters: 112.4 ± 48.3 nm (mean ± SD)
 - Vesicle-like components: 63 / 87 (72.4%)
 Results saved to: .../evaluator/analyse/evaluator-analyse_results.csv
 ```
@@ -132,7 +136,7 @@ Results saved to: .../evaluator/analyse/evaluator-analyse_results.csv
 
 [^units]: Units given here assume the voxel size in nanometres was read from the MRC file header. If this is not the case, units will not be scaled to physical units and will be in voxels/voxels³.
 
-[^equivdiameter]: `equiv_diameter_nm` is not the measured diameter of an EV. Given the volume of all membrane voxels (Vm), the equivalent diameter is calculated as `(6Vm/π)**(1/3)`, which assumes the shape of the component is a perfect sphere. This is likely not a valid assumption for biological EVs, and `equiv_diameter_nm` is therefore only used as a rough proxy during size filtering and for subsequent axis scaling.
+[^equivdiameter]: `equiv_diameter_nm` is not the measured diameter of an EV but a derived outer diameter estimate. Given the volume of all membrane voxels (Vm), the equivalent diameter is derived from solving `4π/3·(R^3 - (R-t)**3) = Vm` for the outer radius `R` (which provides equivalent diameter via `equiv_diameter_nm = 2R`). This estimate assumes a fixed membrane thickness and roughly spherical shell, so is unlikely to be a valid model for biological EVs, and is therefore only used as a rough proxy during size filtering and for subsequent axis scaling.
 
 [^diameters]: `major/minor_axis_diameter` are the more accurate measurements of EV size, calculated from the best-fit ellipsoid that matches the EV morphology. Both measurements are derived from the eigenvalues of the component's inertia tensor, which are scaled using `equiv_diameter_nm`.
 

@@ -111,14 +111,20 @@ class TestMeasureMembraneVolumeDiameter:
     def test_diameter_is_positive(self, sphere_regionprops):
         _, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=VOX_NM_SMALL)
         assert diam > 0
-    def test_diameter_plausible_for_sphere(self, sphere_regionprops):
-        """
-        equiv_diameter is derived from shell volume, not geometric diameter
-        For r_outer=20, r_inner=12 at scale=1: shell_vol ≈ 26,266 vox.
-        equiv_diam = (6 x 26266 / π)^(1/3) ≈ 36.9 vox
-        """
-        _, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0)
-        assert 30.0 < diam < 45.0, f"Unexpected equiv_diameter {diam:.2f} vox"
+    def test_diameter_matches_true_outer_diameter_given_correct_thickness(self, sphere_regionprops):
+        '''
+        Synthetic shell has r_outer=20, r_inner=12, thickness=8 vox.
+        Shell-volume-inversion formula should recover the true outer diameter (2*r_outer=40 vox).
+        '''
+        _, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=8.0)
+        assert 38.0 < diam < 42.0, f"Unexpected outer diameter {diam:.2f} vox (expected ~40 vox)"
+    def test_solid_sphere_fallback_reproduces_old_biased_value_when_no_thickness(self, sphere_regionprops):
+        vol_nm3, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=0.0)
+        assert np.isclose(diam, (6 * vol_nm3 / np.pi) ** (1 / 3))
+    def test_thicker_assumed_membrane_gives_smaller_outer_diameter(self, sphere_regionprops):
+        _, diam_thin = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=4.0)
+        _, diam_thick = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=12.0)
+        assert diam_thick < diam_thin
 
 # -- Define lumen measurement test -----
 class TestMeasureLumenVolume:

@@ -70,6 +70,7 @@ def analyse(
     worker = partial(
         processSegmentation,
         fill_threshold=params.fill_threshold,
+        membrane_thickness_nm=params.membrane_thickness_nm,
         qc_params=qc_params,
     )
     per_file_results = batchutil.run_batch(seg_files, worker=worker, desc="Segmentation files processed", max_workers=params.max_workers)
@@ -88,7 +89,7 @@ def analyse(
 # =========================
 # DEFINE FUNCTION: processSegmentation
 # =========================
-def processSegmentation(seg_path: Path, fill_threshold, qc_params):
+def processSegmentation(seg_path: Path, fill_threshold, membrane_thickness_nm, qc_params):
     '''
     Process a given labelled segmentation file by calling the component processing
     function for each component.
@@ -118,7 +119,7 @@ def processSegmentation(seg_path: Path, fill_threshold, qc_params):
     with logging_redirect_tqdm():
         for component in tqdm(component_list, desc="Components processed"):
             lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Measuring component features...")
-            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold, qc_params)
+            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold, membrane_thickness_nm, qc_params)
             if component_data is None:
                 lg.warning(f"analyse | {seg_path.name} | Component {component.label} | Component processing failed — skipping.")
                 continue
@@ -131,7 +132,7 @@ def processSegmentation(seg_path: Path, fill_threshold, qc_params):
 # =========================
 # DEFINE FUNCTION: processComponent
 # =========================
-def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold, qc_params):
+def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold, membrane_thickness_nm, qc_params):
     '''
     For a given component, make all defined measurements and return as a dictionary.
     '''
@@ -141,7 +142,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     lg.debug(f"analyse | {filename} | Component {component_label} | Creating component mask...")
     component_mask = measurement.createComponentMask(component=component_properties, labelled_vol=labelled_volumes, label_val=component_label)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring membrane volume and equivalent diameter...")
-    membrane_vol_nm3, equiv_diameter_nm = measurement.measureMembraneVolumeDiameter(component=component_properties, scale=scale)
+    membrane_vol_nm3, equiv_diameter_nm = measurement.measureMembraneVolumeDiameter(component=component_properties, scale=scale, membrane_thickness_nm=membrane_thickness_nm)
     component_mask_dilated = filtering.morphologicalDilation(component_mask)
     lg.debug(f"analyse | {filename} | Component {component_label} | Checking if component is enclosed...")
     enclosed, fill_ratio = filtering.checkEnclosed(component_mask=component_mask_dilated, threshold=fill_threshold)
