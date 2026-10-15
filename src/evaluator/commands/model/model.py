@@ -56,6 +56,9 @@ def model_evs(
     labelled_data, voxel_size_nm = mrcutil.readMRCFile(input_file)
     labels = np.unique(labelled_data)
     labels = labels[labels != 0]
+    # Check if only one non-zero label found and warn if so
+    if len(labels) == 1 and len(np.unique(labelled_data)) == 2:
+        lg.warning(f"{input_file.name}: only one non-zero label found. Ensure this is a labelled tomogram (i.e. run through evaluator label) otherwise all segmentations will be fitted as a single object.")
     records: list[dict] = []
     # Fit each labelled vesicle
     lg.info("model | Fitting {} labelled components...", len(labels))
