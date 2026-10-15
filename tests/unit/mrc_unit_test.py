@@ -4,9 +4,12 @@ import numpy as np
 import pytest
 
 # -- Import internal dependencies ------
+from evaluator.utils import mrc as mrcutil
 from evaluator.utils.mrc import (
+    FITTED_MRC_LABEL,
     labelComponents,
     readMRCFile,
+    readMRCLabels,
     validateMRCFile,
     writeMRCFile,
 )
@@ -61,6 +64,24 @@ class TestReadMRCFile:
         original = self._write_simple(p, shape=(2, 3, 4))
         read, _ = readMRCFile(p)
         assert np.allclose(read, original)
+    def test_anisotropic_voxel_size_warns(self, tmp_path, monkeypatch):
+        p = tmp_path / "aniso.mrc"
+        data = np.ones((4, 4, 4), dtype=np.float32)
+        with mrcfile.new(str(p)) as mrc:
+            mrc.set_data(data)
+            mrc.voxel_size = (5.36, 8.0, 5.36)
+        warnings = []
+        monkeypatch.setattr(mrcutil.lg, "warning", lambda msg: warnings.append(msg))
+        _, vox_nm = readMRCFile(p)
+        assert np.isclose(vox_nm, 0.536, rtol=1e-3)
+        assert any("anisotropic" in w for w in warnings)
+    def test_isotropic_voxel_size_does_not_warn(self, tmp_path, monkeypatch):
+        p = tmp_path / "iso.mrc"
+        self._write_simple(p, vox_a=5.36)
+        warnings = []
+        monkeypatch.setattr(mrcutil.lg, "warning", lambda msg: warnings.append(msg))
+        readMRCFile(p)
+        assert not any("anisotropic" in w for w in warnings)
 
 # -- Define write data to MRC file test 
 class TestWriteMRCFile:
@@ -85,6 +106,15 @@ class TestWriteMRCFile:
         assert not p.exists()
         writeMRCFile(np.zeros((2, 2, 2), dtype=np.float32), 1.0, p)
         assert p.exists()
+    def test_no_fitted_label_by_default(self, tmp_path):
+        # mrcfile writes a "Created by mrcfile.py" label so only FITTED_MRC_LABEL marker should be absent
+        p = tmp_path / "plain.mrc"
+        writeMRCFile(np.zeros((2, 2, 2), dtype=np.float32), 1.0, p)
+        assert FITTED_MRC_LABEL not in readMRCLabels(p)
+    def test_label_roundtrips(self, tmp_path):
+        p = tmp_path / "labelled.mrc"
+        writeMRCFile(np.zeros((2, 2, 2), dtype=np.float32), 1.0, p, label=FITTED_MRC_LABEL)
+        assert readMRCLabels(p) == [FITTED_MRC_LABEL]
 
 # -- Define label components test ------
 class TestLabelComponents:

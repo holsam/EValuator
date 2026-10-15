@@ -86,6 +86,12 @@ class TestLabelComponentsFilterOverrides:
         out_file = next(out_dir.glob("*.mrc"))
         data, _ = readMRCFile(out_file)
         assert int(data.max()) == 0
+    def test_exclusion_tally_reports_size_floor_breakdown(self, seg_path, tmp_path):
+        label_components(seg_path, tmp_path, min_arc_coverage=1.01)
+        out_dir = tmp_path / "evaluator" / "label"
+        tally_file = next(out_dir.glob("*_exclusions.txt"))
+        tally = tally_file.read_text()
+        assert "too small to reach threshold" not in tally
     def test_tight_diameter_range_excludes_all(self, seg_path, tmp_path):
         label_components(seg_path, tmp_path, minimum_diameter_nm=1e6, maximum_diameter_nm=1e6 + 1)
         out_dir = tmp_path / "evaluator" / "label"
