@@ -11,6 +11,9 @@ import numpy
 from scipy import ndimage
 from skimage import measure
 
+# DEFAULT_MEMBRANE_THICKNESS_NM: measured median membrane segmentation thickness produced by MemBrain-seg
+DEFAULT_MEMBRANE_THICKNESS_NM = 2.6
+
 # =========================
 # DEFINE FUNCTION: computeSurfaceArea
 # =========================
@@ -32,9 +35,28 @@ def computeSurfaceArea(component_mask: numpy.ndarray, voxel_size_nm: float):
     return sa_vox
 
 # =========================
+# DEFINE FUNCTION: estimateMembraneThickness
+# =========================
+def estimateMembraneThickness(mask: numpy.ndarray, voxel_size_nm: float | None, *, min_ridge_voxels: int = 100) -> float | None:
+    '''
+    Estimate segmented membrane shell thickness (twice the median Euclidean distance-transform value along local maxima).
+    '''
+    if not mask.any():
+        return None
+    # crop to the mask's bounding box to keep the distance transform small
+    mask = mask[ndimage.find_objects(mask.astype(numpy.uint8))[0]]
+    dist = ndimage.distance_transform_edt(mask, sampling=voxel_size_nm if voxel_size_nm is not None else 1.0)
+    # plateau-tolerant ridge: voxels at least as far from the background as all 26 neighbours
+    ridge = mask & (dist >= ndimage.maximum_filter(dist, size=3))
+    if ridge.sum() < min_ridge_voxels:
+        return None
+    return float(2 * numpy.median(dist[ridge]))
+
+
+# =========================
 # DEFINE FUNCTION: measureMembraneVolumeDiameter
 # =========================
-def measureMembraneVolumeDiameter(component, scale, membrane_thickness_nm: float = 7.0):
+def measureMembraneVolumeDiameter(component, scale, membrane_thickness_nm: float = 2.6):
     '''
     Measures the volume of membrane components in voxels and converts to nm^3. Derives the equivalent spherical diameter by treating membrane volume as a spherical shell of known thickness.
     '''

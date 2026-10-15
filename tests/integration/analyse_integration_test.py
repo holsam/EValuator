@@ -18,6 +18,7 @@ EXPECTED_COLUMNS = [
     "is_enclosed", "closure_fill_ratio",
     "sphere_rmse_rel", "solidity", "arc_coverage", "bbox_extent",
     "is_vesicle_like", "qc_flags",
+    "membrane_thickness_nm", "membrane_thickness_source",
     "voxel_size_nm", "measurement_units",
 ]
 
@@ -89,7 +90,11 @@ class TestAnalyseMeasurements:
         """
         df = pd.read_csv(analyse_csv)
         assert (df["equiv_diameter_nm"] > 35.0).all()
-        assert (df["equiv_diameter_nm"] < 105.0).all()
+        assert (df["equiv_diameter_nm"] < 150.0).all()
+    def test_membrane_thickness_columns(self, analyse_csv):
+        df = pd.read_csv(analyse_csv)
+        assert (df["membrane_thickness_source"] == "estimated").all()
+        assert (df["membrane_thickness_nm"] > 0).all()
     def test_major_axis_geq_minor_axis(self, analyse_csv):
         df = pd.read_csv(analyse_csv)
         assert (df["major_axis_diameter"] >= df["minor_axis_diameter"]).all()

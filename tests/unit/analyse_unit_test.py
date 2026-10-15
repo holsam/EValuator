@@ -7,7 +7,7 @@ import pandas as pd
 from evaluator.commands.analyse.utils.filtering import checkEnclosed, morphologicalDilation
 from evaluator.commands.analyse.utils.geometry import arcCoverage, deriveAxes, measureAxes, shellVolume, sphereFitResidual
 from evaluator.commands.analyse.utils.io import saveResultsCSV
-from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter, touchesZBoundary
+from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, estimateMembraneThickness, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter, touchesZBoundary
 from tests.unit.conftest import R_INNER, R_OUTER, VOX_NM_SMALL
 
 # -- Define shell volume test ----------
@@ -153,6 +153,23 @@ class TestMeasureMembraneVolumeDiameter:
         _, diam_thin = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=4.0)
         _, diam_thick = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=12.0)
         assert diam_thick < diam_thin
+
+# -- Define membrane thickness estimate test -----
+class TestEstimateMembraneThickness:
+    def test_recovers_known_shell_thickness(self, hollow_sphere_vol):
+        # fixture shell is 8 vox thick; the ridge estimate reads up to ~half a voxel high
+        est = estimateMembraneThickness(hollow_sphere_vol, voxel_size_nm=None)
+        assert abs(est - 8.0) <= 1.0
+    def test_scales_with_voxel_size(self, hollow_sphere_vol):
+        est_vox = estimateMembraneThickness(hollow_sphere_vol, voxel_size_nm=None)
+        est_nm = estimateMembraneThickness(hollow_sphere_vol, voxel_size_nm=VOX_NM_SMALL)
+        assert np.isclose(est_nm, est_vox * VOX_NM_SMALL, rtol=1e-6)
+    def test_empty_mask_returns_none(self):
+        assert estimateMembraneThickness(np.zeros((20, 20, 20), dtype=bool), voxel_size_nm=1.0) is None
+    def test_too_few_ridge_voxels_returns_none(self):
+        mask = np.zeros((20, 20, 20), dtype=bool)
+        mask[10, 10, 10] = True
+        assert estimateMembraneThickness(mask, voxel_size_nm=1.0) is None
 
 # -- Define lumen measurement test -----
 class TestMeasureLumenVolume:

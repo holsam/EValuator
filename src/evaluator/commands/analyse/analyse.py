@@ -112,6 +112,19 @@ def processSegmentation(seg_path: Path, fill_threshold, membrane_thickness_nm, q
         lg.warning(f"analyse | {seg_path.name} | No components identified - skipping file.")
         return []
     lg.info(f"analyse | {seg_path.name} | {n_components} components identified for analysis.")
+    # resolve thickness once per file: a number (config or CLI) is used as given, 'auto' is estimated from this file's mask
+    if membrane_thickness_nm == 'auto':
+        lg.debug(f"analyse | {seg_path.name} | Estimating membrane thickness from segmentation...")
+        thickness_nm = measurement.estimateMembraneThickness(components > 0, voxel_size_nm)
+        if thickness_nm is None:
+            thickness_nm, thickness_source = measurement.DEFAULT_MEMBRANE_THICKNESS_NM, 'fallback'
+            lg.warning(f"analyse | {seg_path.name} | Could not estimate membrane thickness — using fallback of {thickness_nm} nm.")
+        else:
+            thickness_source = 'estimated'
+        lg.info(f"analyse | {seg_path.name} | Membrane thickness ({thickness_source}): {thickness_nm:.2f}")
+    else:
+        thickness_nm, thickness_source = membrane_thickness_nm, 'override'
+        lg.debug(f"analyse | {seg_path.name} | Membrane thickness ({thickness_source}): {thickness_nm:.2f}")
     lg.debug(f"analyse | {seg_path.name} | Measuring component properties...")
     component_list = measure.regionprops(components)
     file_results = []
@@ -119,7 +132,7 @@ def processSegmentation(seg_path: Path, fill_threshold, membrane_thickness_nm, q
     with logging_redirect_tqdm():
         for component in tqdm(component_list, desc="Components processed"):
             lg.debug(f"analyse | {seg_path.name} | Component {component.label} | Measuring component features...")
-            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold, membrane_thickness_nm, qc_params)
+            component_data = processComponent(component.label, components, component, voxel_size_nm, seg_path.name, fill_threshold, thickness_nm, thickness_source, qc_params)
             if component_data is None:
                 lg.warning(f"analyse | {seg_path.name} | Component {component.label} | Component processing failed — skipping.")
                 continue
@@ -132,7 +145,7 @@ def processSegmentation(seg_path: Path, fill_threshold, membrane_thickness_nm, q
 # =========================
 # DEFINE FUNCTION: processComponent
 # =========================
-def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold, membrane_thickness_nm, qc_params):
+def processComponent(component_label, labelled_volumes, component_properties, voxel_size_nm, filename, fill_threshold, membrane_thickness_nm, membrane_thickness_source, qc_params):
     '''
     For a given component, make all defined measurements and return as a dictionary.
     '''
@@ -183,6 +196,8 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
         "bbox_extent": _r(bbox_extent, 4),
         "is_vesicle_like": is_vesicle_like,
         "qc_flags": qc_flags,
+        "membrane_thickness_nm": round(membrane_thickness_nm, 2),
+        "membrane_thickness_source": membrane_thickness_source,
         "voxel_size_nm": round(scale, 4) if voxel_size_nm is not None else None,
         "measurement_units": scale_label,
     }

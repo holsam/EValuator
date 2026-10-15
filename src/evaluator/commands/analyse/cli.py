@@ -53,7 +53,7 @@ def analyse(
     ] = None,
     membrane_thickness_nm: Annotated[
         Optional[float],
-        typer.Option('--membrane-thickness-nm', help='Override membrane shell thickness (nm) used for diameter derivation', min=0)
+        typer.Option('--membrane-thickness-nm', help='Override membrane shell thickness (nm) used for diameter derivation, instead of estimating from file', min=0)
     ] = None,
     qc_max_sphere_rmse_rel: Annotated[
         Optional[float],
