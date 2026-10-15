@@ -104,5 +104,5 @@ def model_evs(
         voxel_size_nm=voxel_size_nm,
     )
     mrc_out_file = out_dir / f"{input_file.stem}_model_fitted.mrc"
-    mrcutil.writeMRCFile(fitted_volume.astype(np.uint16), voxel_size_nm, mrc_out_file)
+    mrcutil.writeMRCFile(fitted_volume.astype(np.uint16), voxel_size_nm, mrc_out_file, label=mrcutil.FITTED_MRC_LABEL)
     lg.debug(f"model | Wrote fitted MRC file")

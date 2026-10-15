@@ -15,7 +15,13 @@ from scipy import ndimage
 # ====================
 # Import internal dependencies
 # ====================
-from .settings import lg
+from evaluator.utils.settings import lg
+
+# ====================
+# Define constant: FITTED_MRC_LABEL
+# ====================
+FITTED_MRC_LABEL = 'EValuator: reconstructed model output'
+
 
 # ====================
 # Define function: validateMRCFile
@@ -68,6 +74,35 @@ def writeMRCFile(data: numpy.ndarray, voxel_size_nm: float | None, path: Path):
         if voxel_size_nm is not None:
             vox_a = voxel_size_nm * 10.0
             mrc.voxel_size = vox_a
+# ====================
+# Define function: writeMRCFile
+# ====================
+def writeMRCFile(data: numpy.ndarray, voxel_size_nm: float | None, path: Path, *, label: str | None = None):
+    '''
+    Write a numpy array to an MRC file.
+    If voxel_size_nm is provided, encodes it in the header (converting nm back to Angstroms).
+    If label is provided, it is written as the MRC header's first text label (max 80 chars), readable via readMRCLabels.
+    '''
+    with mrcfile.new(str(path), overwrite=True) as mrc:
+        mrc.set_data(data)
+        if voxel_size_nm is not None:
+            vox_a = voxel_size_nm * 10.0
+            mrc.voxel_size = vox_a
+        if label is not None:
+            mrc.header.label[0] = label.encode('ascii', errors='replace')[:80]
+            mrc.header.nlabl = 1
+
+# ====================
+# Define function: readMRCLabels
+# ====================
+def readMRCLabels(path: Path) -> list[str]:
+    '''
+    Return non-empty text labels stored in an MRC file's header.
+    '''
+    with mrcfile.open(str(path), mode='r', permissive=True) as file:
+        n = int(file.header.nlabl)
+        raw_labels = file.header.label[:n]
+    return [bytes(l).decode('ascii', errors='replace').strip('\x00').strip() for l in raw_labels]
 
 # ====================
 # Define function: labelComponents

@@ -6,8 +6,10 @@ import pytest
 # -- Import internal dependencies ------
 from evaluator.utils import mrc as mrcutil
 from evaluator.utils.mrc import (
+    FITTED_MRC_LABEL,
     labelComponents,
     readMRCFile,
+    readMRCLabels,
     validateMRCFile,
     writeMRCFile,
 )
@@ -104,6 +106,15 @@ class TestWriteMRCFile:
         assert not p.exists()
         writeMRCFile(np.zeros((2, 2, 2), dtype=np.float32), 1.0, p)
         assert p.exists()
+    def test_no_fitted_label_by_default(self, tmp_path):
+        # mrcfile writes a "Created by mrcfile.py" label so only FITTED_MRC_LABEL marker should be absent
+        p = tmp_path / "plain.mrc"
+        writeMRCFile(np.zeros((2, 2, 2), dtype=np.float32), 1.0, p)
+        assert FITTED_MRC_LABEL not in readMRCLabels(p)
+    def test_label_roundtrips(self, tmp_path):
+        p = tmp_path / "labelled.mrc"
+        writeMRCFile(np.zeros((2, 2, 2), dtype=np.float32), 1.0, p, label=FITTED_MRC_LABEL)
+        assert readMRCLabels(p) == [FITTED_MRC_LABEL]
 
 # -- Define label components test ------
 class TestLabelComponents:
