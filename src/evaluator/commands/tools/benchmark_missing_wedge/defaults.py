@@ -9,6 +9,7 @@ MAX_DIAMETER = 300
 DIAMETER_STEP = 40
 REPLICATES = 10
 VOXEL_SIZE = 2.0
+THICKNESS = 5.0  # matches synthetic.generate_ev_shell's default membrane thickness
 TILT_RANGE = 60.0
 DIAMETER_JITTER = 6.0
 SHAPE_JITTER = 0.1
