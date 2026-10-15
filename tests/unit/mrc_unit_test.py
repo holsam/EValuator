@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 # -- Import internal dependencies ------
+from evaluator.utils import mrc as mrcutil
 from evaluator.utils.mrc import (
     labelComponents,
     readMRCFile,
@@ -61,6 +62,24 @@ class TestReadMRCFile:
         original = self._write_simple(p, shape=(2, 3, 4))
         read, _ = readMRCFile(p)
         assert np.allclose(read, original)
+    def test_anisotropic_voxel_size_warns(self, tmp_path, monkeypatch):
+        p = tmp_path / "aniso.mrc"
+        data = np.ones((4, 4, 4), dtype=np.float32)
+        with mrcfile.new(str(p)) as mrc:
+            mrc.set_data(data)
+            mrc.voxel_size = (5.36, 8.0, 5.36)
+        warnings = []
+        monkeypatch.setattr(mrcutil.lg, "warning", lambda msg: warnings.append(msg))
+        _, vox_nm = readMRCFile(p)
+        assert np.isclose(vox_nm, 0.536, rtol=1e-3)
+        assert any("anisotropic" in w for w in warnings)
+    def test_isotropic_voxel_size_does_not_warn(self, tmp_path, monkeypatch):
+        p = tmp_path / "iso.mrc"
+        self._write_simple(p, vox_a=5.36)
+        warnings = []
+        monkeypatch.setattr(mrcutil.lg, "warning", lambda msg: warnings.append(msg))
+        readMRCFile(p)
+        assert not any("anisotropic" in w for w in warnings)
 
 # -- Define write data to MRC file test 
 class TestWriteMRCFile:

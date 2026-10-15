@@ -42,12 +42,17 @@ def readMRCFile(path: Path):
     '''
     with mrcfile.open(str(path), mode='r', permissive=True) as file:
         data = file.data.copy()
-        vox_a = float(file.voxel_size.x)
-    if vox_a == 0.0:
+        vox_x, vox_y, vox_z = float(file.voxel_size.x), float(file.voxel_size.y), float(file.voxel_size.z)
+    if any(v == 0 for v in [vox_x, vox_y, vox_z]):
         lg.warning(f"{path.name}: voxel size not found in MRC header. Physical measurement units will be voxels.")
         voxel_size_nm = None
     else:
-        voxel_size_nm = vox_a / 10.0
+        # Check for anisotropy
+        if vox_y and abs(vox_y - vox_x) / vox_x > 0.01:
+            lg.warning(f"{path.name}: anisotropic voxel sizes found (x={vox_x}, y={vox_y} Å). Measurements assume isotropic voxels so will be biased along y.")
+        if vox_z and abs(vox_z - vox_x) / vox_x > 0.01:
+            lg.warning(f"{path.name}: anisotropic voxel sizes found (x={vox_x}, z={vox_z} Å). Measurements assume isotropic voxels so will be biased along z.")
+        voxel_size_nm = vox_x / 10.0
     return data, voxel_size_nm
 
 # ====================
