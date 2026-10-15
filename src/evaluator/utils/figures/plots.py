@@ -10,10 +10,10 @@ EValuator: VIEWER RESULTS PLOT BUILDERS
 import numpy as np, pandas as pd, plotly.graph_objects as go, scipy.stats as _stats
 
 # ====================
-# Import internal viewer utilities
+# Import internal figure utilities
 # ====================
-from evaluator.commands.viewer.utils import theme as themeutil
-from evaluator.commands.viewer.utils.format import pretty_column
+from evaluator.utils.figures import theme as themeutil
+from evaluator.utils.figures.format import pretty_column
 
 # ====================
 # Theme helpers
@@ -331,7 +331,7 @@ def bland_altman(df: pd.DataFrame, col_a: str, col_b: str, selected: set[int]) -
     for yv, dash in ((bias, 'solid'), (lo, 'dash'), (hi, 'dash')):
         fig.add_hline(y=yv, line_color=ACTIVE['highlight'], line_dash=dash, line_width=1)
     _annotate(fig, f'bias {bias:+.3g}<br>95% limits [{lo:.3g}, {hi:.3g}]<br>n {int(m.sum())}')
-    _style(fig, f'Bland-Altman: {pretty_column(col_a)} vs {pretty_column(col_b)}', 'mean of {pretty_column(col_a)} & {pretty_column(col_b)}', 'difference (a - b)')
+    _style(fig, f'Bland-Altman: {pretty_column(col_a)} vs {pretty_column(col_b)}', f'mean of {pretty_column(col_a)} & {pretty_column(col_b)}', 'difference (a - b)')
     return fig
 
 def correlation_matrix(df: pd.DataFrame, cols: list[str], method: str = 'spearman') -> go.Figure:
