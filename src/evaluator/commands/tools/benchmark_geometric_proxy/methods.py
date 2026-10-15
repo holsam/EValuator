@@ -21,3 +21,13 @@ def bbox_centroid_radius(points: np.ndarray) -> tuple[np.ndarray, float]:
     extent = points.max(axis=0) - points.min(axis=0)
     radius_estimate = float(np.mean(extent) / 2.0)
     return centroid, radius_estimate
+
+# -- naive_diagonal_radius: returns tuple of ndarray, float
+def naive_diagonal_radius(points: np.ndarray) -> tuple[np.ndarray, float]:
+    '''
+    Estimate centre/radius as point mean/half the bounding-box diagonal (independent naive baseline)
+    '''
+    centroid = points.mean(axis=0)
+    extent = points.max(axis=0) - points.min(axis=0)
+    radius_estimate = float(np.linalg.norm(extent) / 2.0)
+    return centroid, radius_estimate
