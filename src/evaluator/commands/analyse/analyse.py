@@ -162,7 +162,8 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     arc_coverage = geometry.arcCoverage(coords, _max_fit_points)
     solidity = geometry.solidity(coords, n_voxels, _max_fit_points)
     bbox_extent = float(component_properties.extent)
-    is_vesicle_like, qc_flags = measurement.classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, enclosed, qc_params)
+    touches_z_boundary = measurement.touchesZBoundary(component_properties, labelled_volumes.shape)
+    is_vesicle_like, qc_flags = measurement.classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, enclosed, qc_params, touches_z_boundary)
     return {
         "tomogram": filename,
         "label": component_label,

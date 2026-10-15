@@ -7,7 +7,7 @@ import pandas as pd
 from evaluator.commands.analyse.utils.filtering import checkEnclosed, morphologicalDilation
 from evaluator.commands.analyse.utils.geometry import arcCoverage, deriveAxes, measureAxes, shellVolume, sphereFitResidual
 from evaluator.commands.analyse.utils.io import saveResultsCSV
-from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter
+from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter, touchesZBoundary
 from tests.unit.conftest import R_INNER, R_OUTER, VOX_NM_SMALL
 
 # -- Define shell volume test ----------
@@ -49,11 +49,11 @@ class TestMorphologicalDilation:
         closed = morphologicalDilation(punctured)
         assert closed[40, 40, 20], "Gap voxel was not restored by morphological dilation"
     def test_all_original_voxels_preserved(self, hollow_sphere_vol):
-        """Closing must not remove any pre-existing True voxels."""
+        '''
+        Closing must not remove any pre-existing True voxels.
+        '''
         closed = morphologicalDilation(hollow_sphere_vol)
-        assert np.all(closed[hollow_sphere_vol]), (
-            "morphologicalDilation removed voxels that were present in the original mask"
-        )
+        assert np.all(closed[hollow_sphere_vol]), "morphologicalDilation removed voxels that were present in the original mask"
     def test_returns_bool_array(self, hollow_sphere_vol):
         closed = morphologicalDilation(hollow_sphere_vol)
         assert closed.dtype == bool or closed.dtype == np.bool_
@@ -80,6 +80,14 @@ class TestMorphologicalDilation:
         dilated_interior = morphologicalDilation(interior_vol)
         # count of dilated voxels on the non-clipped (y, x) plane through the seed voxel must match
         assert dilated_boundary[0, :, :].sum() == dilated_interior[5, :, :].sum()
+
+# -- Define touches-z-boundary test --------
+class TestTouchesZBoundary:
+    def test_component_away_from_boundary_not_flagged(self, sphere_regionprops):
+        assert touchesZBoundary(sphere_regionprops, volume_shape=(200, 200, 200)) is False
+    def test_component_touching_last_z_slice_flagged(self, sphere_regionprops):
+        # Shrink the volume's z-extent so sphere's max-z edge sits on the last slice
+        assert touchesZBoundary(sphere_regionprops, volume_shape=(sphere_regionprops.bbox[3], 200, 200)) is True
 
 # -- Define check enclosed test --------
 class TestCheckEnclosed:
@@ -381,6 +389,12 @@ class TestClassifyVesicle:
         args = (5000, 0.1, 2.0, 0.3, 0.9, True)
         assert classifyVesicle(*args, _QC_DEFAULTS)[0] is True
         assert classifyVesicle(*args, {**_QC_DEFAULTS, "qc_max_aspect_ratio": 1.5})[0] is False
+    def test_z_boundary_touch_flagged(self):
+        ok, flags = classifyVesicle(5000, 0.05, 1.1, 0.4, 0.9, True, _QC_DEFAULTS, touches_z_boundary=True)
+        assert ok is False and "touches_z_boundary" in flags
+    def test_z_boundary_touch_defaults_false(self):
+        ok, flags = classifyVesicle(5000, 0.05, 1.1, 0.4, 0.9, True, _QC_DEFAULTS)
+        assert ok is True and "touches_z_boundary" not in flags
 
 # -- Define results saving test --------
 class TestSaveResultsCSV:

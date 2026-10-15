@@ -94,7 +94,7 @@ def measureEccentricityAspectRatio(major_axis_diameter, minor_axis_diameter):
 # =========================
 # DEFINE FUNCTION: classifyVesicle
 # =========================
-def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, is_enclosed, qc_params):
+def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, is_enclosed, qc_params, touches_z_boundary=False):
     '''
     Classify component as `is_vesicle_like` unless any enabled check fails'''
     if n_voxels < 4:
@@ -108,4 +108,16 @@ def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_cover
         flags.append("solidity")
     if not (is_enclosed or arc_coverage >= qc_params['qc_min_arc_coverage']):
         flags.append('open_shell')
+    if touches_z_boundary:
+        flags.append('touches_z_boundary')
     return len(flags) == 0, ','.join(flags)
+
+# =========================
+# DEFINE FUNCTION: touchesZBoundary
+# =========================
+def touchesZBoundary(component_properties, volume_shape) -> bool:
+    '''
+    If a component's bounding box reaches the Z boundary, it may be truncated by the slab/field of view so flag this.
+    '''
+    z_min, z_max = component_properties.bbox[0], component_properties.bbox[3]
+    return z_min == 0 or z_max == volume_shape[0]
