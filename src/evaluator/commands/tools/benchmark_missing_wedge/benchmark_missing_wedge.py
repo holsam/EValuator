@@ -79,7 +79,7 @@ def calculate_benchmark(
 
             # Apply mitigation 3: convex hull outer diameter
             t0 = time.perf_counter()
-            hull_d = methods.hull_outer_diameter(shell, voxel_size_nm)
+            hull_d = methods.hull_outer_diameter(degraded, voxel_size_nm)
             hull_time = time.perf_counter() - t0
 
             # Apply mitigation 4: XY/Z diagnostic
