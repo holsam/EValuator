@@ -24,7 +24,7 @@ from evaluator.utils import paths as pathutil
 # Import EValuator label utilities
 # ====================
 from evaluator.commands.label.utils.filters import filterComponentsBySize
-from evaluator.commands.label.utils.geometric_proxies import estimateCentroidRadius, estimateArcCoverage
+from evaluator.commands.label.utils.geometric_proxies import estimateCentroidRadius, estimateArcCoverage, ARC_COVERAGE_N_BINS
 from evaluator.commands.label.utils.merge import findMergeGroups, applyMerges
 
 # ====================
@@ -83,12 +83,18 @@ def label_components(
     # Step 2: arc-coverage filter (post-merge)
     lg.debug(f"label | Applying arc-coverage filter...")
     n_excluded_arc_coverage = 0
+    n_excluded_arc_coverage_size_floor = 0
     for component in measure.regionprops(labelled):
         centroid, radius_estimate = estimateCentroidRadius(component.coords)
         coverage = estimateArcCoverage(component.coords, centroid, radius_estimate)
         if coverage < params.min_arc_coverage:
-            lg.info(f"label | Component {component.label} | Arc coverage {coverage:.2f} below threshold ({params.min_arc_coverage}) — excluding.")
+            max_possible_coverage = min(component.area, ARC_COVERAGE_N_BINS) / ARC_COVERAGE_N_BINS
+            size_floor = max_possible_coverage < params.min_arc_coverage
+            reason = "size floor (too few voxels to reach threshold)" if size_floor else "incomplete coverage"
+            lg.info(f"label | Component {component.label} | Arc coverage {coverage:.2f} below threshold ({params.min_arc_coverage}) — excluding ({reason}).")
             n_excluded_arc_coverage += 1
+            if size_floor:
+                n_excluded_arc_coverage_size_floor += 1
             labelled[labelled == component.label] = 0
 
     # Step 3: size/extent filter
@@ -142,7 +148,8 @@ def label_components(
     tally_file = out_file.with_name(f"{out_file.stem}_exclusions.txt")
     tally_file.write_text(tally)
     lg.warning(
-        f"label | {segmentation.name}: {n_initial} identified -> {n_components} retained "
-        f"(arc-coverage excluded {n_excluded_arc_coverage}, size excluded {n_excluded_size}); "
+        f"label | {segmentation.name}: {n_initial} identified -> {n_components} retained; "
+        f"{n_excluded_arc_coverage} excluded by arc-coverage filter ({n_excluded_arc_coverage_size_floor} too small to reach threshold), "
+        f"{n_excluded_size} excluded by size filter; "
         f"tally written to {tally_file.name}."
     )

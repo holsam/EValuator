@@ -10,6 +10,13 @@ EValuator: LABEL GEOMETRIC PROXY UTILITIES
 import numpy
 
 # =========================
+# DEFINE CONSTANT: arc-coverage angular grid
+# =========================
+ARC_COVERAGE_N_LAT_BINS, ARC_COVERAGE_N_LON_BINS = 18, 36
+ARC_COVERAGE_N_BINS = ARC_COVERAGE_N_LAT_BINS * ARC_COVERAGE_N_LON_BINS
+
+
+# =========================
 # DEFINE FUNCTION: estimateCentroidRadius
 # =========================
 def estimateCentroidRadius(points: numpy.ndarray) -> tuple[numpy.ndarray, float]:
@@ -69,9 +76,9 @@ def estimateArcCoverage(points: numpy.ndarray, centroid: numpy.ndarray, radius_e
     norms[norms == 0] = 1e-9
     unit_vecs = vecs / norms[:, None]
     # Coarse lat/long grid (10-degree bins each), equal-area: bin sin(lat)
-    n_lat_bins, n_lon_bins = 18, 36
+    n_lat_bins, n_lon_bins = ARC_COVERAGE_N_LAT_BINS, ARC_COVERAGE_N_LON_BINS
     lon = numpy.degrees(numpy.arctan2(unit_vecs[:, 1], unit_vecs[:, 0]))
     lat_idx = numpy.clip((((unit_vecs[:, 2] + 1) / 2) * n_lat_bins).astype(int), 0, n_lat_bins - 1)
     lon_idx = numpy.clip(((lon + 180) / 360 * n_lon_bins).astype(int), 0, n_lon_bins - 1)
     occupied = set(zip(lat_idx.tolist(), lon_idx.tolist()))
-    return len(occupied) / (n_lat_bins * n_lon_bins)
+    return len(occupied) / ARC_COVERAGE_N_BINS
