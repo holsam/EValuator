@@ -15,13 +15,13 @@ from pathlib import Path
 # Import EValuator utilities
 from evaluator.utils import io as ioutil
 from evaluator.utils import mrc as mrcutil
+from evaluator.utils.figures import plots as plotutil
+from evaluator.utils.figures.format import pretty_column
 
 # Import EValuator viewer utilities
 from evaluator.commands.viewer.app.components.plotly_camera_sync import plotly_view
-from evaluator.commands.viewer.utils import plots as plotutil
 from evaluator.commands.viewer.utils import theme as themeutil
 from evaluator.commands.viewer.utils.export import export_filtered_csv
-from evaluator.commands.viewer.utils.format import pretty_column
 from evaluator.commands.viewer.utils.join import join_analyse_model
 from evaluator.commands.viewer.utils.mesh import build_label_mesh_traces, build_point_cloud_trace, dim_trace
 

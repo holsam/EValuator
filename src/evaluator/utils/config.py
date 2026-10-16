@@ -64,10 +64,12 @@ class AnalyseConfig(_Section):
 
 class PlotConfig(_Section):
     '''Configuration parameters for `evaluator plot` command'''
-    default_sections: list[Literal['distributions', 'qc', 'scatter', 'concordance', 'compare']] = Field(
-        default_factory=lambda: ['distributions', 'qc', 'scatter'], description='Sections run when --section/--all are not given',
-    )
+    default_sections: list[Literal['distributions', 'qc', 'scatter', 'correlations', 'concordance', 'reliability', 'agreement', 'compare']] = Field(default_factory=lambda: ['distributions', 'qc', 'scatter', 'correlations'], description='Sections run when --section/--all are not given')
     fill_ratio_flag_threshold: float = Field(0.05, description='closure_fill_ratio below this is flagged in qc plots')
+    theme: Literal['Okabe-Ito', 'Brewer Set2', 'Viridis', 'Grayscale', 'Neon'] = Field('Okabe-Ito', description='Colour theme for figures (same themes as the viewer)')
+    bin_width: float = Field(25.0, ge=0, description='Histogram bin width in feature units, anchored at 0 (0 for automatic bins)')
+    bin_width_overrides: dict[str, float] = Field(default_factory=lambda: {'aspect_ratio': 0.1, 'eccentricity': 0.05, 'closure_fill_ratio': 0.05, 'sphere_rmse_rel': 0.02, 'membrane_volume': 0.0, 'lumen_volume': 0.0, 'surface_area': 0.0}, description='Per-feature histogram bin widths replacing bin_width (0 for automatic bins)')
+    scatter_pairs: list[tuple[str, str]] = Field(default_factory=lambda: [('equiv_diameter_nm', 'lumen_volume'), ('surface_area', 'lumen_volume'), ('aspect_ratio', 'equiv_diameter_nm')], description='(x, y) feature pairs drawn by the scatter section')
 
 class VisualiseConfig(_Section):
     '''Configuration parameters for `evaluator visualise` command'''
