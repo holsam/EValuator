@@ -18,7 +18,7 @@ from evaluator.commands.tools.benchmark_geometric_proxy import defaults
 # Define constants
 # ====================
 CLOUD_TYPE_LABELS = {'polar_cap': 'Polar cap', 'equatorial_band': 'Equatorial band'}
-METHOD_COLOURS = {'naive bounding box': 'tab:red', 'isotropy-aware bounding box': 'tab:blue'}
+METHOD_COLOURS = {'naive bounding box': 'tab:red', 'isotropy-aware bounding box': 'tab:blue', 'diagonal/2 baseline': 'tab:green'}
 
 # ====================
 # Define summary functions
