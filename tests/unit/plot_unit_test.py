@@ -5,7 +5,7 @@ Unit tests for `evaluator plot`
 # ====================
 # Import external dependencies
 # ====================
-import pytest, subprocess, tomllib
+import pandas as pd, pytest, subprocess, tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 # Import evaluator plot functions
 # ====================
 from evaluator.commands.plot.plot import run_plot
+from evaluator.commands.plot.utils import data as datautil
 from evaluator.commands.plot.utils.dispatch import (
     resolve_rscript,
     dispatch,
@@ -277,3 +278,51 @@ class TestPlot:
             run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, rscript=None)
         params = tomllib.loads((tmp_path / 'evaluator' / 'plot' / 'params.toml').read_text())
         assert params['fill_ratio_flag_threshold'] == 0.05
+
+# ====================
+# Define tests for plot/utils/data.py
+# ====================
+class TestPlotUtilsData:
+    def _csv(self, tmp_path, rows):
+        header = 'tomogram,label,equiv_diameter_nm,major_axis_diameter,minor_axis_diameter,aspect_ratio,eccentricity,membrane_volume,lumen_volume,surface_area,is_enclosed,closure_fill_ratio,is_vesicle_like,qc_flags\n'
+        body = ''.join(f'tomo1.mrc,{i},80,90,70,1.2,0.5,5,3,2,True,0.4,{vl},{flags}\n' for i, (vl, flags) in enumerate(rows))
+        return _write(tmp_path / 'a.csv', header + body)
+
+    def test_flagged_rows_dropped_by_default(self, tmp_path):
+        path = self._csv(tmp_path, [(True, ''), (False, 'sphere_rmse'), (False, 'sphere_rmse|x')])
+        assert len(datautil.load_analyse(path)) == 1
+
+    def test_include_flagged_keeps_everything(self, tmp_path):
+        path = self._csv(tmp_path, [(True, ''), (False, 'sphere_rmse')])
+        assert len(datautil.load_analyse(path, include_flagged=True)) == 2
+
+    def test_missing_vesicle_like_column_is_not_filtered(self, tmp_path):
+        path = _make_analyse_csv(tmp_path)
+        assert len(datautil.load_analyse(path)) == 1
+
+    def test_missing_required_column_raises(self, tmp_path):
+        path = _write(tmp_path / 'a.csv', 'tomogram,label\ntomo1.mrc,1\n')
+        with pytest.raises(ValueError, match='missing required'):
+            datautil.load_analyse(path)
+
+    def test_drop_reasons_counted_per_flag(self, tmp_path, capsys):
+        from evaluator.utils.settings import lg
+        messages = []
+        sink = lg.add(lambda m: messages.append(str(m)), level='INFO')
+        try:
+            path = self._csv(tmp_path, [(True, ''), (False, '"sphere_rmse,touches_z_boundary"'), (False, 'sphere_rmse')])
+            datautil.load_analyse(path)
+        finally:
+            lg.remove(sink)
+        assert any('sphere_rmse=2' in m and 'touches_z_boundary=1' in m for m in messages)
+
+    def test_join_matches_on_basename_and_label_and_counts_unmatched(self):
+        analyse = pd.DataFrame({'tomogram': ['t.mrc', 't.mrc', 't.mrc'], 'label': [1, 2, 3]})
+        model = pd.DataFrame({'source_file': ['/x/t.mrc', '/x/t.mrc'], 'label_id': [1, 9], 'radius': [10.0, 5.0]})
+        joined, a_only, m_only = datautil.join_analyse_model(analyse, model)
+        assert list(joined['label']) == [1] and (a_only, m_only) == (2, 1)
+
+    def test_pooling_note_states_true_n(self):
+        df = pd.DataFrame({'tomogram': ['a', 'a', 'b']})
+        note = datautil.pooling_note(df, n_samples=2)
+        assert 'n = 3 EVs' in note and '2 tomogram(s)' in note and '2 sample(s)' in note
