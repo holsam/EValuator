@@ -362,6 +362,52 @@ def correlation_matrix(df: pd.DataFrame, cols: list[str], method: str = 'spearma
     return fig
 
 # ====================
+# Define builders for plot-specific figures
+# ====================
+def bar(df: pd.DataFrame, x: str, y: str, *, title: str, y_title: str, y_range: tuple[float, float] | None = None) -> go.Figure:
+    fig = go.Figure(go.Bar(x=df[x], y=df[y], marker_color=ACTIVE['base']))
+    _style(fig, title, pretty_column(x), y_title)
+    fig.update_xaxes(tickangle=45)
+    if y_range is not None:
+        fig.update_yaxes(range=list(y_range))
+    return fig
+
+def group_distribution(df: pd.DataFrame, feature: str, group: str = 'group') -> go.Figure:
+    pal = ACTIVE['palette']
+    fig = go.Figure()
+    for i, g in enumerate(sorted(df[group].dropna().unique())):
+        fig.add_trace(go.Violin(
+            y=_numeric(df.loc[df[group] == g, feature]), name=str(g), box_visible=True, meanline_visible=True,
+            points=False, fillcolor=pal[i % len(pal)], line_color=ACTIVE['font'], opacity=0.7, showlegend=False,
+        ))
+    _style(fig, f'{pretty_column(feature)} by {group}', group.title(), pretty_column(feature))
+    return fig
+
+def pca_scatter(df: pd.DataFrame, features: list[str], group: str = 'group') -> go.Figure | None:
+    '''PC1 vs PC2 of standardised features, or None with < 3 rows or < 2 usable features'''
+    num = df[features].apply(_numeric)
+    ok = num.notna().all(axis=1)
+    x = num[ok]
+    x = x.loc[:, x.std(ddof=1) > 0]  # constant columns cannot be standardised
+    if len(x) < 3 or x.shape[1] < 2:
+        return None
+    z = ((x - x.mean()) / x.std(ddof=1)).to_numpy()
+    u, s, _ = np.linalg.svd(z, full_matrices=False)
+    scores, var = u[:, :2] * s[:2], s ** 2 / np.sum(s ** 2)
+    groups = df.loc[ok, group].to_numpy()
+    pal = ACTIVE['palette']
+    fig = go.Figure()
+    for i, g in enumerate(sorted(set(groups))):
+        m = groups == g
+        fig.add_trace(go.Scattergl(
+            x=scores[m, 0], y=scores[m, 1], mode='markers', name=str(g),
+            marker=dict(size=9, color=pal[i % len(pal)], line=dict(width=0)),
+        ))
+    _style(fig, 'PCA of standardised features', f'PC1 ({var[0]:.0%})', f'PC2 ({var[1]:.0%})')
+    fig.update_layout(showlegend=True)
+    return fig
+
+# ====================
 # Define function to extract vesicle labels from selection
 # ====================
 def selected_labels_from_event(event) -> set[int]:

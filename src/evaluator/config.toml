@@ -37,8 +37,20 @@ qc_max_fit_points = 4000
 
 # Plot command default configuration parameters
 [plot]
-default_sections = ["distributions", "qc", "scatter"]
+default_sections = ["distributions", "qc", "scatter", "correlations"]
 fill_ratio_flag_threshold = 0.05
+theme = "Okabe-Ito"             # figure colours (valid options: Okabe-Ito, Brewer Set2, Viridis, Grayscale, Neon)
+bin_width = 25.0                # histogram bin width in feature units (0 for automatic bins)
+scatter_pairs = [["equiv_diameter_nm", "lumen_volume"], ["surface_area", "lumen_volume"], ["aspect_ratio", "equiv_diameter_nm"]]
+
+[plot.bin_width_overrides]
+aspect_ratio = 0.1
+eccentricity = 0.05
+closure_fill_ratio = 0.05
+sphere_rmse_rel = 0.02
+membrane_volume = 0.0
+lumen_volume = 0.0
+surface_area = 0.0
 
 # Visualise command default configuration parameters
 [visualise]

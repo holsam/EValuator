@@ -81,9 +81,9 @@ def available_sections(runs: list[PlotRun], multi_run: bool) -> list[str]:
     has_model = any(r.model_path for r in runs)
     sections = []
     if has_analyse:
-        sections += ['distributions', 'qc', 'scatter']
+        sections += ['distributions', 'qc', 'scatter', 'correlations']
     if has_analyse and has_model:
-        sections.append("concordance")
+        sections += ['concordance', 'reliability']
     if multi_run and len({r.group for r in runs if r.group} ) > 1:
         sections.append('compare')
     return sections

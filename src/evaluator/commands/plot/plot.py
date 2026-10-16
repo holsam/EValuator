@@ -14,25 +14,17 @@ from pathlib import Path
 # ====================
 from evaluator.utils import config as confutil
 from evaluator.utils import paths as pathutil
+from evaluator.utils.figures import plots as plotutil
+from evaluator.utils.figures import theme as themeutil
 from evaluator.utils.settings import lg
+from evaluator.commands.plot import sections as sectionutil
+from evaluator.commands.plot.utils import export as exportutil
 from evaluator.commands.plot.utils.input import resolve_plot_inputs, available_sections, PlotRun
-from evaluator.commands.plot.utils.dispatch import resolve_rscript, dispatch, RscriptError
-
-# ====================
-# Define R scripts for each section
-# ====================
-SECTION_SCRIPTS = {
-    'distributions': 'distributions.R',
-    'qc': 'qc.R',
-    'scatter': 'scatter.R',
-    'concordance': 'concordance.R',
-    'compare': 'compare.R',
-}
 
 # ====================
 # run_plot: orchestration logic for plot command
 # ====================
-def run_plot(analyse_input, model_input, output, sections, all_sections, overwrite, rscript):
+def run_plot(analyse_input, model_input, output, sections, all_sections, overwrite, include_flagged=False):
     config, evaluator_dir = confutil.load_config(output)
     params = config.plot
     runs, multi_run, sheet_path = resolve_plot_inputs(analyse_input, model_input)
@@ -45,7 +37,12 @@ def run_plot(analyse_input, model_input, output, sections, all_sections, overwri
     if not to_run:
         lg.error('plot | No runnable sections for the given input.')
         return
-    rscript_bin = resolve_rscript(rscript)
+    try:
+        exportutil.check_kaleido()
+    except RuntimeError as e:
+        lg.error(str(e))
+        return
+    plotutil.use_theme(themeutil.resolve(params.theme))
     out_dir = pathutil.generate_command_output_dir(evaluator_dir, 'plot')
     confutil.write_params(params, out_dir)
     completed = []
@@ -56,30 +53,25 @@ def run_plot(analyse_input, model_input, output, sections, all_sections, overwri
             continue
         section_dir.mkdir(parents=True, exist_ok=True)
         try:
-            _run_section(section, runs, multi_run, section_dir, rscript_bin, params, sheet_path)
+            _run_section(section, runs, multi_run, section_dir, params, include_flagged)
             completed.append(section)
-        except RscriptError as e:
-            lg.warning('plot | Section {} failed: {}', section, e)
+        except Exception as e:
+            lg.warning(f'plot | Section {section} failed: {e}')
     _write_index(out_dir, completed)
     lg.info(f'plot | Finished. Sections completed: {completed}')
 
 # ====================
 # _run_section: orchestration logic for each section
 # ====================
-def _run_section(section: str, runs, multi_run: bool, section_dir: Path, rscript_bin: Path, params, sheet_path: Path | None = None) -> None:
-    mode = 'multi' if multi_run else 'single'
-    script = SECTION_SCRIPTS[section]
-    if section == 'concordance':
-        run = runs[0]
-        dispatch(rscript_bin, script, [section_dir, run.analyse_path, run.model_path, mode])
-    elif section == 'qc':
-        run = runs[0]
-        dispatch(rscript_bin, script, [section_dir, run.analyse_path, mode, params.fill_ratio_flag_threshold])
-    elif section in ('distributions', 'scatter'):
-        run = runs[0]
-        dispatch(rscript_bin, script, [section_dir, run.analyse_path, mode])
-    elif section == 'compare':
-        dispatch(rscript_bin, script, [section_dir, sheet_path, mode])
+def _run_section(section: str, runs: list[PlotRun], multi_run: bool, section_dir: Path, params, include_flagged: bool) -> None:
+    if section == 'compare':
+        sectionutil.compare(section_dir, runs, params, include_flagged=include_flagged)
+        return
+    # per-sample sections: in multi-run mode every sample is plotted into its own subdirectory
+    for run in (runs if multi_run else runs[:1]):
+        run_dir = section_dir / run.sample_id if multi_run else section_dir
+        run_dir.mkdir(parents=True, exist_ok=True)
+        sectionutil.SECTIONS[section](run_dir, sectionutil.load(run, include_flagged=include_flagged), params)
 
 # ====================
 # _write_index: write the markdown index of all generated files

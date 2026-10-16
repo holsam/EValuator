@@ -23,7 +23,7 @@ evaluatorPlot = typer.Typer(
     add_completion=False,
 )
 
-VALID_SECTIONS = ["distributions", "qc", "scatter", "concordance", "compare"]
+VALID_SECTIONS = ["distributions", "qc", "scatter", "correlations", "concordance", "reliability", "agreement", "compare"]
 
 @evaluatorPlot.command(help='Generate plots from evaluator analyse and/or model output', rich_help_panel='Component Analysis')
 def plot(
@@ -51,10 +51,10 @@ def plot(
         bool,
         typer.Option('--overwrite', help='Overwrite existing section outputs instead of skipping them')
     ] = False,
-    rscript: Annotated[
-        Optional[Path],
-        typer.Option('--rscript', help='Path to the Rscript binary (default: resolved from PATH)')
-    ] = None,
+    include_flagged: Annotated[
+        bool,
+        typer.Option('--include-flagged', help='Include components flagged as non-vesicle-like instead of excluding them')
+    ] = False,
 ):
     '''
     Generate plots and summary tables from `analyse` and/or `model` output.
@@ -68,5 +68,5 @@ def plot(
         sections=section,
         all_sections=all_sections,
         overwrite=overwrite,
-        rscript=rscript,
+        include_flagged=include_flagged,
     )
