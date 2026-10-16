@@ -83,7 +83,17 @@ def available_sections(runs: list[PlotRun], multi_run: bool) -> list[str]:
     if has_analyse:
         sections += ['distributions', 'qc', 'scatter', 'correlations']
     if has_analyse and has_model:
-        sections += ['concordance', 'reliability']
+        sections += ['concordance', 'reliability', 'agreement']
     if multi_run and len({r.group for r in runs if r.group} ) > 1:
         sections.append('compare')
     return sections
+
+# parse_agreement: split --agreement values into (A, B) measurement pairs; each value may hold several space-separated pairs
+def parse_agreement(values: list[str]) -> list[tuple[str, str]]:
+    pairs = []
+    for token in (t for v in values for t in v.split()):
+        parts = token.split(',')
+        if len(parts) != 2 or not all(parts):
+            raise ValueError(f'invalid --agreement pair {token!r}, expected A,B')
+        pairs.append((parts[0], parts[1]))
+    return pairs

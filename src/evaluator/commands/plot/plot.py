@@ -24,12 +24,14 @@ from evaluator.commands.plot.utils.input import resolve_plot_inputs, available_s
 # ====================
 # run_plot: orchestration logic for plot command
 # ====================
-def run_plot(analyse_input, model_input, output, sections, all_sections, overwrite, include_flagged=False):
+def run_plot(analyse_input, model_input, output, sections, all_sections, overwrite, include_flagged=False, agreement=None):
     config, evaluator_dir = confutil.load_config(output)
     params = config.plot
     runs, multi_run, sheet_path = resolve_plot_inputs(analyse_input, model_input)
     runnable = available_sections(runs, multi_run)
     requested = runnable if all_sections else (sections or params.default_sections)
+    if agreement and 'agreement' not in sections:
+        requested.append('agreement')
     to_run = [s for s in requested if s in runnable]
     skipped = set(requested) - set(to_run)
     if skipped:
@@ -53,7 +55,7 @@ def run_plot(analyse_input, model_input, output, sections, all_sections, overwri
             continue
         section_dir.mkdir(parents=True, exist_ok=True)
         try:
-            _run_section(section, runs, multi_run, section_dir, params, include_flagged)
+            _run_section(section, runs, multi_run, section_dir, params, include_flagged, agreement)
             completed.append(section)
         except Exception as e:
             lg.warning(f'plot | Section {section} failed: {e}')
@@ -63,7 +65,7 @@ def run_plot(analyse_input, model_input, output, sections, all_sections, overwri
 # ====================
 # _run_section: orchestration logic for each section
 # ====================
-def _run_section(section: str, runs: list[PlotRun], multi_run: bool, section_dir: Path, params, include_flagged: bool) -> None:
+def _run_section(section: str, runs: list[PlotRun], multi_run: bool, section_dir: Path, params, include_flagged: bool, agreement) -> None:
     if section == 'compare':
         sectionutil.compare(section_dir, runs, params, include_flagged=include_flagged)
         return
@@ -71,7 +73,7 @@ def _run_section(section: str, runs: list[PlotRun], multi_run: bool, section_dir
     for run in (runs if multi_run else runs[:1]):
         run_dir = section_dir / run.sample_id if multi_run else section_dir
         run_dir.mkdir(parents=True, exist_ok=True)
-        sectionutil.SECTIONS[section](run_dir, sectionutil.load(run, include_flagged=include_flagged), params)
+        sectionutil.SECTIONS[section](run_dir, sectionutil.load(run, include_flagged=include_flagged, agreement=agreement), params)
 
 # ====================
 # _write_index: write the markdown index of all generated files

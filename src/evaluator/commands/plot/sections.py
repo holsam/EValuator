@@ -27,6 +27,7 @@ from evaluator.commands.plot.utils.input import PlotRun
 FEATURES = ['equiv_diameter_nm', 'major_axis_diameter', 'minor_axis_diameter', 'aspect_ratio', 'eccentricity', 'membrane_volume', 'lumen_volume', 'surface_area', 'closure_fill_ratio', 'sphere_rmse_rel',]
 COMPARE_FEATURES = ['equiv_diameter_nm', 'aspect_ratio', 'closure_fill_ratio', 'lumen_volume']
 DIAMETERS = ['equiv_diameter_nm', 'major_axis_diameter']
+DEFAULT_AGREEMENT = [('equiv_diameter_nm', 'model_diameter_nm')]
 
 # ====================
 # Define per-run section input
@@ -38,14 +39,16 @@ class SectionData:
     joined: pd.DataFrame | None
     n_analyse_only: int = 0
     n_model_only: int = 0
+    agreement: tuple[tuple[str, str], ...] = ()
 
-def load(run: PlotRun, *, include_flagged: bool) -> SectionData:
+def load(run: PlotRun, *, include_flagged: bool, agreement=None) -> SectionData:
+    pairs = tuple(agreement or ())
     analyse = datautil.load_analyse(run.analyse_path, include_flagged=include_flagged) if run.analyse_path else None
     model = datautil.load_model(run.model_path) if run.model_path else None
     if analyse is None or model is None:
-        return SectionData(analyse, model, None)
+        return SectionData(analyse, model, None, agreement=pairs)
     joined, n_analyse_only, n_model_only = datautil.join_analyse_model(analyse, model)
-    return SectionData(analyse, model, joined, n_analyse_only, n_model_only)
+    return SectionData(analyse, model, joined, n_analyse_only, n_model_only, pairs)
 
 # ====================
 # Define sections
@@ -141,6 +144,27 @@ def reliability(out: Path, data: SectionData, params) -> None:
         row['n_vesicle_like'] = int(j['is_vesicle_like'].fillna(False).astype(bool).sum())
     write_xlsx(out / 'reliability_summary.xlsx', {'summary': pd.DataFrame([row])})
 
+def agreement(out: Path, data: SectionData, params) -> None:
+    j = data.joined
+    if j is None or j.empty:
+        raise ValueError('agreement needs matching analyse and model rows')
+    rows = []
+    for a, b in (data.agreement or DEFAULT_AGREEMENT):
+        fig = plots.bland_altman(j, a, b, set())
+        if fig is None:
+            lg.warning(f'plot | agreement: skipping {a!r} vs {b!r}, column missing or fewer than two paired values')
+            continue
+        write_figure(fig, out / f'{a}_vs_{b}.svg')
+        x, y = _paired(j[a], j[b])
+        diff, sd = x - y, (x - y).std(ddof=1)
+        rows.append({
+            'a': a, 'b': b, 'n': len(x), 'bias': diff.mean(),
+            'loa_lower': diff.mean() - 1.96 * sd, 'loa_upper': diff.mean() + 1.96 * sd,
+        })
+    if not rows:
+        raise ValueError('agreement: no plottable measurement pair')
+    write_xlsx(out / 'agreement_stats.xlsx', {'stats': pd.DataFrame(rows)})
+
 def compare(out: Path, runs: list[PlotRun], params, *, include_flagged: bool) -> None:
     frames = [
         datautil.load_analyse(r.analyse_path, include_flagged=include_flagged).assign(sample_id=r.sample_id, group=r.group)
@@ -167,6 +191,7 @@ SECTIONS = {
     'qc': qc,
     'concordance': concordance,
     'reliability': reliability,
+    'agreement': agreement,
 }
 
 # ====================

@@ -15,6 +15,7 @@ from typing import Annotated, Optional
 # Import EValuator utilities
 # ====================
 from evaluator.commands.plot import plot as plotFuncs
+from evaluator.commands.plot.utils.input import parse_agreement
 
 # ====================
 # Initialise typer as evaluatorPlot
@@ -55,12 +56,20 @@ def plot(
         bool,
         typer.Option('--include-flagged', help='Include components flagged as non-vesicle-like instead of excluding them')
     ] = False,
+    agreement: Annotated[
+        Optional[list[str]],
+        typer.Option('--agreement', help='Bland-Altman plot for a pair of measurements (repeatable)')
+    ] = None,
 ):
     '''
     Generate plots and summary tables from `analyse` and/or `model` output.
     '''
     if analyse_input is None and model_input is None:
         raise typer.BadParameter('At least one of --analyse or --model must be provided.')
+    try:
+        agreement_pairs = parse_agreement(agreement or [])
+    except ValueError as e:
+        raise typer.BadParameter(str(e))
     plotFuncs.run_plot(
         analyse_input,
         model_input,
@@ -69,4 +78,5 @@ def plot(
         all_sections=all_sections,
         overwrite=overwrite,
         include_flagged=include_flagged,
+        agreement=agreement_pairs,
     )

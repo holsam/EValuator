@@ -151,6 +151,26 @@ class TestPlotConcordance:
         assert (base / 'concordance' / 'concordance_stats.xlsx').exists()
         assert (base / 'reliability' / 'reliability.svg').exists()
 
+    def test_agreement_plots_requested_pairs(self, tmp_path):
+        csv_a = tmp_path / 'a.csv'
+        _write_analyse_csv(csv_a, n=6)
+        model = tmp_path / 'model.json'
+        results = [
+            {'label_id': i, 'source_file': 'tomo1.mrc', 'chosen_model': 'sphere', 'radius': (60 + i) / 2 + 0.3 * i, 'rmse_nm': 1.0,
+            'reliability': {'is_reliable': True}}
+            for i in range(1, 6)
+        ]
+        model.write_text(__import__('json').dumps({'results': results, 'parameters': {}}))
+        out = tmp_path / 'out'
+        run_plot(
+            csv_a, model, out, sections=['qc'], all_sections=False, overwrite=False,
+            agreement=[('equiv_diameter_nm', 'model_diameter_nm'), ('major_axis_diameter', 'model_diameter_nm')],
+        )
+        base = out / 'evaluator' / 'plot' / 'agreement'
+        assert (base / 'equiv_diameter_nm_vs_model_diameter_nm.svg').exists()
+        assert (base / 'major_axis_diameter_vs_model_diameter_nm.svg').exists()
+        assert (base / 'agreement_stats.xlsx').exists()
+
 class TestPlotCompare:
     def test_compare_writes_group_outputs(self, tmp_path):
         a, b = tmp_path / 'a.csv', tmp_path / 'b.csv'

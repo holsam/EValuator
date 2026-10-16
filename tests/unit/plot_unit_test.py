@@ -17,8 +17,9 @@ from evaluator.commands.plot.utils import data as datautil
 from evaluator.commands.plot.utils import export as exportutil
 from evaluator.commands.plot.utils.input import (
     PlotRun,
-    resolve_plot_inputs,
     available_sections,
+    parse_agreement,
+    resolve_plot_inputs,
 )
 
 # ====================
@@ -48,7 +49,7 @@ def _make_analyse_csv(tmp_path):
 
 @pytest.fixture
 def fake_sections():
-    names = ['distributions', 'qc', 'scatter', 'correlations', 'concordance', 'reliability']
+    names = ['distributions', 'qc', 'scatter', 'correlations', 'concordance', 'reliability', 'agreement']
     mocks = {n: MagicMock() for n in names}
     with patch.dict('evaluator.commands.plot.sections.SECTIONS', mocks, clear=True), patch('evaluator.commands.plot.plot.exportutil.check_kaleido'), patch('evaluator.commands.plot.plot.sectionutil.load'):
         yield mocks
@@ -145,6 +146,7 @@ class TestPlotUtilsInput:
         sections = available_sections(runs, False)
         assert 'concordance' in sections
         assert 'reliability' in sections
+        assert 'agreement' in sections
 
     def test_single_group_excludes_compare(self):
         runs = [
@@ -164,6 +166,14 @@ class TestPlotUtilsInput:
         '''compare requires multi_run even if (somehow) groups differ'''
         runs = [PlotRun(sample_id='s', analyse_path=Path('a.csv'), model_path=None, group='g')]
         assert 'compare' not in available_sections(runs, False)
+
+    def test_parse_agreement_repeatable_and_space_separated(self):
+        assert parse_agreement(['a,b', 'c,d e,f']) == [('a', 'b'), ('c', 'd'), ('e', 'f')]
+
+    @pytest.mark.parametrize('bad', ['a', 'a,b,c', ',b', 'a,'])
+    def test_parse_agreement_rejects_malformed_pairs(self, bad):
+        with pytest.raises(ValueError):
+            parse_agreement([bad])
 
 # ====================
 # Define tests for plot/plot.py
@@ -228,6 +238,12 @@ class TestPlot:
         run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False)
         params = tomllib.loads((tmp_path / 'evaluator' / 'plot' / 'params.toml').read_text())
         assert params['fill_ratio_flag_threshold'] == 0.05 and params['theme'] == 'Okabe-Ito'
+
+    def test_agreement_pairs_add_the_section(self, tmp_path, fake_sections):
+        analyse = _make_analyse_csv(tmp_path)
+        model = _write(tmp_path / 'model.json', '{}')
+        run_plot(analyse, model, tmp_path, sections=['qc'], all_sections=False, overwrite=False, agreement=[('a', 'b')])
+        fake_sections['agreement'].assert_called_once()
 
 # ====================
 # Define tests for plot/utils/data.py
