@@ -5,7 +5,7 @@ Unit tests for `evaluator plot`
 # ====================
 # Import external dependencies
 # ====================
-import pandas as pd, pytest, subprocess, tomllib
+import pandas as pd, plotly.graph_objects as go, pytest, subprocess, tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 # ====================
 from evaluator.commands.plot.plot import run_plot
 from evaluator.commands.plot.utils import data as datautil
+from evaluator.commands.plot.utils import export as exportutil
 from evaluator.commands.plot.utils.dispatch import (
     resolve_rscript,
     dispatch,
@@ -326,3 +327,32 @@ class TestPlotUtilsData:
         df = pd.DataFrame({'tomogram': ['a', 'a', 'b']})
         note = datautil.pooling_note(df, n_samples=2)
         assert 'n = 3 EVs' in note and '2 tomogram(s)' in note and '2 sample(s)' in note
+
+# ====================
+# Define tests for plot/utils/export.py
+# ====================
+def _kaleido_ok() -> bool:
+    try:
+        exportutil.check_kaleido()
+        return True
+    except RuntimeError:
+        return False
+
+class TestPlotUtilsExport:
+    def test_vectorise_replaces_scattergl(self):
+        fig = go.Figure(go.Scattergl(x=[1, 2], y=[1, 2], mode='markers'))
+        assert fig.data[0].type == 'scattergl'
+        assert exportutil._vectorise(fig).data[0].type == 'scatter'
+
+    def test_write_xlsx_first_sheet_active(self, tmp_path):
+        from openpyxl import load_workbook
+        path = tmp_path / 't.xlsx'
+        exportutil.write_xlsx(path, {'main': pd.DataFrame({'a': [1, 2]}), 'notes': pd.DataFrame({'note': ['x']})})
+        wb = load_workbook(path)
+        assert wb.sheetnames == ['main', 'notes'] and wb.active.title == 'main'
+
+    @pytest.mark.skipif(not _kaleido_ok(), reason='kaleido/Chrome unavailable')
+    def test_write_figure_svg(self, tmp_path):
+        path = tmp_path / 'f.svg'
+        exportutil.write_figure(go.Figure(go.Scatter(x=[1, 2], y=[1, 2])), path)
+        assert path.read_text().lstrip().startswith(('<svg', '<?xml'))
