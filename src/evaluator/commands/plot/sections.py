@@ -81,15 +81,18 @@ def distributions(out: Path, data: SectionData, params) -> None:
 def scatter(out: Path, data: SectionData, params) -> None:
     df = data.analyse
     _log_pooling(df)
-    rows = []
-    for x, y in params.scatter_pairs:
-        x, y = _size(df, x), _size(df, y)
+    pairs = [(_size(df, x), _size(df, y)) for x, y in params.scatter_pairs]
+    tomo = datautil.aggregate_tomograms(df, list(dict.fromkeys(c for pair in pairs for c in pair if c in df.columns)), keys=('tomogram',))
+    rows, tomo_rows = [], []
+    for x, y in pairs:
         if x not in df.columns or y not in df.columns:
             lg.warning(f'plot | scatter: skipping {x!r} vs {y!r}, column missing')
             continue
         write_figure(plots.feature_scatter(df, x, y, set()), out / f'{x}_vs_{y}.svg')
         rows.append(_pair_stats(df, x, y))
-    write_xlsx(out / 'scatter_stats.xlsx', {'stats': pd.DataFrame(rows), 'notes': _notes(df)})
+        tomo_rows.append(_pair_stats(tomo, x, y))
+    notes = pd.concat([_notes(df), pd.DataFrame({'note': [f'stats_tomogram: regression and correlation on per-tomogram medians (n = {len(tomo)} tomograms), the cluster-aware estimate; stats is pooled over EVs and descriptive only']})], ignore_index=True)
+    write_xlsx(out / 'scatter_stats.xlsx', {'stats': pd.DataFrame(rows), 'stats_tomogram': pd.DataFrame(tomo_rows), 'notes': notes})
 
 def correlations(out: Path, data: SectionData, params) -> None:
     df = data.analyse
@@ -97,11 +100,13 @@ def correlations(out: Path, data: SectionData, params) -> None:
     if len(cols) < 2:
         raise ValueError('correlations needs at least two numeric feature columns')
     _log_pooling(df)
+    tomo = datautil.aggregate_tomograms(df, cols, keys=('tomogram',))
     sheets = {}
     for method in ('spearman', 'pearson'):
         write_figure(plots.correlation_matrix(df, cols, method=method), out / f'correlation_{method}.svg', 'heatmap')
         sheets[method] = df[cols].apply(pd.to_numeric, errors='coerce').corr(method=method).reset_index(names='feature')
-    sheets['notes'] = _notes(df)
+        sheets[f'{method}_tomogram'] = tomo[cols].corr(method=method).reset_index(names='feature')
+    sheets['notes'] = pd.concat([_notes(df), pd.DataFrame({'note': [f'*_tomogram sheets: correlations of per-tomogram medians (n = {len(tomo)} tomograms), the cluster-aware estimate']})], ignore_index=True)
     write_xlsx(out / 'correlations.xlsx', sheets)
 
 def qc(out: Path, data: SectionData, params) -> None:

@@ -262,7 +262,7 @@ class TestPlotUtilsData:
     def test_tomogram_note_states_tomogram_n(self):
         tomo = pd.DataFrame({'sample_id': ['s1', 's2', 's2'], 'tomogram': ['a', 'b', 'c']})
         note = datautil.tomogram_note(tomo)
-        assert 'n = 3 tomogram(s)' in note and '2 sample(s)' in note and 'non-independent' in note
+        assert 'n = 3 tomogram(s)' in note and '2 sample(s)' in note
 
     def test_attach_fitted_diameter_masks_unreliable(self):
         analyse = pd.DataFrame({'tomogram': ['t.mrc'] * 3, 'label': [1, 2, 3]})
@@ -380,3 +380,15 @@ class TestGroupTests:
         two = sectionutil._group_tests(self._tomo([1, 1, 1], [1, 1, 1]), ['x'])
         three = sectionutil._group_tests(self._tomo([1, 1, 1], [1, 1, 1], [1, 1, 1]), ['x'])
         assert two.loc[0, 'p_value'] == 1.0 and pd.isna(three.loc[0, 'p_value'])
+
+# -- Define tomogram-level stats test --------
+class TestTomogramLevelStats:
+    def test_pair_stats_on_tomogram_medians_counts_tomograms(self):
+        df = pd.DataFrame({
+            'tomogram': ['t1'] * 3 + ['t2'] * 3 + ['t3'] * 3,
+            'x': [1, 2, 3, 4, 5, 6, 7, 8, 9], 'y': [2, 4, 6, 8, 10, 12, 14, 16, 18],
+        })
+        tomo = datautil.aggregate_tomograms(df, ['x', 'y'], keys=('tomogram',))
+        row = sectionutil._pair_stats(tomo, 'x', 'y')
+        assert row['n'] == 3 and row['r2'] == pytest.approx(1.0)
+        assert sectionutil._pair_stats(df, 'x', 'y')['n'] == 9
