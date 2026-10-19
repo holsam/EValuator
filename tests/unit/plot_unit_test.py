@@ -249,6 +249,17 @@ class TestPlot:
 # Define tests for plot/utils/data.py
 # ====================
 class TestPlotUtilsData:
+    def test_populations_split_by_qc_and_z_clip(self):
+        df = pd.DataFrame({
+            'is_vesicle_like': [True, True, False, True],
+            'touches_z_boundary': [False, True, False, False],
+        })
+        pops = datautil.populations(df)
+        assert {k: len(v) for k, v in pops.items()} == {'all': 4, 'vesicle_like': 3, 'vesicle_like_no_z_clip': 2}
+
+    def test_populations_without_qc_column_is_all_only(self):
+        assert list(datautil.populations(pd.DataFrame({'x': [1, 2]}))) == ['all']
+
     def _csv(self, tmp_path, rows):
         header = 'tomogram,label,equiv_diameter_nm,major_axis_diameter,minor_axis_diameter,aspect_ratio,eccentricity,membrane_volume,lumen_volume,surface_area,is_enclosed,closure_fill_ratio,is_vesicle_like,qc_flags\n'
         body = ''.join(f'tomo1.mrc,{i},80,90,70,1.2,0.5,5,3,2,True,0.4,{vl},{flags}\n' for i, (vl, flags) in enumerate(rows))

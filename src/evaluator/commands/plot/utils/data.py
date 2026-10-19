@@ -50,6 +50,18 @@ def join_analyse_model(analyse: pd.DataFrame, model: pd.DataFrame) -> tuple[pd.D
     joined = analyse.merge(model, left_on=['tomogram', 'label'], right_on=['tomogram', 'label_id'], how='inner', suffixes=('', '_model'))
     return joined, len(analyse) - len(joined), len(model) - len(joined)
 
+# populations: named subsets of the unfiltered analyse frame, for reporting the QC filter and z clipping both ways
+def populations(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    out = {'all': df}
+    if 'is_vesicle_like' not in df.columns:
+        return out
+    keep = df['is_vesicle_like'].fillna(False).astype(bool)
+    out['vesicle_like'] = df[keep]
+    if 'touches_z_boundary' in df.columns:
+        clipped = df['touches_z_boundary'].fillna(False).astype(bool)
+        out['vesicle_like_no_z_clip'] = df[keep & ~clipped]
+    return out
+
 # pooling_note: caveat text for any statistic that treats pooled EVs as independent observations
 def pooling_note(df: pd.DataFrame, n_samples: int = 1) -> str:
     return (f'n = {len(df)} EVs pooled across {df["tomogram"].nunique()} tomogram(s) and {n_samples} sample(s); EVs are treated as independent and no clustering-adjusted test is applied, so treat statistics as descriptive only')

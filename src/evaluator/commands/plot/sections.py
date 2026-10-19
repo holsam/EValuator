@@ -24,7 +24,7 @@ from evaluator.commands.plot.utils.input import PlotRun
 # Define constant variables
 # ====================
 # Morphology features reported by distributions and correlations
-FEATURES = ['equiv_diameter_nm', 'major_axis_diameter', 'minor_axis_diameter', 'aspect_ratio', 'eccentricity', 'membrane_volume', 'lumen_volume', 'surface_area', 'closure_fill_ratio', 'sphere_rmse_rel',]
+FEATURES = ['equiv_diameter_nm', 'xy_diameter_nm', 'major_axis_diameter', 'minor_axis_diameter', 'aspect_ratio', 'eccentricity', 'membrane_volume', 'lumen_volume', 'surface_area', 'closure_fill_ratio', 'sphere_rmse_rel',]
 COMPARE_FEATURES = ['equiv_diameter_nm', 'aspect_ratio', 'closure_fill_ratio', 'lumen_volume']
 DIAMETERS = ['equiv_diameter_nm', 'major_axis_diameter']
 DEFAULT_AGREEMENT = [('equiv_diameter_nm', 'model_diameter_nm')]
@@ -40,15 +40,17 @@ class SectionData:
     n_analyse_only: int = 0
     n_model_only: int = 0
     agreement: tuple[tuple[str, str], ...] = ()
+    analyse_all: pd.DataFrame | None = None
 
 def load(run: PlotRun, *, include_flagged: bool, agreement=None) -> SectionData:
     pairs = tuple(agreement or ())
     analyse = datautil.load_analyse(run.analyse_path, include_flagged=include_flagged) if run.analyse_path else None
+    analyse_all = datautil.load_analyse(run.analyse_path, include_flagged=True) if run.analyse_path else None  # unfiltered, for report-both-ways stats
     model = datautil.load_model(run.model_path) if run.model_path else None
     if analyse is None or model is None:
-        return SectionData(analyse, model, None, agreement=pairs)
+        return SectionData(analyse, model, None, agreement=pairs, analyse_all=analyse_all)
     joined, n_analyse_only, n_model_only = datautil.join_analyse_model(analyse, model)
-    return SectionData(analyse, model, joined, n_analyse_only, n_model_only, pairs)
+    return SectionData(analyse, model, joined, n_analyse_only, n_model_only, pairs, analyse_all)
 
 # ====================
 # Define sections
@@ -61,12 +63,18 @@ def distributions(out: Path, data: SectionData, params) -> None:
             continue
         width = params.bin_width_overrides.get(feat, params.bin_width)
         write_figure(plots.distribution(df, feat, set(), bin_size=width or None), out / f'{feat}_histogram.svg')
-        v = pd.to_numeric(df[feat], errors='coerce')
-        rows.append({
-            'feature': feat, 'n': int(v.notna().sum()), 'mean': v.mean(), 'median': v.median(),
-            'sd': v.std(), 'p5': v.quantile(0.05), 'p95': v.quantile(0.95),
-        })
-    write_xlsx(out / 'summary_stats.xlsx', {'summary': pd.DataFrame(rows)})
+        for population, subset in datautil.populations(data.analyse_all).items():
+            v = pd.to_numeric(subset[feat], errors='coerce')
+            rows.append({
+                'population': population, 'feature': feat, 'n': int(v.notna().sum()), 'mean': v.mean(), 'median': v.median(),
+                'sd': v.std(), 'p5': v.quantile(0.05), 'p95': v.quantile(0.95),
+            })
+    notes = pd.DataFrame({'note': [
+        'population: all = every component; vesicle_like = passes the QC filters; vesicle_like_no_z_clip = also excludes components touching a z face',
+        'a conclusion that holds in all populations does not depend on the QC filter or on z clipping',
+        'xy_diameter_nm is independent of z clipping; aspect_ratio, eccentricity and sphere_rmse_rel are biased low for clipped components, preferring vesicle_like_no_z_clip may be useful with caveat that excluding clipped EVs biases size small',
+    ]})
+    write_xlsx(out / 'summary_stats.xlsx', {'summary': pd.DataFrame(rows), 'notes': notes})
 
 def scatter(out: Path, data: SectionData, params) -> None:
     df = data.analyse
