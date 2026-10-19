@@ -162,6 +162,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     component_mask = measurement.createComponentMask(component=component_properties, labelled_vol=labelled_volumes, label_val=component_label)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring membrane volume and equivalent diameter...")
     membrane_vol_nm3, equiv_diameter_nm = measurement.measureMembraneVolumeDiameter(component=component_properties, scale=scale, membrane_thickness_nm=membrane_thickness_nm)
+    xy_diameter_nm = measurement.measureXYDiameter(component_mask, scale)
     component_mask_dilated = filtering.morphologicalDilation(component_mask)
     lg.debug(f"analyse | {filename} | Component {component_label} | Checking if component is enclosed...")
     enclosed, fill_ratio = filtering.checkEnclosed(component_mask=component_mask_dilated, threshold=fill_threshold)
@@ -187,6 +188,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
         "tomogram": filename,
         "label": component_label,
         "equiv_diameter_nm": round(equiv_diameter_nm, 2),
+        "xy_diameter_nm": round(xy_diameter_nm, 2),
         "major_axis_diameter": round(major_axis_diameter, 2),
         "minor_axis_diameter": round(minor_axis_diameter, 2),
         "aspect_ratio": round(aspect_ratio, 2),

@@ -74,6 +74,29 @@ def measureMembraneVolumeDiameter(component, scale, membrane_thickness_nm: float
     return vol_nm3, equiv_diameter_nm
 
 # =========================
+# DEFINE FUNCTION: measureXYDiameter
+# =========================
+def measureXYDiameter(component_mask, scale):
+    '''
+    Diameter from the widest xy slice (mean of the y and x extents), in nm if scale is a voxel size.
+    Independent of z, so unaffected by clipping at the z faces.
+    '''
+    per_slice = (_sliceExtent(component_mask.any(axis=2)) + _sliceExtent(component_mask.any(axis=1))) / 2
+    return float(per_slice.max() * scale)
+
+# =========================
+# DEFINE HELPER FUNCTION: _sliceExtent
+# =========================
+def _sliceExtent(slice_mask: numpy.ndarray) -> numpy.ndarray:
+    '''
+    Per-row extent (voxels) between the first and last True along axis 1; 0 for empty rows.
+    '''
+    idx = numpy.arange(slice_mask.shape[1])
+    hi = numpy.where(slice_mask, idx, -1).max(axis=1)
+    lo = numpy.where(slice_mask, idx, slice_mask.shape[1]).min(axis=1)
+    return numpy.where(slice_mask.any(axis=1), hi - lo + 1, 0)
+
+# =========================
 # DEFINE FUNCTION: createComponentMask
 # =========================
 def createComponentMask(component, labelled_vol, label_val):

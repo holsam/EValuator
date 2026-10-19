@@ -92,6 +92,7 @@ Column | Description | Units[^units]
 `tomogram` | Filename of the input MRC file from which the EV was identified |
 `label` | Unique integer identifier for the EV within its file |
 `equiv_diameter_nm`[^equivdiameter] | Outer diameter of the vesicle, derived from the membrane shell volume and thickness | nm (rounded to 2 d.p.)
+`xy_diameter_nm` | Outer diameter of the widest xy slice (mean of y and x extents), independent of z | nm (rounded to 2 d.p.)
 `major_axis_diameter`[^diameters] | Length of the longest axis of the best-fit ellipsoid | nm (rounded to 2 d.p.)
 `minor_axis_diameter`[^diameters] | Length of the shortest axis of the best-fit ellipsoid | nm (rounded to 2 d.p.)
 `aspect_ratio`[^aspectratio] | Ratio of `major_axis_diameter` to `minor_axis_diameter` | unitless (rounded to 2 d.p.)
