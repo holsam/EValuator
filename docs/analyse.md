@@ -105,6 +105,7 @@ Column | Description | Units[^units]
 `solidity` | Voxel count ÷ convex-hull volume (QuickHull over the component's voxels; ~1 for a solid convex blob, low for sprawling/concave debris) | unitless (0 < s ≲ 1; rounded to 4 d.p.)
 `arc_coverage` | Fraction of the fitted sphere's surface (18×36 grid) occupied by the component | unitless (0 ≤ c ≤ 1; rounded to 4 d.p.; `NaN` if < 4 voxels)
 `bbox_extent` | Bounding-box fill ratio (`skimage` `regionprops.extent`) | unitless (0 < e ≤ 1; rounded to 4 d.p.)
+`touches_z_boundary` | Whether the component's bounding box reaches the first or last z slice (and component therefore may be clipped by reconstruction box) | boolean (True/False)
 `is_vesicle_like` | Composite QC flag — `True` unless a vesicle-vs-debris check fails (see [`--qc-*` options](#--qc-max-sphere-rmse-rel---qc-max-aspect-ratio---qc-min-solidity---qc-min-arc-coverage)) | boolean (True/False)
 `qc_flags` | Comma-joined names of failed QC checks (`sphere_rmse`, `aspect_ratio`, `solidity`, `open_shell`, `too_small`); empty when clean | string
 `membrane_thickness_nm` | Membrane shell thickness used to derive `equiv_diameter_nm` for this file | nm (rounded to 2 d.p.)

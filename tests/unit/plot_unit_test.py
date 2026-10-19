@@ -276,11 +276,11 @@ class TestPlotUtilsData:
         messages = []
         sink = logger.add(lambda m: messages.append(str(m)), level='INFO')
         try:
-            path = self._csv(tmp_path, [(True, ''), (False, '"sphere_rmse,touches_z_boundary"'), (False, 'sphere_rmse')])
+            path = self._csv(tmp_path, [(True, ''), (False, '"sphere_rmse,open_shell"'), (False, 'sphere_rmse')])
             datautil.load_analyse(path)
         finally:
             logger.remove(sink)
-        assert any('sphere_rmse=2' in m and 'touches_z_boundary=1' in m for m in messages)
+        assert any('sphere_rmse=2' in m and 'open_shell=1' in m for m in messages)
 
     def test_join_matches_on_basename_and_label_and_counts_unmatched(self):
         analyse = pd.DataFrame({'tomogram': ['t.mrc', 't.mrc', 't.mrc'], 'label': [1, 2, 3]})

@@ -406,12 +406,9 @@ class TestClassifyVesicle:
         args = (5000, 0.1, 2.0, 0.3, 0.9, True)
         assert classifyVesicle(*args, _QC_DEFAULTS)[0] is True
         assert classifyVesicle(*args, {**_QC_DEFAULTS, "qc_max_aspect_ratio": 1.5})[0] is False
-    def test_z_boundary_touch_flagged(self):
-        ok, flags = classifyVesicle(5000, 0.05, 1.1, 0.4, 0.9, True, _QC_DEFAULTS, touches_z_boundary=True)
-        assert ok is False and "touches_z_boundary" in flags
-    def test_z_boundary_touch_defaults_false(self):
-        ok, flags = classifyVesicle(5000, 0.05, 1.1, 0.4, 0.9, True, _QC_DEFAULTS)
-        assert ok is True and "touches_z_boundary" not in flags
+    def test_z_boundary_not_a_classification_input(self):
+        import inspect
+        assert 'touches_z_boundary' not in inspect.signature(classifyVesicle).parameters
 
 # -- Define results saving test --------
 class TestSaveResultsCSV:
