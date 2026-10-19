@@ -24,10 +24,10 @@ from evaluator.commands.plot.utils.input import PlotRun
 # Define constant variables
 # ====================
 # Morphology features reported by distributions and correlations
-FEATURES = ['equiv_diameter_nm', 'xy_diameter_nm', 'major_axis_diameter', 'minor_axis_diameter', 'aspect_ratio', 'eccentricity', 'membrane_volume', 'lumen_volume', 'surface_area', 'closure_fill_ratio', 'sphere_rmse_rel',]
+FEATURES = ['equiv_diameter_nm', 'xy_diameter_nm', datautil.SIZE_COL, 'major_axis_diameter', 'minor_axis_diameter', 'aspect_ratio', 'eccentricity', 'membrane_volume', 'lumen_volume', 'surface_area', 'closure_fill_ratio', 'sphere_rmse_rel',]
 COMPARE_FEATURES = ['equiv_diameter_nm', 'aspect_ratio', 'closure_fill_ratio', 'lumen_volume']
 DIAMETERS = ['equiv_diameter_nm', 'major_axis_diameter']
-DEFAULT_AGREEMENT = [('equiv_diameter_nm', 'model_diameter_nm')]
+DEFAULT_AGREEMENT = [('equiv_diameter_nm', datautil.SIZE_COL)]
 
 # ====================
 # Define per-run section input
@@ -49,7 +49,9 @@ def load(run: PlotRun, *, include_flagged: bool, agreement=None) -> SectionData:
     model = datautil.load_model(run.model_path) if run.model_path else None
     if analyse is None or model is None:
         return SectionData(analyse, model, None, agreement=pairs, analyse_all=analyse_all)
-    joined, n_analyse_only, n_model_only = datautil.join_analyse_model(analyse, model)
+    joined, n_analyse_only, n_model_only = datautil.join_analyse_model(analyse, model)  # before the attach below, so the joined frame keeps one model_diameter_nm
+    analyse = datautil.attach_fitted_diameter(analyse, model)
+    analyse_all = datautil.attach_fitted_diameter(analyse_all, model)
     return SectionData(analyse, model, joined, n_analyse_only, n_model_only, pairs, analyse_all)
 
 # ====================
@@ -81,6 +83,7 @@ def scatter(out: Path, data: SectionData, params) -> None:
     _log_pooling(df)
     rows = []
     for x, y in params.scatter_pairs:
+        x, y = _size(df, x), _size(df, y)
         if x not in df.columns or y not in df.columns:
             lg.warning(f'plot | scatter: skipping {x!r} vs {y!r}, column missing')
             continue
@@ -90,7 +93,7 @@ def scatter(out: Path, data: SectionData, params) -> None:
 
 def correlations(out: Path, data: SectionData, params) -> None:
     df = data.analyse
-    cols = [c for c in FEATURES if c in df.columns]
+    cols = [c for c in FEATURES if c in df.columns and pd.to_numeric(df[c], errors='coerce').notna().any()]
     if len(cols) < 2:
         raise ValueError('correlations needs at least two numeric feature columns')
     _log_pooling(df)
@@ -128,7 +131,7 @@ def concordance(out: Path, data: SectionData, params) -> None:
         if fig is None:
             continue
         write_figure(fig, out / f'model_vs_{col}.svg', 'square')
-        a, b = _paired(j[col], j['model_diameter_nm'])
+        a, b = _paired(j[col], j[datautil.SIZE_COL])
         diff = b - a
         rows.append({
             'analyse_measure': col, 'n': len(a), 'bias': diff.mean(), 'rmse': float(np.sqrt((diff ** 2).mean())),
@@ -174,12 +177,16 @@ def agreement(out: Path, data: SectionData, params) -> None:
     write_xlsx(out / 'agreement_stats.xlsx', {'stats': pd.DataFrame(rows)})
 
 def compare(out: Path, runs: list[PlotRun], params, *, include_flagged: bool) -> None:
-    frames = [
-        datautil.load_analyse(r.analyse_path, include_flagged=include_flagged).assign(sample_id=r.sample_id, group=r.group)
-        for r in runs if r.analyse_path and r.group
-    ]
+    frames = []
+    for r in runs:
+        if not (r.analyse_path and r.group):
+            continue
+        df = datautil.load_analyse(r.analyse_path, include_flagged=include_flagged)
+        if r.model_path:
+            df = datautil.attach_fitted_diameter(df, datautil.load_model(r.model_path))
+        frames.append(df.assign(sample_id=r.sample_id, group=r.group))
     combined = pd.concat(frames, ignore_index=True)
-    feats = [f for f in COMPARE_FEATURES if f in combined.columns]
+    feats = [_size(combined, f) for f in COMPARE_FEATURES if f in combined.columns]
     _log_pooling(combined, n_samples=combined['sample_id'].nunique())
     for feat in feats:
         write_figure(plots.group_distribution(combined, feat), out / f'violin_{feat}.svg')
@@ -205,6 +212,12 @@ SECTIONS = {
 # ====================
 # Define private helpers
 # ====================
+# _size: swap the shell-volume equivalent diameter for the fitted diameter when model output is available
+def _size(df: pd.DataFrame, col: str) -> str:
+    if col == 'equiv_diameter_nm' and datautil.SIZE_COL in df.columns and df[datautil.SIZE_COL].notna().any():
+        return datautil.SIZE_COL
+    return col
+
 def _paired(a, b) -> tuple[pd.Series, pd.Series]:
     a, b = pd.to_numeric(a, errors='coerce'), pd.to_numeric(b, errors='coerce')
     m = a.notna() & b.notna()

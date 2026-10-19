@@ -249,6 +249,21 @@ class TestPlot:
 # Define tests for plot/utils/data.py
 # ====================
 class TestPlotUtilsData:
+    def test_attach_fitted_diameter_masks_unreliable(self):
+        analyse = pd.DataFrame({'tomogram': ['t.mrc'] * 3, 'label': [1, 2, 3]})
+        model = pd.DataFrame({
+            'source_file': ['/x/t.mrc', '/x/t.mrc'], 'label_id': [1, 2], 'model_diameter_nm': [100.0, 50.0],
+            'reliability.is_reliable': [True, False],
+        })
+        out = datautil.attach_fitted_diameter(analyse, model)
+        assert out['model_diameter_nm'].tolist()[0] == 100.0
+        assert out['model_diameter_nm'].isna().tolist() == [False, True, True]  # unreliable fit and unmatched row both NaN
+
+    def test_attach_fitted_diameter_keeps_row_count_with_duplicate_model_rows(self):
+        analyse = pd.DataFrame({'tomogram': ['t.mrc'], 'label': [1]})
+        model = pd.DataFrame({'source_file': ['/x/t.mrc', '/y/t.mrc'], 'label_id': [1, 1], 'model_diameter_nm': [10.0, 20.0]})
+        assert len(datautil.attach_fitted_diameter(analyse, model)) == 1
+
     def test_populations_split_by_qc_and_z_clip(self):
         df = pd.DataFrame({
             'is_vesicle_like': [True, True, False, True],

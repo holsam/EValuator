@@ -21,6 +21,8 @@ from evaluator.utils.settings import lg
 # ====================
 ANALYSE_REQUIRED = ['tomogram', 'label', 'equiv_diameter_nm', 'major_axis_diameter', 'minor_axis_diameter', 'aspect_ratio', 'eccentricity', 'membrane_volume', 'lumen_volume', 'surface_area', 'is_enclosed', 'closure_fill_ratio']
 MODEL_REQUIRED = ['label_id', 'source_file', 'chosen_model', 'radius', 'rmse_nm']
+# SIZE_COL: fitted-sphere diameter from `model`, used as the size axis whenever model output is supplied
+SIZE_COL = 'model_diameter_nm'
 
 # ====================
 # Define loaders
@@ -41,7 +43,7 @@ def load_model(path: Path) -> pd.DataFrame:
     records, _ = ioutil.read_results(path)
     df = pd.json_normalize(records)  # flattens nested reliability / fit dicts to 'reliability.is_reliable' etc.
     _validate(df, MODEL_REQUIRED, path.name)
-    df['model_diameter_nm'] = pd.to_numeric(df['radius'], errors='coerce') * 2
+    df[SIZE_COL] = pd.to_numeric(df['radius'], errors='coerce') * 2
     return df
 
 # join_analyse_model: inner join on (tomogram basename, label); also returns the unmatched counts on each side
@@ -49,6 +51,17 @@ def join_analyse_model(analyse: pd.DataFrame, model: pd.DataFrame) -> tuple[pd.D
     model = model.assign(tomogram=model['source_file'].map(lambda s: Path(s).name))
     joined = analyse.merge(model, left_on=['tomogram', 'label'], right_on=['tomogram', 'label_id'], how='inner', suffixes=('', '_model'))
     return joined, len(analyse) - len(joined), len(model) - len(joined)
+
+# attach_fitted_diameter: left-join model's fitted diameter onto analyse, masking unreliable fits, so figures can use it as the size axis
+def attach_fitted_diameter(analyse: pd.DataFrame, model: pd.DataFrame) -> pd.DataFrame:
+    fitted = pd.DataFrame({
+        'tomogram': model['source_file'].map(lambda s: Path(s).name),
+        'label': model['label_id'],
+        SIZE_COL: model[SIZE_COL],
+    })
+    if 'reliability.is_reliable' in model.columns:
+        fitted[SIZE_COL] = fitted[SIZE_COL].where(model['reliability.is_reliable'].fillna(False).astype(bool))
+    return analyse.merge(fitted.drop_duplicates(['tomogram', 'label']), on=['tomogram', 'label'], how='left')
 
 # populations: named subsets of the unfiltered analyse frame, for reporting the QC filter and z clipping both ways
 def populations(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
