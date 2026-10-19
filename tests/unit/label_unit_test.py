@@ -100,6 +100,31 @@ class TestFindMergeGroups:
         )
         assert sorted(groups[0]) == [1, 2, 3]
 
+    def test_concentric_pair_not_merged(self):
+        # 23% radius difference passes merge_radius_tol_pct (0.30) but is concentric
+        outer = _sphere_points(centre=(0, 0, 0), radius=13.0)
+        inner = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: outer, 2: inner}, centre_tol_factor=1.5, radius_tol_pct=0.30)
+        assert sorted(sorted(g) for g in groups) == [[1], [2]]
+
+    def test_concentric_same_radius_still_merges(self):
+        a = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        b = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: a, 2: b}, centre_tol_factor=1.5, radius_tol_pct=0.30)
+        assert sorted(groups[0]) == [1, 2]
+
+    def test_concentric_guard_can_be_relaxed(self):
+        outer = _sphere_points(centre=(0, 0, 0), radius=13.0)
+        inner = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: outer, 2: inner}, centre_tol_factor=1.5, radius_tol_pct=0.30, concentric_radius_pct=0.50)
+        assert sorted(groups[0]) == [1, 2]
+
+    def test_concentric_centre_frac_zero_disables_guard(self):
+        outer = _sphere_points(centre=(0, 0, 0), radius=13.0)
+        inner = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: outer, 2: inner}, centre_tol_factor=1.5, radius_tol_pct=0.30, concentric_centre_frac=0.0)
+        assert sorted(groups[0]) == [1, 2]
+
 class TestApplyMerges:
     def test_voxel_count_preserved(self):
         vol = np.zeros((10, 10, 10), dtype=np.int32)
