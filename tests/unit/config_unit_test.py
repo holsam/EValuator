@@ -48,7 +48,11 @@ def _write_config(path: Path, content: str | None = None) -> Path:
 # Define tests
 # ====================
 class TestSchema:
-    '''The Pydantic Config model and the packaged default are in lockstep'''
+    '''The Pydantic Config model and the packaged default match'''
+    def test_merge_centre_tol_factor_below_neighbour_ceiling(self):
+        from evaluator.utils.config import LabelConfig
+        assert LabelConfig().merge_centre_tol_factor <= 0.573
+
     def test_packaged_default_validates(self):
         '''The packaged config.toml must validate against Config'''
         from importlib.resources import files

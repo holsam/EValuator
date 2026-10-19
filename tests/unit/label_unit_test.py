@@ -8,6 +8,7 @@ import numpy as np, pytest
 # ====================
 from evaluator.commands.label.utils.geometric_proxies import estimateCentroidRadius, estimateArcCoverage
 from evaluator.commands.label.utils.merge import findMergeGroups, applyMerges
+from evaluator.utils.config import LabelConfig
 
 # ====================
 # Define point-cloud generator helpers
@@ -118,6 +119,12 @@ class TestFindMergeGroups:
         inner = _sphere_points(centre=(0, 0, 0), radius=10.0)
         groups = findMergeGroups({1: outer, 2: inner}, centre_tol_factor=1.5, radius_tol_pct=0.30, concentric_radius_pct=0.50)
         assert sorted(groups[0]) == [1, 2]
+
+    def test_default_centre_tol_does_not_fuse_neighbours(self):
+        pts_a = _sphere_points(centre=(0, 0, 0), radius=5.0)
+        pts_b = _sphere_points(centre=(7, 0, 0), radius=5.0)
+        groups = findMergeGroups({1: pts_a, 2: pts_b}, centre_tol_factor=LabelConfig().merge_centre_tol_factor, radius_tol_pct=0.30)
+        assert sorted(sorted(g) for g in groups) == [[1], [2]]
 
     def test_concentric_centre_frac_zero_disables_guard(self):
         outer = _sphere_points(centre=(0, 0, 0), radius=13.0)
