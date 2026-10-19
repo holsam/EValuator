@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 # Import evaluator plot functions
 # ====================
 from evaluator.commands.plot.plot import run_plot
+from evaluator.commands.plot import sections as sectionutil
 from evaluator.commands.plot.utils import data as datautil
 from evaluator.commands.plot.utils import export as exportutil
 from evaluator.commands.plot.utils.input import (
@@ -249,6 +250,20 @@ class TestPlot:
 # Define tests for plot/utils/data.py
 # ====================
 class TestPlotUtilsData:
+    def test_aggregate_tomograms_takes_median_and_counts_evs(self):
+        df = pd.DataFrame({
+            'group': ['a'] * 4, 'sample_id': ['s'] * 4, 'tomogram': ['t1', 't1', 't1', 't2'],
+            'x': [1.0, 2.0, 100.0, 5.0],
+        })
+        out = datautil.aggregate_tomograms(df, ['x'])
+        assert out.set_index('tomogram')['x'].to_dict() == {'t1': 2.0, 't2': 5.0}
+        assert out.set_index('tomogram')['n_evs'].to_dict() == {'t1': 3, 't2': 1}
+
+    def test_tomogram_note_states_tomogram_n(self):
+        tomo = pd.DataFrame({'sample_id': ['s1', 's2', 's2'], 'tomogram': ['a', 'b', 'c']})
+        note = datautil.tomogram_note(tomo)
+        assert 'n = 3 tomogram(s)' in note and '2 sample(s)' in note and 'non-independent' in note
+
     def test_attach_fitted_diameter_masks_unreliable(self):
         analyse = pd.DataFrame({'tomogram': ['t.mrc'] * 3, 'label': [1, 2, 3]})
         model = pd.DataFrame({
@@ -347,3 +362,21 @@ class TestPlotUtilsExport:
         path = tmp_path / 'f.svg'
         exportutil.write_figure(go.Figure(go.Scatter(x=[1, 2], y=[1, 2])), path)
         assert path.read_text().lstrip().startswith(('<svg', '<?xml'))
+
+# -- Define group test tests --------
+class TestGroupTests:
+    def _tomo(self, a, b, c=None):
+        rows = [('a', v) for v in a] + [('b', v) for v in b] + [('c', v) for v in (c or [])]
+        return pd.DataFrame({'group': [g for g, _ in rows], 'x': [v for _, v in rows]})
+    def test_two_groups_use_mann_whitney(self):
+        res = sectionutil._group_tests(self._tomo([1, 2, 3, 4], [10, 11, 12, 13]), ['x'])
+        assert res.loc[0, 'test'] == 'mann-whitney' and res.loc[0, 'p_value'] < 0.05
+        assert res.loc[0, 'n_tomograms_a'] == 4
+    def test_three_groups_use_kruskal(self):
+        res = sectionutil._group_tests(self._tomo([1, 2, 3], [4, 5, 6], [7, 8, 9]), ['x'])
+        assert res.loc[0, 'test'] == 'kruskal-wallis'
+    def test_identical_values_do_not_raise(self):
+        # mann-whitney returns p = 1 here; kruskal raises ValueError, which is caught and recorded as NaN
+        two = sectionutil._group_tests(self._tomo([1, 1, 1], [1, 1, 1]), ['x'])
+        three = sectionutil._group_tests(self._tomo([1, 1, 1], [1, 1, 1], [1, 1, 1]), ['x'])
+        assert two.loc[0, 'p_value'] == 1.0 and pd.isna(three.loc[0, 'p_value'])

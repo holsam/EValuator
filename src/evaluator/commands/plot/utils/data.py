@@ -52,6 +52,20 @@ def join_analyse_model(analyse: pd.DataFrame, model: pd.DataFrame) -> tuple[pd.D
     joined = analyse.merge(model, left_on=['tomogram', 'label'], right_on=['tomogram', 'label_id'], how='inner', suffixes=('', '_model'))
     return joined, len(analyse) - len(joined), len(model) - len(joined)
 
+# aggregate_tomograms: one row per tomogram holding the median of each feature and the EV count, so tomograms (not EVs) are the unit of analysis
+def aggregate_tomograms(df: pd.DataFrame, feats: list[str], keys: tuple[str, ...] = ('group', 'sample_id', 'tomogram')) -> pd.DataFrame:
+    keys = [k for k in keys if k in df.columns]
+    num = df[keys].join(df[feats].apply(pd.to_numeric, errors='coerce'))
+    grouped = num.groupby(keys, dropna=False)
+    out = grouped[feats].median()
+    out.insert(0, 'n_evs', grouped.size())
+    return out.reset_index()
+
+# tomogram_note: caveat text for statistics computed on per-tomogram medians
+def tomogram_note(tomo: pd.DataFrame) -> str:
+    n_samples = tomo['sample_id'].nunique() if 'sample_id' in tomo.columns else 1
+    return (f'n = {len(tomo)} tomogram(s) from {n_samples} sample(s); each tomogram contributes its median, so EVs are not treated as independent. ')
+
 # attach_fitted_diameter: left-join model's fitted diameter onto analyse, masking unreliable fits, so figures can use it as the size axis
 def attach_fitted_diameter(analyse: pd.DataFrame, model: pd.DataFrame) -> pd.DataFrame:
     fitted = pd.DataFrame({

@@ -184,19 +184,26 @@ def compare(out: Path, runs: list[PlotRun], params, *, include_flagged: bool) ->
         df = datautil.load_analyse(r.analyse_path, include_flagged=include_flagged)
         if r.model_path:
             df = datautil.attach_fitted_diameter(df, datautil.load_model(r.model_path))
-        frames.append(df.assign(sample_id=r.sample_id, group=r.group))
+        frames.append(df.assign(sample_id=r.sample_id, group=r.group, replicate=r.replicate))
     combined = pd.concat(frames, ignore_index=True)
     feats = [_size(combined, f) for f in COMPARE_FEATURES if f in combined.columns]
     _log_pooling(combined, n_samples=combined['sample_id'].nunique())
+    tomo = datautil.aggregate_tomograms(combined, feats)
+    lg.info(f'plot | caveat: {datautil.tomogram_note(tomo)}')
     for feat in feats:
-        write_figure(plots.group_distribution(combined, feat), out / f'violin_{feat}.svg')
-    fig = plots.pca_scatter(combined, feats)
+        write_figure(plots.group_distribution(tomo, feat), out / f'violin_{feat}.svg')
+    fig = plots.pca_scatter(tomo, feats)
     if fig is not None:
         write_figure(fig, out / 'pca.svg', 'square')
-    summary = combined.groupby('group')[feats].agg(['mean', 'median'])
+    summary = tomo.groupby('group')[feats].agg(['mean', 'median'])
     summary.columns = [f'{f}_{s}' for f, s in summary.columns]
-    summary.insert(0, 'n_evs', combined.groupby('group').size())
-    write_xlsx(out / 'group_summary.xlsx', {'summary': summary.reset_index(), 'notes': _notes(combined, combined['sample_id'].nunique())})
+    counts = tomo.groupby('group').agg(n_tomograms=('tomogram', 'size'), n_samples=('sample_id', 'nunique'), n_evs=('n_evs', 'sum'))
+    replicates = combined.groupby('group')['replicate'].nunique()
+    if replicates.any():  # only when the sample sheet carries a replicate column
+        counts['n_replicates'] = replicates
+    notes = pd.DataFrame({'note': [datautil.tomogram_note(tomo), 'summary columns are the mean and median across per-tomogram medians']})
+    write_xlsx(out / 'group_summary.xlsx', {'summary': counts.join(summary).reset_index(), 'notes': notes})
+    write_xlsx(out / 'group_tests.xlsx', {'tests': _group_tests(tomo, feats), 'notes': notes})
 
 # SECTIONS: per-run section functions, keyed by section name (compare pools every run so is called separately)
 SECTIONS = {
@@ -212,6 +219,23 @@ SECTIONS = {
 # ====================
 # Define private helpers
 # ====================
+# _group_tests: tomogram-level test per feature (Mann-Whitney U for two groups, Kruskal-Wallis for more)
+def _group_tests(tomo: pd.DataFrame, feats: list[str]) -> pd.DataFrame:
+    rows = []
+    for feat in feats:
+        samples = {g: pd.to_numeric(s[feat], errors='coerce').dropna() for g, s in tomo.groupby('group')}
+        samples = {g: v for g, v in samples.items() if len(v)}
+        if len(samples) < 2:
+            continue
+        name, test = ('mann-whitney', stats.mannwhitneyu) if len(samples) == 2 else ('kruskal-wallis', stats.kruskal)
+        try:
+            res = test(*samples.values())
+            statistic, p_value = res.statistic, res.pvalue
+        except ValueError:  # e.g. every value identical
+            statistic = p_value = np.nan
+        rows.append({'feature': feat, 'test': name, 'statistic': statistic, 'p_value': p_value, **{f'n_tomograms_{g}': len(v) for g, v in samples.items()}})
+    return pd.DataFrame(rows)
+
 # _size: swap the shell-volume equivalent diameter for the fitted diameter when model output is available
 def _size(df: pd.DataFrame, col: str) -> str:
     if col == 'equiv_diameter_nm' and datautil.SIZE_COL in df.columns and df[datautil.SIZE_COL].notna().any():
