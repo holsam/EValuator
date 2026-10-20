@@ -40,20 +40,22 @@ By default (no `--section`, no `--all`), the sections listed under `[plot].defau
 Any vesicles where `analyse`'s `is_vesicle_like` column is `False` are excluded before computing any distribution, statistic or plot. The number of dropped rows and a breakdown of the reasons for exclusion are logged automatically. To include these vesicles in outputs, use the `--include-flagged` option.
 
 ### Caveats
-`scatter`, `correlations` and `compare` pool every vesicle, irrespective of source tomogram/sample, and treat each as an independent observation. No clustering-adjusted tests are applied, so statistics should be treated as descriptive only. `tomogram` (and `sample_id` for `compare`) are kept in outputs for further analysis which accounts for this clustering.
+- `distributions` reports each summary statistic for three populations (`all`, `vesicle_like`, `vesicle_like_no_z_clip`), so the effect of the QC filter and of z clipping is visible. Conclusions which hold in all three should be independent of QC filters/z clipping.
+- `scatter` and `correlations` figures and `stats`/`pearson`/`spearman` sheets pool all vesicles, treating each as an independent observation so should be considered descriptive only. Each section also writes a `*_tomogram` sheet computed on per-tomogram medians, which is a cluster-aware estimate.
+- `compare` aggregates to one median per tomogram before plotting, summarising and testing (see below). Tomograms within a replicate are still non-independent, so `compare` p-values are optimistic if *n<sub>replicate</sub>* < *n<sub>tomogram</sub>*.
 
 ## Sections
 
 Section | Requires | Outputs
 --|--|--
-`distributions` | `--analyse` | A histogram per morphology feature (`<feature>_histogram.svg`), and `summary_stats.xlsx` (*n*, mean, median, sd, p5, p95 per feature)
+`distributions` | `--analyse` | A histogram per morphology feature (`<feature>_histogram.svg`), and `summary_stats.xlsx` (*n*, mean, median, sd, p5, p95 per feature, for each population)
 `qc` | `--analyse` | `count_per_tomogram.svg`, `closure_pass_rate.svg`, `closure_fill_ratio_distribution.svg` (configured flag threshold marked), and `qc_summary.xlsx`
-`scatter` | `--analyse` | A scatter plot with fitted trend line and R^2 annotation per feature pair (`<x>_vs_<y>.svg`), and `scatter_stats.xlsx` (Pearson/Spearman correlation, slope, slope SE, R^2, *n* per pair)
+`scatter` | `--analyse` | A scatter plot with fitted trend line and R^2 annotation per feature pair (`<x>_vs_<y>.svg`), and `scatter_stats.xlsx` (Pearson/Spearman correlation, slope, slope SE, R^2, *n* per pair; `stats` is pooled over vesicles, `stats_tomogram` over per-tomogram medians)
 `correlations` | `--analyse` | `correlation_spearman.svg` and `correlation_pearson.svg` heatmaps across the morphology features, and `correlations.xlsx`
 `concordance` | `--analyse` **and** `--model` | See [Concordance](#concordance) below.
 `reliability` | `--analyse` **and** `--model` | `reliability.svg` (fit RMSE against closure fill ratio, coloured by `reliability.is_reliable`) and `reliability_summary.xlsx`
 `agreement` | `--analyse` **and** `--model`; runs when `--agreement` is given | See [Agreement](#agreement) below.
-`compare` | Sample sheet with more than one distinct `group` | Per-feature violin+box plots by group (`violin_<feature>.svg`), `pca.svg` (only if at least 3 complete-case rows and 2 features), and `group_summary.xlsx`
+`compare` | Sample sheet with more than one distinct `group` | Per-feature violin+box plots by group of per-tomogram medians (`violin_<feature>.svg`), `pca.svg` (only if at least 3 complete-case tomograms and 2 features), `group_summary.xlsx` (`n_tomograms`, `n_samples`, `n_evs`, and `n_replicates` when the sheet has a `replicate` column, plus mean and median of per-tomogram medians) and `group_tests.xlsx` (Mann-Whitney U for two groups, Kruskal-Wallis for more, on per-tomogram medians)
 
 ### Concordance
 `concordance` provides a comparison of `model`'s least-squares-fitted geometry and the raw voxel measurements that `analyse` produces. 
@@ -78,7 +80,7 @@ Column | Required | Description
 `sample_id` | Yes | Unique identifier for the sample/run; joins rows across the `--analyse` and `--model` sheets when both are sheets
 `path` | No | Path to that sample's result file. If omitted and the *other* option's value is a single file (not a sheet), that single file is treated as applying to every sample on this side
 `group` | No | Group label, used by the `compare` section. `compare` only becomes runnable when more than one distinct `group` value is present across the sheet.
-`replicate` | No | Optional integer replicate number; parsed but not currently used by any section
+`replicate` | No | Optional integer replicate number; `compare` reports the number of replicates per group
 
 If both `--analyse` and `--model` are sheets, rows are matched by `sample_id`; a `sample_id` present in only one sheet gets `None` for the missing side. If only one side is a sheet, every sample on that side is paired with the other side's single (non-sheet) file, if one was given.
 
