@@ -74,6 +74,8 @@ def label_components(
         component_points,
         centre_tol_factor=params.merge_centre_tol_factor,
         radius_tol_pct=params.merge_radius_tol_pct,
+        concentric_radius_pct=params.merge_concentric_radius_pct,
+        concentric_centre_frac=params.merge_concentric_centre_frac,
     )
     labelled = applyMerges(labelled, merge_groups)
     n_merge_groups_merged = sum(1 for group in merge_groups if len(group) > 1)

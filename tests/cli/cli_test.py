@@ -147,8 +147,7 @@ class TestPlotCLI:
             'aspect_ratio,eccentricity,membrane_volume,lumen_volume,surface_area,'
             'is_enclosed,closure_fill_ratio\ntomo1.mrc,1,80.0,90.0,70.0,1.28,0.5,50000,30000,20000,True,0.4\n'
         )
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch'):
+        with patch('evaluator.commands.plot.plot._run_section'):
             result = runner.invoke(evaluator, ['plot', '--analyse', str(analyse), '-o', str(tmp_path), '--section', 'qc'])
         assert result.exit_code == 0
 

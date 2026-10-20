@@ -10,8 +10,10 @@ format = "json"
 # Label command default configuration parameters
 [label]
 min_arc_coverage = 0.30
-merge_centre_tol_factor = 1.5
+merge_centre_tol_factor = 0.573
 merge_radius_tol_pct = 0.30
+merge_concentric_radius_pct = 0.10
+merge_concentric_centre_frac = 0.25
 maximum_diameter_nm = 500.0
 minimum_diameter_nm = 20.0
 membrane_thickness_nm = 2.6

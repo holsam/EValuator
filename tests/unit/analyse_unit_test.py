@@ -7,7 +7,7 @@ import pandas as pd
 from evaluator.commands.analyse.utils.filtering import checkEnclosed, morphologicalDilation
 from evaluator.commands.analyse.utils.geometry import arcCoverage, deriveAxes, measureAxes, shellVolume, sphereFitResidual
 from evaluator.commands.analyse.utils.io import saveResultsCSV
-from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, estimateMembraneThickness, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter, touchesZBoundary
+from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, estimateMembraneThickness, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter, measureXYDiameter, touchesZBoundary
 from tests.unit.conftest import R_INNER, R_OUTER, VOX_NM_SMALL
 
 # -- Define shell volume test ----------
@@ -153,6 +153,23 @@ class TestMeasureMembraneVolumeDiameter:
         _, diam_thin = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=4.0)
         _, diam_thick = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=12.0)
         assert diam_thick < diam_thin
+
+# -- Define xy diameter test --------
+class TestMeasureXYDiameter:
+    def _shell(self, radius=20, size=60):
+        zz, yy, xx = np.indices((size, size, size)) - size // 2
+        dist = np.sqrt(zz ** 2 + yy ** 2 + xx ** 2)
+        return (dist >= radius - 2) & (dist <= radius)
+    def test_sphere_matches_outer_diameter(self):
+        d = measureXYDiameter(self._shell(), scale=1.0)
+        assert abs(d - 41) <= 2
+    def test_scales_by_voxel_size(self):
+        shell = self._shell()
+        assert measureXYDiameter(shell, scale=0.5) == pytest.approx(measureXYDiameter(shell, scale=1.0) / 2)
+    def test_unchanged_when_poles_clipped(self):
+        shell = self._shell()
+        clipped = shell[15:45]  # keeps the equator, removes both polar caps
+        assert measureXYDiameter(clipped, scale=1.0) == measureXYDiameter(shell, scale=1.0)
 
 # -- Define membrane thickness estimate test -----
 class TestEstimateMembraneThickness:
@@ -406,12 +423,9 @@ class TestClassifyVesicle:
         args = (5000, 0.1, 2.0, 0.3, 0.9, True)
         assert classifyVesicle(*args, _QC_DEFAULTS)[0] is True
         assert classifyVesicle(*args, {**_QC_DEFAULTS, "qc_max_aspect_ratio": 1.5})[0] is False
-    def test_z_boundary_touch_flagged(self):
-        ok, flags = classifyVesicle(5000, 0.05, 1.1, 0.4, 0.9, True, _QC_DEFAULTS, touches_z_boundary=True)
-        assert ok is False and "touches_z_boundary" in flags
-    def test_z_boundary_touch_defaults_false(self):
-        ok, flags = classifyVesicle(5000, 0.05, 1.1, 0.4, 0.9, True, _QC_DEFAULTS)
-        assert ok is True and "touches_z_boundary" not in flags
+    def test_z_boundary_not_a_classification_input(self):
+        import inspect
+        assert 'touches_z_boundary' not in inspect.signature(classifyVesicle).parameters
 
 # -- Define results saving test --------
 class TestSaveResultsCSV:

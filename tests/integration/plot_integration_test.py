@@ -31,14 +31,14 @@ ANALYSE_COLUMNS = [
 # ====================
 # Define helper functions
 # ====================
-def _write_analyse_csv(path, n=12, tomogram='tomo1.mrc'):
+def _write_analyse_csv(path, n=12, tomogram='tomo1.mrc', shift=0.0):
     with path.open('w', newline='') as fh:
         writer = csv.writer(fh)
         writer.writerow(ANALYSE_COLUMNS)
         for i in range(n):
             writer.writerow([
-                tomogram, i, 60.0 + i, 70.0 + i, 50.0 + i, 1.2 + 0.01 * i, 0.4 + 0.01 * i,
-                40000 + i * 100, 25000 + i * 50, 18000 + i * 80,
+                tomogram, i, 60.0 + i + shift, 70.0 + i + shift, 50.0 + i, 1.2 + 0.01 * i, 0.4 + 0.01 * i,
+                40000 + i * 100, 25000 + i * 50 + shift * 100, 18000 + i * 80,
                 bool(i % 3), 0.02 + 0.01 * i, 0.05 + 0.005 * i, i != 0, 'sphere_rmse' if i == 0 else '',
             ])
 
@@ -175,9 +175,11 @@ class TestPlotCompare:
     def test_compare_writes_group_outputs(self, tmp_path):
         a, b = tmp_path / 'a.csv', tmp_path / 'b.csv'
         _write_analyse_csv(a, tomogram='a.mrc')
-        _write_analyse_csv(b, tomogram='b.mrc')
+        _write_analyse_csv(b, tomogram='b.mrc', shift=5.0)
+        c = tmp_path / 'c.csv'
+        _write_analyse_csv(c, tomogram='c.mrc', shift=12.0)  # pca needs three tomograms varying in two or more features
         sheet = tmp_path / 'samples.tsv'
-        sheet.write_text(f'sample_id\tpath\tgroup\ns1\t{a}\tcontrol\ns2\t{b}\ttreated\n')
+        sheet.write_text(f'sample_id\tpath\tgroup\ns1\t{a}\tcontrol\ns2\t{b}\ttreated\ns3\t{c}\ttreated\n')
         out = tmp_path / 'out'
         run_plot(sheet, None, out, sections=['compare'], all_sections=False, overwrite=False)
         base = out / 'evaluator' / 'plot' / 'compare'

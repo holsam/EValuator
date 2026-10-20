@@ -74,6 +74,29 @@ def measureMembraneVolumeDiameter(component, scale, membrane_thickness_nm: float
     return vol_nm3, equiv_diameter_nm
 
 # =========================
+# DEFINE FUNCTION: measureXYDiameter
+# =========================
+def measureXYDiameter(component_mask, scale):
+    '''
+    Diameter from the widest xy slice (mean of the y and x extents), in nm if scale is a voxel size.
+    Independent of z, so unaffected by clipping at the z faces.
+    '''
+    per_slice = (_sliceExtent(component_mask.any(axis=2)) + _sliceExtent(component_mask.any(axis=1))) / 2
+    return float(per_slice.max() * scale)
+
+# =========================
+# DEFINE HELPER FUNCTION: _sliceExtent
+# =========================
+def _sliceExtent(slice_mask: numpy.ndarray) -> numpy.ndarray:
+    '''
+    Per-row extent (voxels) between the first and last True along axis 1; 0 for empty rows.
+    '''
+    idx = numpy.arange(slice_mask.shape[1])
+    hi = numpy.where(slice_mask, idx, -1).max(axis=1)
+    lo = numpy.where(slice_mask, idx, slice_mask.shape[1]).min(axis=1)
+    return numpy.where(slice_mask.any(axis=1), hi - lo + 1, 0)
+
+# =========================
 # DEFINE FUNCTION: createComponentMask
 # =========================
 def createComponentMask(component, labelled_vol, label_val):
@@ -116,9 +139,10 @@ def measureEccentricityAspectRatio(major_axis_diameter, minor_axis_diameter):
 # =========================
 # DEFINE FUNCTION: classifyVesicle
 # =========================
-def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, is_enclosed, qc_params, touches_z_boundary=False):
+def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, is_enclosed, qc_params):
     '''
-    Classify component as `is_vesicle_like` unless any enabled check fails'''
+    Classify component as `is_vesicle_like` unless any enabled check fails.
+    '''
     if n_voxels < 4:
         return False, 'too_small'
     flags = []
@@ -130,8 +154,6 @@ def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_cover
         flags.append("solidity")
     if not (is_enclosed or arc_coverage >= qc_params['qc_min_arc_coverage']):
         flags.append('open_shell')
-    if touches_z_boundary:
-        flags.append('touches_z_boundary')
     return len(flags) == 0, ','.join(flags)
 
 # =========================
@@ -139,7 +161,7 @@ def classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_cover
 # =========================
 def touchesZBoundary(component_properties, volume_shape) -> bool:
     '''
-    If a component's bounding box reaches the Z boundary, it may be truncated by the slab/field of view so flag this.
+    If a component's bounding box reaches the Z boundary, it may be truncated by the reconstruction box.
     '''
     z_min, z_max = component_properties.bbox[0], component_properties.bbox[3]
     return z_min == 0 or z_max == volume_shape[0]

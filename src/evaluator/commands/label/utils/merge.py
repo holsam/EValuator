@@ -21,6 +21,8 @@ def findMergeGroups(
     component_points: dict[int, numpy.ndarray],
     centre_tol_factor: float,
     radius_tol_pct: float,
+    concentric_radius_pct: float = 0.10,
+    concentric_centre_frac: float = 0.25,
 ) -> list[list[int]]:
     '''
     Returns groups of label_ids that should be merged, based on centroid proximity and radius-estimate consistency using union-find
@@ -44,7 +46,7 @@ def findMergeGroups(
         centroid_a, radius_a = proxies[id_a]
         for id_b in label_ids[i + 1:]:
             centroid_b, radius_b = proxies[id_b]
-            if _shouldMerge(centroid_a, radius_a, centroid_b, radius_b, centre_tol_factor, radius_tol_pct):
+            if _shouldMerge(centroid_a, radius_a, centroid_b, radius_b, centre_tol_factor, radius_tol_pct, concentric_radius_pct, concentric_centre_frac):
                 union(id_a, id_b)
 
     groups: dict[int, list[int]] = {}
@@ -55,15 +57,18 @@ def findMergeGroups(
 # =========================
 # DEFINE FUNCTION: _shouldMerge
 # =========================
-def _shouldMerge(centroid_a, radius_a, centroid_b, radius_b, centre_tol_factor, radius_tol_pct) -> bool:
-    '''Mutually-consistent check: centroid proximity and radius agreement.'''
+def _shouldMerge(centroid_a, radius_a, centroid_b, radius_b, centre_tol_factor, radius_tol_pct, concentric_radius_pct=0.10, concentric_centre_frac=0.25) -> bool:
+    '''Mutually-consistent check: centroid proximity and radius agreement, unless the pair is concentric.'''
     centre_distance = float(numpy.linalg.norm(centroid_a - centroid_b))
     centre_ok = centre_distance <= centre_tol_factor * (radius_a + radius_b)
     if max(radius_a, radius_b) == 0:
-        radius_ok = False
-    else:
-        radius_ok = abs(radius_a - radius_b) / max(radius_a, radius_b) <= radius_tol_pct
-    return centre_ok and radius_ok
+        return False
+    radius_diff = abs(radius_a - radius_b) / max(radius_a, radius_b)
+    if not (centre_ok and radius_diff <= radius_tol_pct):
+        return False
+    # concentric signature: near-identical centre but clearly different radius; split fragments of one sphere share both
+    concentric = centre_distance <= concentric_centre_frac * min(radius_a, radius_b) and radius_diff > concentric_radius_pct
+    return not concentric
 
 # =========================
 # DEFINE FUNCTION: applyMerges

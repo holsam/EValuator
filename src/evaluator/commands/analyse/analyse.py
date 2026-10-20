@@ -162,6 +162,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     component_mask = measurement.createComponentMask(component=component_properties, labelled_vol=labelled_volumes, label_val=component_label)
     lg.debug(f"analyse | {filename} | Component {component_label} | Measuring membrane volume and equivalent diameter...")
     membrane_vol_nm3, equiv_diameter_nm = measurement.measureMembraneVolumeDiameter(component=component_properties, scale=scale, membrane_thickness_nm=membrane_thickness_nm)
+    xy_diameter_nm = measurement.measureXYDiameter(component_mask, scale)
     component_mask_dilated = filtering.morphologicalDilation(component_mask)
     lg.debug(f"analyse | {filename} | Component {component_label} | Checking if component is enclosed...")
     enclosed, fill_ratio = filtering.checkEnclosed(component_mask=component_mask_dilated, threshold=fill_threshold)
@@ -182,11 +183,12 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
     solidity = geometry.solidity(coords, n_voxels, _max_fit_points)
     bbox_extent = float(component_properties.extent)
     touches_z_boundary = measurement.touchesZBoundary(component_properties, labelled_volumes.shape)
-    is_vesicle_like, qc_flags = measurement.classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, enclosed, qc_params, touches_z_boundary)
+    is_vesicle_like, qc_flags = measurement.classifyVesicle(n_voxels, sphere_rmse_rel, aspect_ratio, solidity, arc_coverage, enclosed, qc_params)
     return {
         "tomogram": filename,
         "label": component_label,
         "equiv_diameter_nm": round(equiv_diameter_nm, 2),
+        "xy_diameter_nm": round(xy_diameter_nm, 2),
         "major_axis_diameter": round(major_axis_diameter, 2),
         "minor_axis_diameter": round(minor_axis_diameter, 2),
         "aspect_ratio": round(aspect_ratio, 2),
@@ -200,6 +202,7 @@ def processComponent(component_label, labelled_volumes, component_properties, vo
         "solidity": _r(solidity, 4),
         "arc_coverage": _r(arc_coverage, 4),
         "bbox_extent": _r(bbox_extent, 4),
+        "touches_z_boundary": bool(touches_z_boundary),
         "is_vesicle_like": is_vesicle_like,
         "qc_flags": qc_flags,
         "membrane_thickness_nm": round(membrane_thickness_nm, 2),
