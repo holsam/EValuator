@@ -441,7 +441,7 @@ class TestEditConfigStepwise:
 class TestPlotConfig:
     def test_default_construction(self):
         cfg = PlotConfig()
-        assert cfg.default_sections == ['distributions', 'qc', 'scatter']
+        assert cfg.default_sections == ['distributions', 'qc', 'scatter', 'correlations']
         assert cfg.fill_ratio_flag_threshold == 0.05
 
     def test_extra_key_forbidden(self):
@@ -458,7 +458,7 @@ class TestPlotConfig:
         import tomllib
         data = tomllib.loads((files('evaluator') / 'config.toml').read_text(encoding='utf-8'))
         config = Config.model_validate(data)
-        assert config.plot.default_sections == ['distributions', 'qc', 'scatter']
+        assert config.plot.default_sections == ['distributions', 'qc', 'scatter', 'correlations']
     
 class TestQCAndReliabilityConfig:
     def test_analyse_qc_defaults(self):
