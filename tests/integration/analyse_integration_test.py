@@ -13,11 +13,11 @@ VOX_NM = 0.536
 EXPECTED_COLUMNS = [
     "tomogram", "label", "equiv_diameter_nm",
     "major_axis_diameter", "minor_axis_diameter",
-    "aspect_ratio", "eccentricity",
+    "xy_diameter_nm", "aspect_ratio", "eccentricity",
     "membrane_volume", "lumen_volume", "surface_area",
     "is_enclosed", "closure_fill_ratio",
     "sphere_rmse_rel", "solidity", "arc_coverage", "bbox_extent",
-    "is_vesicle_like", "qc_flags",
+    "is_vesicle_like", "touches_z_boundary", "qc_flags",
     "membrane_thickness_nm", "membrane_thickness_source",
     "voxel_size_nm", "measurement_units",
 ]
