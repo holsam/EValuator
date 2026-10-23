@@ -15,15 +15,27 @@ from skimage.morphology import convex_hull_image
 # ====================
 # Define method functions
 # ====================
-# -- shell_voxel_diameter: returns float corresponding to raw shell voxel count
-def _shell_voxel_diameter(binary: np.ndarray, voxel_size_nm: float) -> float:
+# -- _shell_voxel_diameter: returns float corresponding to raw shell voxel count
+def _shell_voxel_diameter(binary: np.ndarray, voxel_size_nm: float, thickness_nm: float) -> float:
     '''
-    Calculate equivalent diameter from raw shell voxel count
+    Calculate outer diameter from raw shell voxel count, given a known membrane thickness.
     '''
     n = int(binary.sum())
+    volume_nm3 = n * voxel_size_nm ** 3
+    t = thickness_nm
+    # V = (4/3)pi*(3*r^2*t - 3*r*t^2 + t^3)  =>  3t*r^2 - 3t^2*r + (t^3 - 3V/(4pi)) = 0
+    a = 3 * t
+    b = -3 * t ** 2
+    c = t ** 3 - (3 * volume_nm3) / (4 * np.pi)
+    discriminant = b ** 2 - 4 * a * c
+    if discriminant < 0:
+        # shell is thinner/sparser than a full continuous shell of thickness t would allow at this
+        # voxel count; fall back to the solid-sphere-equivalent as a conservative estimate
+        return 2 * (3 * volume_nm3 / (4 * np.pi)) ** (1 / 3)
+    r_out = (-b + np.sqrt(discriminant)) / (2 * a)
+    return 2 * r_out
     if n == 0:
         return float('nan')
-    return 2 * (3 * n * voxel_size_nm ** 3 / (4 * np.pi)) ** (1 / 3)
 
 # -- anisotropic_closing_per_component: returns ndarray with closed binary segmentation
 def anisotropic_closing_per_component(

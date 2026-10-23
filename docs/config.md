@@ -100,11 +100,13 @@ format = "json"
 # Label command default configuration parameters
 [label]
 min_arc_coverage = 0.30
-merge_centre_tol_factor = 1.5
+merge_centre_tol_factor = 0.573
 merge_radius_tol_pct = 0.30
+merge_concentric_radius_pct = 0.10
+merge_concentric_centre_frac = 0.25
 maximum_diameter_nm = 500.0
 minimum_diameter_nm = 20.0
-membrane_thickness_nm = 7
+membrane_thickness_nm = 2.6
 max_workers = 0
 
 # Model command default configuration parameters
@@ -117,6 +119,7 @@ max_workers = 0
 # Analyse command default configuration parameters
 [analyse]
 fill_threshold = 0.05
+membrane_thickness_nm = "auto"
 max_workers = 0
 qc_max_sphere_rmse_rel = 0.25
 qc_max_aspect_ratio = 2.5

@@ -1,14 +1,13 @@
 # ====================
 # Import external dependencies
 # ====================
-import json, tomllib
-import pytest
+import json, numpy as np, pytest, tomllib
 
 # ====================
 # Import internal dependencies
 # ====================
 from evaluator.commands.model.model import model_evs
-from evaluator.utils.mrc import readMRCFile
+from evaluator.utils.mrc import readMRCFile, writeMRCFile
 
 # ====================
 # Define constants
@@ -146,6 +145,17 @@ class TestModelConfigOverrides:
         data = tomllib.loads(params_path.read_text())
         assert data['rmse_relative_max'] == 0.5
         assert data['min_points'] == 5
+
+    def test_binary_mask_input_warns(self, tmp_path, monkeypatch):
+        import evaluator.commands.model.model as model_cmd
+        binary = np.zeros((20, 20, 20), dtype=np.float32)
+        binary[5:15, 5:15, 5:15] = 1.0
+        mask_path = tmp_path / "binary_mask.mrc"
+        writeMRCFile(binary, 1.0, mask_path)
+        warnings = []
+        monkeypatch.setattr(model_cmd.lg, "warning", lambda msg: warnings.append(msg))
+        model_evs(mask_path, tmp_path)
+        assert any("only one non-zero label found" in w for w in warnings)
 
     def test_strict_min_points_override_fails_reliability(self, labelled_path, tmp_path):
         '''

@@ -50,14 +50,14 @@ def calculate_benchmark(
             offset = tuple(rng.uniform(-0.5, 0.5, size=3))
             axes = tuple(rng.normal(1.0, shape_jitter, size=3))
             # Generate synthetic EVs across specified diameter range
-            shell, truth = synthetic.generate_ev_shell(diameter_nm=d, voxel_size_nm=voxel_size_nm, centre_offset_voxels=offset, axis_ratios=axes)
+            shell, truth = synthetic.generate_ev_shell(diameter_nm=d, thickness_nm=defaults.THICKNESS, voxel_size_nm=voxel_size_nm, centre_offset_voxels=offset, axis_ratios=axes)
             true_diameter = truth['diameter_nm']
             # Apply fourier missing wedge degradation
             degraded = synthetic.apply_fourier_missing_wedge(shell, tilt_range_deg=tilt_range_deg)
 
             # Baseline (no mitigation)
             t0 = time.perf_counter()
-            baseline_d = methods._shell_voxel_diameter(degraded, voxel_size_nm)
+            baseline_d = methods._shell_voxel_diameter(degraded, voxel_size_nm, defaults.THICKNESS)
             baseline_time = time.perf_counter() - t0
 
             # Apply mitigation 1: anisotropic closing → shell-volume diameter
@@ -79,7 +79,7 @@ def calculate_benchmark(
 
             # Apply mitigation 3: convex hull outer diameter
             t0 = time.perf_counter()
-            hull_d = methods.hull_outer_diameter(shell, voxel_size_nm)
+            hull_d = methods.hull_outer_diameter(degraded, voxel_size_nm)
             hull_time = time.perf_counter() - t0
 
             # Apply mitigation 4: XY/Z diagnostic

@@ -13,11 +13,12 @@ VOX_NM = 0.536
 EXPECTED_COLUMNS = [
     "tomogram", "label", "equiv_diameter_nm",
     "major_axis_diameter", "minor_axis_diameter",
-    "aspect_ratio", "eccentricity",
+    "xy_diameter_nm", "aspect_ratio", "eccentricity",
     "membrane_volume", "lumen_volume", "surface_area",
     "is_enclosed", "closure_fill_ratio",
     "sphere_rmse_rel", "solidity", "arc_coverage", "bbox_extent",
-    "is_vesicle_like", "qc_flags",
+    "is_vesicle_like", "touches_z_boundary", "qc_flags",
+    "membrane_thickness_nm", "membrane_thickness_source",
     "voxel_size_nm", "measurement_units",
 ]
 
@@ -84,13 +85,16 @@ class TestAnalyseEVDetection:
 class TestAnalyseMeasurements:
     def test_equiv_diameter_within_generator_range(self, analyse_csv):
         """
-        Synthetic EVs have outer diameters 42.9–128.6 nm (r_outer 40–120 vox).
-        equiv_diameter is derived from shell volume, not geometric diameter,
-        so it will be somewhat smaller — but must remain within the filter bounds.
+        Synthetic EVs have outer diameters 42.9-128.6 nm (r_outer 40-120 vox).
+        equiv_diameter is derived from shell volume inversion using the default membrane thickness of 7nm (which differs slightly from true shell thickness of 5.4nm).
         """
         df = pd.read_csv(analyse_csv)
-        assert (df["equiv_diameter_nm"] > 20.0).all()
-        assert (df["equiv_diameter_nm"] < 500.0).all()
+        assert (df["equiv_diameter_nm"] > 35.0).all()
+        assert (df["equiv_diameter_nm"] < 150.0).all()
+    def test_membrane_thickness_columns(self, analyse_csv):
+        df = pd.read_csv(analyse_csv)
+        assert (df["membrane_thickness_source"] == "estimated").all()
+        assert (df["membrane_thickness_nm"] > 0).all()
     def test_major_axis_geq_minor_axis(self, analyse_csv):
         df = pd.read_csv(analyse_csv)
         assert (df["major_axis_diameter"] >= df["minor_axis_diameter"]).all()
@@ -111,8 +115,8 @@ class TestAnalyseMeasurements:
     def test_aspect_ratio_near_one_for_spheres(self, analyse_csv):
         """Synthetic perfect spheres must have aspect ratios close to 1.0."""
         df = pd.read_csv(analyse_csv)
-        assert (df["aspect_ratio"] > 0.5).all()
-        assert (df["aspect_ratio"] < 2.0).all()
+        assert (df["aspect_ratio"] > 0.98).all()
+        assert (df["aspect_ratio"] < 1.02).all()
     def test_qc_metric_columns_finite(self, analyse_csv):
         df = pd.read_csv(analyse_csv)
         for col in ["sphere_rmse_rel", "solidity", "arc_coverage", "bbox_extent"]:
@@ -156,6 +160,16 @@ class TestAnalyseInputTypes:
         assert len(csvs) == 1
         df = pd.read_csv(csvs[0])
         assert len(df) == N_EVS
+
+    def test_fitted_mrc_input_skipped_not_measured(self, tmp_path):
+        from evaluator.utils.mrc import FITTED_MRC_LABEL, writeMRCFile
+        fitted = np.zeros((10, 10, 10), dtype=np.uint16)
+        fitted[2:8, 2:8, 2:8] = 1
+        fitted_path = tmp_path / "fitted.mrc"
+        writeMRCFile(fitted, 1.0, fitted_path, label=FITTED_MRC_LABEL)
+        analyse(fitted_path, tmp_path)
+        csv_dir = tmp_path / "evaluator" / "analyse"
+        assert not csv_dir.exists() or list(csv_dir.glob("*.csv")) == []
 
     def test_directory_input_processes_single_file(self, labelled_path, tmp_path_factory):
         """

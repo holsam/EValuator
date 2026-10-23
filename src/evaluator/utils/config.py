@@ -35,11 +35,13 @@ class OutputConfig(_Section):
 class LabelConfig(_Section):
     '''Configuration parameters for `evaluator label` command'''
     min_arc_coverage: float = Field(0.30, description='Minimum fraction of expected spherical surface a component must cover to be retained', gt=0, le=1)
-    merge_centre_tol_factor: float = Field(1.5, description='Centroids within centre_tol_factor * (r_a + r_b) are merge candidates')
+    merge_centre_tol_factor: float = Field(0.573, description='Centroids within centre_tol_factor * (r_a + r_b) are merge candidates')
     merge_radius_tol_pct: float = Field(0.30, description='Maximum relative difference between two components\' estimated radii to be merge candidates', gt=0)
+    merge_concentric_radius_pct: float = Field(0.10, description='Radii difference threshold to prevent merging concentric pairs', ge=0)
+    merge_concentric_centre_frac: float = Field(0.25, description='Threshold to consider components concentric if centroids are closer than this fraction of the smaller radius', ge=0)
     minimum_diameter_nm: float = Field(20, description='Minimum component diameter (nm)')
     maximum_diameter_nm: float = Field(500, description='Maximum component diameter (nm)')
-    membrane_thickness_nm: float = Field(7, description='Membrane thickness (nm)')
+    membrane_thickness_nm: float = Field(2.6, description='Membrane thickness (nm)')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
 
 
@@ -53,6 +55,7 @@ class ModelConfig(_Section):
 class AnalyseConfig(_Section):
     '''Configuration parameters for `evaluator analyse` command'''
     fill_threshold: float = Field(..., description='Fill ratio threshold for labelling')
+    membrane_thickness_nm: float | Literal['auto'] = Field('auto', description='Assumed membrane shell thickness (nm), used to derive outer diameter from membrane volume')
     max_workers: int | None = Field(None, description='Maximum parallel worker processes for batch input (default: CPU count)')
     # Vesicle-vs-debris QC thresholds
     qc_max_sphere_rmse_rel: float = Field(0.25, description='Max best-fit-sphere relative RMSE for a vesicle-like component', gt=0)
@@ -63,10 +66,12 @@ class AnalyseConfig(_Section):
 
 class PlotConfig(_Section):
     '''Configuration parameters for `evaluator plot` command'''
-    default_sections: list[Literal['distributions', 'qc', 'scatter', 'concordance', 'compare']] = Field(
-        default_factory=lambda: ['distributions', 'qc', 'scatter'], description='Sections run when --section/--all are not given',
-    )
+    default_sections: list[Literal['distributions', 'qc', 'scatter', 'correlations', 'concordance', 'reliability', 'agreement', 'compare']] = Field(default_factory=lambda: ['distributions', 'qc', 'scatter', 'correlations'], description='Sections run when --section/--all are not given')
     fill_ratio_flag_threshold: float = Field(0.05, description='closure_fill_ratio below this is flagged in qc plots')
+    theme: Literal['Okabe-Ito', 'Brewer Set2', 'Viridis', 'Grayscale', 'Neon'] = Field('Okabe-Ito', description='Colour theme for figures (same themes as the viewer)')
+    bin_width: float = Field(25.0, ge=0, description='Histogram bin width in feature units, anchored at 0 (0 for automatic bins)')
+    bin_width_overrides: dict[str, float] = Field(default_factory=lambda: {'aspect_ratio': 0.1, 'eccentricity': 0.05, 'closure_fill_ratio': 0.05, 'sphere_rmse_rel': 0.02, 'membrane_volume': 0.0, 'lumen_volume': 0.0, 'surface_area': 0.0}, description='Per-feature histogram bin widths replacing bin_width (0 for automatic bins)')
+    scatter_pairs: list[tuple[str, str]] = Field(default_factory=lambda: [('equiv_diameter_nm', 'lumen_volume'), ('surface_area', 'lumen_volume'), ('aspect_ratio', 'equiv_diameter_nm')], description='(x, y) feature pairs drawn by the scatter section')
 
 class VisualiseConfig(_Section):
     '''Configuration parameters for `evaluator visualise` command'''

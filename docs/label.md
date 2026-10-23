@@ -53,7 +53,7 @@ After merging, each component's coverage of the surface of its best-fit sphere i
 These options filter components by their equivalent sphere diameter, using the configured membrane thickness to convert diameter to an expected voxel count range. The default range (`20`-`500` nm, set in `config.toml`) is appropriate for typical EV preparations, which include small exosomes (~30-150 nm) through to larger MVB-derived vesicles (~200-500 nm). If no voxel size is present in the input MRC header, this filter is skipped and all components pass.
 
 #### Component merge configuration settings
-The merge step (centroid-proximity and radius-agreement tolerances) is controlled separately via `merge_centre_tol_factor` and `merge_radius_tol_pct` in `config.toml` under `[label]`; there is no CLI override for these.
+The merge step (centroid-proximity and radius-agreement tolerances) is controlled separately via `merge_centre_tol_factor`, `merge_radius_tol_pct`, `merge_concentric_radius_pct` and `merge_concentric_centre_frac` in `config.toml` under `[label]`; there is no CLI override for these. Pairs whose centres are within `merge_concentric_centre_frac` (default a quarter) of the smaller radius but have radii that differ by more than `merge_concentric_radius_pct` are treated as concentric membranes (MVBs, multilamellar vesicles) and are not merged. Concentric pairs with radii differing by less than this fraction are indistinguishable from split fragments, and thus merged to a single component.
 
 ## Output
 

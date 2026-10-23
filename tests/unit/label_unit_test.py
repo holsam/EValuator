@@ -1,14 +1,14 @@
 # ====================
 # Import external dependencies
 # ====================
-import numpy as np
-import pytest
+import numpy as np, pytest
 
 # ====================
 # Import internal dependencies
 # ====================
 from evaluator.commands.label.utils.geometric_proxies import estimateCentroidRadius, estimateArcCoverage
 from evaluator.commands.label.utils.merge import findMergeGroups, applyMerges
+from evaluator.utils.config import LabelConfig
 
 # ====================
 # Define point-cloud generator helpers
@@ -86,8 +86,9 @@ class TestFindMergeGroups:
         assert sorted(groups[0]) == [1, 2]
 
     def test_separate_vesicles_not_merged(self):
-        pts_a = _sphere_points(centre=(0, 0, 0), radius=5.0)
-        pts_b = _sphere_points(centre=(500, 500, 500), radius=20.0)
+        pts_a = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        # centre_tol_factor=1.5 * (10+10) = 30 is the merge boundary
+        pts_b = _sphere_points(centre=(31, 0, 0), radius=10.0)
         groups = findMergeGroups({1: pts_a, 2: pts_b}, centre_tol_factor=1.5, radius_tol_pct=0.30)
         assert sorted(sorted(g) for g in groups) == [[1], [2]]
 
@@ -99,6 +100,37 @@ class TestFindMergeGroups:
             {1: pts_a, 2: pts_b, 3: pts_c}, centre_tol_factor=1.5, radius_tol_pct=0.30
         )
         assert sorted(groups[0]) == [1, 2, 3]
+
+    def test_concentric_pair_not_merged(self):
+        # 23% radius difference passes merge_radius_tol_pct (0.30) but is concentric
+        outer = _sphere_points(centre=(0, 0, 0), radius=13.0)
+        inner = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: outer, 2: inner}, centre_tol_factor=1.5, radius_tol_pct=0.30)
+        assert sorted(sorted(g) for g in groups) == [[1], [2]]
+
+    def test_concentric_same_radius_still_merges(self):
+        a = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        b = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: a, 2: b}, centre_tol_factor=1.5, radius_tol_pct=0.30)
+        assert sorted(groups[0]) == [1, 2]
+
+    def test_concentric_guard_can_be_relaxed(self):
+        outer = _sphere_points(centre=(0, 0, 0), radius=13.0)
+        inner = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: outer, 2: inner}, centre_tol_factor=1.5, radius_tol_pct=0.30, concentric_radius_pct=0.50)
+        assert sorted(groups[0]) == [1, 2]
+
+    def test_default_centre_tol_does_not_fuse_neighbours(self):
+        pts_a = _sphere_points(centre=(0, 0, 0), radius=5.0)
+        pts_b = _sphere_points(centre=(7, 0, 0), radius=5.0)
+        groups = findMergeGroups({1: pts_a, 2: pts_b}, centre_tol_factor=LabelConfig().merge_centre_tol_factor, radius_tol_pct=0.30)
+        assert sorted(sorted(g) for g in groups) == [[1], [2]]
+
+    def test_concentric_centre_frac_zero_disables_guard(self):
+        outer = _sphere_points(centre=(0, 0, 0), radius=13.0)
+        inner = _sphere_points(centre=(0, 0, 0), radius=10.0)
+        groups = findMergeGroups({1: outer, 2: inner}, centre_tol_factor=1.5, radius_tol_pct=0.30, concentric_centre_frac=0.0)
+        assert sorted(groups[0]) == [1, 2]
 
 class TestApplyMerges:
     def test_voxel_count_preserved(self):

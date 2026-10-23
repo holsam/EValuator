@@ -34,9 +34,10 @@ def generate_ev_shell(
     dx = (x - centre[2]) / axis_ratios[2]
     dist = np.sqrt(dz ** 2 + dy ** 2 + dx ** 2)
     shell = np.abs(dist - radius_voxels) <= half_thickness_voxels
-
+    volume_equivalent_diameter_nm = diameter_nm * (float(np.prod(axis_ratios))) ** (1 / 3)
     truth = {
-        "diameter_nm": diameter_nm,
+        "diameter_nm": volume_equivalent_diameter_nm,
+        "nominal_diameter_nm": diameter_nm,
         "thickness_nm": thickness_nm,
         "centre_voxels": centre,
         "voxel_size_nm": voxel_size_nm,

@@ -7,7 +7,7 @@ import pandas as pd
 from evaluator.commands.analyse.utils.filtering import checkEnclosed, morphologicalDilation
 from evaluator.commands.analyse.utils.geometry import arcCoverage, deriveAxes, measureAxes, shellVolume, sphereFitResidual
 from evaluator.commands.analyse.utils.io import saveResultsCSV
-from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter
+from evaluator.commands.analyse.utils.measurement import classifyVesicle, computeSurfaceArea, estimateMembraneThickness, measureEccentricityAspectRatio, measureLumenVolume, measureMembraneVolumeDiameter, measureXYDiameter, touchesZBoundary
 from tests.unit.conftest import R_INNER, R_OUTER, VOX_NM_SMALL
 
 # -- Define shell volume test ----------
@@ -49,17 +49,45 @@ class TestMorphologicalDilation:
         closed = morphologicalDilation(punctured)
         assert closed[40, 40, 20], "Gap voxel was not restored by morphological dilation"
     def test_all_original_voxels_preserved(self, hollow_sphere_vol):
-        """Closing must not remove any pre-existing True voxels."""
+        '''
+        Closing must not remove any pre-existing True voxels.
+        '''
         closed = morphologicalDilation(hollow_sphere_vol)
-        assert np.all(closed[hollow_sphere_vol]), (
-            "morphologicalDilation removed voxels that were present in the original mask"
-        )
+        assert np.all(closed[hollow_sphere_vol]), "morphologicalDilation removed voxels that were present in the original mask"
     def test_returns_bool_array(self, hollow_sphere_vol):
         closed = morphologicalDilation(hollow_sphere_vol)
         assert closed.dtype == bool or closed.dtype == np.bool_
     def test_same_shape(self, hollow_sphere_vol):
         closed = morphologicalDilation(hollow_sphere_vol)
         assert closed.shape == hollow_sphere_vol.shape
+    def test_dilation_not_clipped_at_box_face(self):
+        '''
+        Components touching mask boundary should be dilated outward instead of being clipped at the box face.
+        '''
+        vol = np.zeros((10, 10, 10), dtype=bool)
+        vol[0, 5, 5] = True
+        dilated = morphologicalDilation(vol)
+        assert dilated[2, 5, 5], "Inward dilation did not reach the expected extent"
+    def test_symmetric_dilation_extent_matches_interior_point(self):
+        '''
+        The mask boundary should not asymmetrically clip results.
+        '''
+        boundary_vol = np.zeros((10, 10, 10), dtype=bool)
+        boundary_vol[0, 5, 5] = True
+        interior_vol = np.zeros((10, 10, 10), dtype=bool)
+        interior_vol[5, 5, 5] = True
+        dilated_boundary = morphologicalDilation(boundary_vol)
+        dilated_interior = morphologicalDilation(interior_vol)
+        # count of dilated voxels on the non-clipped (y, x) plane through the seed voxel must match
+        assert dilated_boundary[0, :, :].sum() == dilated_interior[5, :, :].sum()
+
+# -- Define touches-z-boundary test --------
+class TestTouchesZBoundary:
+    def test_component_away_from_boundary_not_flagged(self, sphere_regionprops):
+        assert touchesZBoundary(sphere_regionprops, volume_shape=(200, 200, 200)) is False
+    def test_component_touching_last_z_slice_flagged(self, sphere_regionprops):
+        # Shrink the volume's z-extent so sphere's max-z edge sits on the last slice
+        assert touchesZBoundary(sphere_regionprops, volume_shape=(sphere_regionprops.bbox[3], 200, 200)) is True
 
 # -- Define check enclosed test --------
 class TestCheckEnclosed:
@@ -111,14 +139,54 @@ class TestMeasureMembraneVolumeDiameter:
     def test_diameter_is_positive(self, sphere_regionprops):
         _, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=VOX_NM_SMALL)
         assert diam > 0
-    def test_diameter_plausible_for_sphere(self, sphere_regionprops):
-        """
-        equiv_diameter is derived from shell volume, not geometric diameter
-        For r_outer=20, r_inner=12 at scale=1: shell_vol ≈ 26,266 vox.
-        equiv_diam = (6 x 26266 / π)^(1/3) ≈ 36.9 vox
-        """
-        _, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0)
-        assert 30.0 < diam < 45.0, f"Unexpected equiv_diameter {diam:.2f} vox"
+    def test_diameter_matches_true_outer_diameter_given_correct_thickness(self, sphere_regionprops):
+        '''
+        Synthetic shell has r_outer=20, r_inner=12, thickness=8 vox.
+        Shell-volume-inversion formula should recover the true outer diameter (2*r_outer=40 vox).
+        '''
+        _, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=8.0)
+        assert 38.0 < diam < 42.0, f"Unexpected outer diameter {diam:.2f} vox (expected ~40 vox)"
+    def test_solid_sphere_fallback_reproduces_old_biased_value_when_no_thickness(self, sphere_regionprops):
+        vol_nm3, diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=0.0)
+        assert np.isclose(diam, (6 * vol_nm3 / np.pi) ** (1 / 3))
+    def test_thicker_assumed_membrane_gives_smaller_outer_diameter(self, sphere_regionprops):
+        _, diam_thin = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=4.0)
+        _, diam_thick = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0, membrane_thickness_nm=12.0)
+        assert diam_thick < diam_thin
+
+# -- Define xy diameter test --------
+class TestMeasureXYDiameter:
+    def _shell(self, radius=20, size=60):
+        zz, yy, xx = np.indices((size, size, size)) - size // 2
+        dist = np.sqrt(zz ** 2 + yy ** 2 + xx ** 2)
+        return (dist >= radius - 2) & (dist <= radius)
+    def test_sphere_matches_outer_diameter(self):
+        d = measureXYDiameter(self._shell(), scale=1.0)
+        assert abs(d - 41) <= 2
+    def test_scales_by_voxel_size(self):
+        shell = self._shell()
+        assert measureXYDiameter(shell, scale=0.5) == pytest.approx(measureXYDiameter(shell, scale=1.0) / 2)
+    def test_unchanged_when_poles_clipped(self):
+        shell = self._shell()
+        clipped = shell[15:45]  # keeps the equator, removes both polar caps
+        assert measureXYDiameter(clipped, scale=1.0) == measureXYDiameter(shell, scale=1.0)
+
+# -- Define membrane thickness estimate test -----
+class TestEstimateMembraneThickness:
+    def test_recovers_known_shell_thickness(self, hollow_sphere_vol):
+        # fixture shell is 8 vox thick; the ridge estimate reads up to ~half a voxel high
+        est = estimateMembraneThickness(hollow_sphere_vol, voxel_size_nm=None)
+        assert abs(est - 8.0) <= 1.0
+    def test_scales_with_voxel_size(self, hollow_sphere_vol):
+        est_vox = estimateMembraneThickness(hollow_sphere_vol, voxel_size_nm=None)
+        est_nm = estimateMembraneThickness(hollow_sphere_vol, voxel_size_nm=VOX_NM_SMALL)
+        assert np.isclose(est_nm, est_vox * VOX_NM_SMALL, rtol=1e-6)
+    def test_empty_mask_returns_none(self):
+        assert estimateMembraneThickness(np.zeros((20, 20, 20), dtype=bool), voxel_size_nm=1.0) is None
+    def test_too_few_ridge_voxels_returns_none(self):
+        mask = np.zeros((20, 20, 20), dtype=bool)
+        mask[10, 10, 10] = True
+        assert estimateMembraneThickness(mask, voxel_size_nm=1.0) is None
 
 # -- Define lumen measurement test -----
 class TestMeasureLumenVolume:
@@ -172,35 +240,53 @@ class TestComputeSurfaceArea:
 
 # -- Define axis derivation test -------
 class TestDeriveAxes:
-    def test_identity_tensor_returns_ones(self):
-        """Identity inertia tensor → all eigenvalues=1 → inv_sqrt=[1,1,1]"""
+    def test_identity_tensor_returns_equal_axes(self):
+        """Identity inertia tensor (i.e. isotropic) gives equal relative axis lengths"""
         result = deriveAxes(np.eye(3))
-        assert np.allclose(result, [1.0, 1.0, 1.0])
-    def test_diagonal_tensor_known_values(self):
+        assert np.allclose(result, result[0])
+    def test_known_ellipsoid_semi_axes_recovered(self):
         """
-        Diagonal tensor [1, 4, 9] → eigvalsh ascending [1,4,9]
-        → inv_sqrt = [1/1, 1/2, 1/3].
+        Solid ellipsoid with known semi-axes a=3,b=2,c=1 (mass=1) has principal moments I_a=(b^2+c^2)/5, I_b=(a^2+c^2)/5, I_c=(a^2+b^2)/5.
+        deriveAxes must recover axis lengths proportional to the true (3, 2, 1) ratio.
         """
-        tensor = np.diag([1.0, 4.0, 9.0])
+        a, b, c = 3.0, 2.0, 1.0
+        i_a = (b ** 2 + c ** 2) / 5.0
+        i_b = (a ** 2 + c ** 2) / 5.0
+        i_c = (a ** 2 + b ** 2) / 5.0
+        tensor = np.diag(sorted([i_a, i_b, i_c]))  # eigvalsh returns ascending order
         result = deriveAxes(tensor)
-        assert np.allclose(result, [1.0, 0.5, 1.0 / 3.0], rtol=1e-6)
-    def test_zero_eigenvalue_gives_zero_not_inf(self):
-        """A zero eigenvalue must produce 0.0 in inv_sqrt, not NaN or inf"""
-        tensor = np.diag([0.0, 1.0, 4.0])
+        result_ratio = result / result[-1]
+        true_ratio = np.array([a, b, c]) / c
+        assert np.allclose(result_ratio, true_ratio, rtol=1e-6), f"Recovered axis ratio {result_ratio} does not match true ratio {true_ratio}"
+    def test_zero_eigenvalue_gives_zero_not_nan_or_inf(self):
+        """A zero eigenvalue must produce 0.0, not NaN or inf."""
+        tensor = np.diag([0.0, 4.0, 4.0])
         result = deriveAxes(tensor)
-        assert result[0] == 0.0
         assert not np.any(np.isnan(result))
         assert not np.any(np.isinf(result))
     def test_output_is_descending(self):
-        """inv_sqrt must be in descending order (largest first)"""
-        tensor = np.diag([1.0, 4.0, 9.0])
+        """Axis lengths must be in descending order (largest first)"""
+        a, b, c = 3.0, 2.0, 1.0
+        i_a, i_b, i_c = (b ** 2 + c ** 2) / 5.0, (a ** 2 + c ** 2) / 5.0, (a ** 2 + b ** 2) / 5.0
+        tensor = np.diag(sorted([i_a, i_b, i_c]))
         result = deriveAxes(tensor)
         assert result[0] >= result[1] >= result[2]
     def test_symmetric_tensor_gives_equal_axes(self):
-        """An isotropic (spherical) inertia tensor must give equal inv_sqrt values"""
+        """An isotropic (spherical) inertia tensor must give equal axis lengths"""
         tensor = 5.0 * np.eye(3)
         result = deriveAxes(tensor)
         assert np.allclose(result[0], result[1]) and np.allclose(result[1], result[2])
+    def test_no_artificial_oblate_ceiling(self):
+        """
+        A strongly oblate ellipsoid (a=b=5, c=1) must give an axis ratio beyond inverse square root's ~1.414 ceiling.
+        """
+        a, b, c = 5.0, 5.0, 1.0
+        i_a = (b ** 2 + c ** 2) / 5.0
+        i_b = (a ** 2 + c ** 2) / 5.0
+        i_c = (a ** 2 + b ** 2) / 5.0
+        tensor = np.diag(sorted([i_a, i_b, i_c]))
+        result = deriveAxes(tensor)
+        assert (result[0] / result[-1]) > 2.0
 
 # -- Define axes measurements test -----
 class TestMeasureAxes:
@@ -219,6 +305,36 @@ class TestMeasureAxes:
         _, equiv_diam = measureMembraneVolumeDiameter(sphere_regionprops, scale=1.0)
         major, minor = measureAxes(sphere_regionprops, equiv_diam)
         assert major > 0 and minor > 0
+    def test_known_ellipsoid_axis_ratio_recovered(self):
+        """
+        Measurement of ellipsoid with semi-axes 12, 6, 3 vox recovers major/minor axis ratio close to 4.0.
+        """
+        from skimage import measure as skmeasure
+        shape = (30, 30, 30)
+        zz, yy, xx = np.indices(shape)
+        cz, cy, cx = 15, 15, 15
+        a, b, c = 12.0, 6.0, 3.0
+        vol = (((zz - cz) / a) ** 2 + ((yy - cy) / b) ** 2 + ((xx - cx) / c) ** 2) <= 1.0
+        props = skmeasure.regionprops(vol.astype(np.int32))[0]
+        _, equiv_diam = measureMembraneVolumeDiameter(props, scale=1.0)
+        major, minor = measureAxes(props, equiv_diam)
+        assert np.isclose(major / minor, a / c, rtol=0.15), f"Recovered axis ratio {major / minor:.2f} too far from true ratio {a / c:.2f}"
+    def test_single_voxel_component_returns_nan_not_crash(self):
+        """A degenerate single-voxel component returns NaN."""
+        from skimage import measure as skmeasure
+        vol = np.zeros((5, 5, 5), dtype=np.int32)
+        vol[2, 2, 2] = 1
+        props = skmeasure.regionprops(vol)[0]
+        major, minor = measureAxes(props, equiv_diameter_nm=10.0)
+        assert np.isnan(major) and np.isnan(minor)
+    def test_line_component_returns_nan_not_crash(self):
+        """A 1-voxel-wide line component returns NaN."""
+        from skimage import measure as skmeasure
+        vol = np.zeros((10, 5, 5), dtype=np.int32)
+        vol[2:8, 2, 2] = 1
+        props = skmeasure.regionprops(vol)[0]
+        major, minor = measureAxes(props, equiv_diameter_nm=10.0)
+        assert np.isnan(major) and np.isnan(minor)
 
 # -- Define eccentricity & aspect ratio test
 class TestMeasureEccentricityAspectRatio:
@@ -307,6 +423,9 @@ class TestClassifyVesicle:
         args = (5000, 0.1, 2.0, 0.3, 0.9, True)
         assert classifyVesicle(*args, _QC_DEFAULTS)[0] is True
         assert classifyVesicle(*args, {**_QC_DEFAULTS, "qc_max_aspect_ratio": 1.5})[0] is False
+    def test_z_boundary_not_a_classification_input(self):
+        import inspect
+        assert 'touches_z_boundary' not in inspect.signature(classifyVesicle).parameters
 
 # -- Define results saving test --------
 class TestSaveResultsCSV:

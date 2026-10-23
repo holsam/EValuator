@@ -15,6 +15,7 @@ from typing import Annotated, Optional
 # Import EValuator utilities
 # ====================
 from evaluator.commands.plot import plot as plotFuncs
+from evaluator.commands.plot.utils.input import parse_agreement
 
 # ====================
 # Initialise typer as evaluatorPlot
@@ -23,7 +24,7 @@ evaluatorPlot = typer.Typer(
     add_completion=False,
 )
 
-VALID_SECTIONS = ["distributions", "qc", "scatter", "concordance", "compare"]
+VALID_SECTIONS = ["distributions", "qc", "scatter", "correlations", "concordance", "reliability", "agreement", "compare"]
 
 @evaluatorPlot.command(help='Generate plots from evaluator analyse and/or model output', rich_help_panel='Component Analysis')
 def plot(
@@ -51,9 +52,13 @@ def plot(
         bool,
         typer.Option('--overwrite', help='Overwrite existing section outputs instead of skipping them')
     ] = False,
-    rscript: Annotated[
-        Optional[Path],
-        typer.Option('--rscript', help='Path to the Rscript binary (default: resolved from PATH)')
+    include_flagged: Annotated[
+        bool,
+        typer.Option('--include-flagged', help='Include components flagged as non-vesicle-like instead of excluding them')
+    ] = False,
+    agreement: Annotated[
+        Optional[list[str]],
+        typer.Option('--agreement', help='Bland-Altman plot for a pair of measurements (repeatable)')
     ] = None,
 ):
     '''
@@ -61,6 +66,10 @@ def plot(
     '''
     if analyse_input is None and model_input is None:
         raise typer.BadParameter('At least one of --analyse or --model must be provided.')
+    try:
+        agreement_pairs = parse_agreement(agreement or [])
+    except ValueError as e:
+        raise typer.BadParameter(str(e))
     plotFuncs.run_plot(
         analyse_input,
         model_input,
@@ -68,5 +77,6 @@ def plot(
         sections=section,
         all_sections=all_sections,
         overwrite=overwrite,
-        rscript=rscript,
+        include_flagged=include_flagged,
+        agreement=agreement_pairs,
     )

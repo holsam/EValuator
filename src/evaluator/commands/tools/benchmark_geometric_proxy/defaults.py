@@ -20,4 +20,5 @@ SEED = 0
 METHODS = {
     'naive bounding box': ('old_radius_nm', 'old_time_s'),
     'isotropy-aware bounding box': ('new_radius_nm', 'new_time_s'),
+    'diagonal/2 baseline': ('diag_radius_nm', 'diag_time_s'),
 }

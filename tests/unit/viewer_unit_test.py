@@ -5,10 +5,14 @@ Unit tests for `evaluator viewer`
 # ====================
 # Import external dependencies
 # ====================
-import socket, types
+import mrcfile, numpy as np, pandas as pd, pytest, socket, types
 from pathlib import Path
 
-import mrcfile, numpy as np, pandas as pd, pytest
+# ====================
+# Import evaluator utilities
+# ====================
+from evaluator.utils.figures import plots as plotsutil
+from evaluator.utils.figures.format import pretty_column
 
 # ====================
 # Import evaluator viewer helpers
@@ -16,11 +20,9 @@ import mrcfile, numpy as np, pandas as pd, pytest
 from evaluator.commands.viewer.utils import dispatch as dispatchutil
 from evaluator.commands.viewer.utils import gallery as galleryutil
 from evaluator.commands.viewer.utils import mesh as meshutil
-from evaluator.commands.viewer.utils import plots as plotsutil
 from evaluator.commands.viewer.utils import stems as stemutil
 from evaluator.commands.viewer.utils import theme as themeutil
 from evaluator.commands.viewer.utils.export import export_filtered_csv
-from evaluator.commands.viewer.utils.format import pretty_column
 from evaluator.commands.viewer.utils.join import join_analyse_model
 
 # ====================
@@ -300,6 +302,11 @@ class TestPlotBuilders:
     def test_bland_altman_returns_none_without_pairs(self):
         df = pd.DataFrame({'label': [0, 1], 'a': [np.nan, np.nan], 'b': [1.0, 2.0]})
         assert plotsutil.bland_altman(df, 'a', 'b', set()) is None
+
+    def test_bland_altman_x_title_interpolated(self):
+        df = pd.DataFrame({'label': [1, 2, 3], 'a': [1.0, 2.0, 3.0], 'b': [1.1, 2.1, 2.9]})
+        fig = plotsutil.bland_altman(df, 'a', 'b', set())
+        assert '{' not in fig.layout.xaxis.title.text
 
     def test_correlation_matrix_diagonal_is_one(self):
         rng = np.random.default_rng(0)

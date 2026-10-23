@@ -5,7 +5,7 @@ Unit tests for `evaluator plot`
 # ====================
 # Import external dependencies
 # ====================
-import pytest, subprocess, tomllib
+import pandas as pd, plotly.graph_objects as go, pytest, tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,16 +13,14 @@ from unittest.mock import MagicMock, patch
 # Import evaluator plot functions
 # ====================
 from evaluator.commands.plot.plot import run_plot
-from evaluator.commands.plot.utils.dispatch import (
-    resolve_rscript,
-    dispatch,
-    RscriptNotFoundError,
-    RscriptError,
-)
+from evaluator.commands.plot import sections as sectionutil
+from evaluator.commands.plot.utils import data as datautil
+from evaluator.commands.plot.utils import export as exportutil
 from evaluator.commands.plot.utils.input import (
     PlotRun,
-    resolve_plot_inputs,
     available_sections,
+    parse_agreement,
+    resolve_plot_inputs,
 )
 
 # ====================
@@ -49,6 +47,13 @@ def _make_analyse_csv(tmp_path):
         'tomo1.mrc,1,80.0,90.0,70.0,1.28,0.5,50000,30000,20000,True,0.4\n'
     )
     return path
+
+@pytest.fixture
+def fake_sections():
+    names = ['distributions', 'qc', 'scatter', 'correlations', 'concordance', 'reliability', 'agreement']
+    mocks = {n: MagicMock() for n in names}
+    with patch.dict('evaluator.commands.plot.sections.SECTIONS', mocks, clear=True), patch('evaluator.commands.plot.plot.exportutil.check_kaleido'), patch('evaluator.commands.plot.plot.sectionutil.load'):
+        yield mocks
 
 # ====================
 # Define tests for plot/utils/input.py
@@ -130,7 +135,7 @@ class TestPlotUtilsInput:
     # == Define tests for available_sections ==
     def test_analyse_only_gives_core_sections(self):
         runs = [PlotRun(sample_id='s', analyse_path=Path('a.csv'), model_path=None)]
-        assert available_sections(runs, False) == ['distributions', 'qc', 'scatter']
+        assert available_sections(runs, False) == ['distributions', 'qc', 'scatter', 'correlations']
 
     def test_model_only_gives_no_sections(self):
         '''No section currently runs on model output alone'''
@@ -141,6 +146,8 @@ class TestPlotUtilsInput:
         runs = [PlotRun(sample_id='s', analyse_path=Path('a.csv'), model_path=Path('m.json'))]
         sections = available_sections(runs, False)
         assert 'concordance' in sections
+        assert 'reliability' in sections
+        assert 'agreement' in sections
 
     def test_single_group_excludes_compare(self):
         runs = [
@@ -160,120 +167,228 @@ class TestPlotUtilsInput:
         '''compare requires multi_run even if (somehow) groups differ'''
         runs = [PlotRun(sample_id='s', analyse_path=Path('a.csv'), model_path=None, group='g')]
         assert 'compare' not in available_sections(runs, False)
-    
-# ====================
-# Define tests for plot/utils/dispatch.py
-# ====================
-class TestPlotUtilsDispatch:
-    # == Define tests for resolve_rscript ==
-    def test_explicit_path_that_exists(self, tmp_path):
-        fake_bin = tmp_path / 'Rscript'
-        fake_bin.touch()
-        assert resolve_rscript(fake_bin) == fake_bin
 
-    def test_explicit_path_missing_raises(self, tmp_path):
-        missing = tmp_path / 'does_not_exist'
-        with pytest.raises(RscriptNotFoundError):
-            resolve_rscript(missing)
+    def test_parse_agreement_repeatable_and_space_separated(self):
+        assert parse_agreement(['a,b', 'c,d e,f']) == [('a', 'b'), ('c', 'd'), ('e', 'f')]
 
-    def test_falls_back_to_path_lookup(self, monkeypatch):
-        monkeypatch.setattr('shutil.which', lambda name: '/usr/bin/Rscript')
-        assert resolve_rscript(None) == Path('/usr/bin/Rscript')
-
-    def test_not_on_path_raises(self, monkeypatch):
-        monkeypatch.setattr('shutil.which', lambda name: None)
-        with pytest.raises(RscriptNotFoundError):
-            resolve_rscript(None)
-
-    # == Define tests for dispatch ==
-    def test_builds_expected_command(self):
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout='', stderr='')
-            dispatch(Path('/usr/bin/Rscript'), 'qc.R', ['/out', '/analyse.csv', 'single', 0.05])
-        cmd = mock_run.call_args.args[0]
-        assert cmd[0] == '/usr/bin/Rscript'
-        assert cmd[1].endswith('r/qc.R')
-        assert cmd[2:] == ['/out', '/analyse.csv', 'single', '0.05']
-
-    def test_nonzero_exit_raises_rscript_error_with_stderr(self):
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout='', stderr='boom')
-            with pytest.raises(RscriptError, match='boom'):
-                dispatch(Path('/usr/bin/Rscript'), 'qc.R', [])
-
-    def test_zero_exit_does_not_raise(self):
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout='', stderr='')
-            dispatch(Path('/usr/bin/Rscript'), 'qc.R', [])
+    @pytest.mark.parametrize('bad', ['a', 'a,b,c', ',b', 'a,'])
+    def test_parse_agreement_rejects_malformed_pairs(self, bad):
+        with pytest.raises(ValueError):
+            parse_agreement([bad])
 
 # ====================
 # Define tests for plot/plot.py
 # ====================
 class TestPlot:
     # == Define tests for run_plot section gating ==
-    def test_requested_but_unrunnable_section_is_skipped(self, tmp_path):
-        '''--section concordance with only --analyse given is not runnable and should be skipped'''
+    def test_requested_but_unrunnable_section_is_skipped(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch') as mock_dispatch:
-            run_plot(analyse, None, tmp_path, sections=['concordance'], all_sections=False, overwrite=False, rscript=None)
-        mock_dispatch.assert_not_called()
+        run_plot(analyse, None, tmp_path, sections=['concordance'], all_sections=False, overwrite=False)
+        fake_sections['concordance'].assert_not_called()
 
-    def test_all_sections_runs_every_runnable_section(self, tmp_path):
+    def test_all_sections_runs_every_runnable_section(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch') as mock_dispatch:
-            run_plot(analyse, None, tmp_path, sections=None, all_sections=True, overwrite=False, rscript=None)
-        called_scripts = {call.args[1] for call in mock_dispatch.call_args_list}
-        assert called_scripts == {'distributions.R', 'qc.R', 'scatter.R'}
+        run_plot(analyse, None, tmp_path, sections=None, all_sections=True, overwrite=False)
+        called = {n for n, m in fake_sections.items() if m.called}
+        assert called == {'distributions', 'qc', 'scatter', 'correlations'}
 
-    def test_qc_passes_fill_ratio_threshold_as_fourth_arg(self, tmp_path):
+    def test_include_flagged_passed_to_loader(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch') as mock_dispatch:
-            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, rscript=None)
-        args = mock_dispatch.call_args.args[2]
-        assert args[3] == 0.05  # PlotConfig default fill_ratio_flag_threshold
+        with patch('evaluator.commands.plot.plot.sectionutil.load') as mock_load:
+            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, include_flagged=True)
+        assert mock_load.call_args.kwargs['include_flagged'] is True
 
-    def test_section_failure_is_not_fatal(self, tmp_path):
-        '''One section raising RscriptError must not prevent other sections from running'''
+    def test_section_failure_is_not_fatal(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch', side_effect=RscriptError('boom')):
-            run_plot(analyse, None, tmp_path, sections=['distributions', 'qc'], all_sections=False, overwrite=False, rscript=None)  # must not raise
+        fake_sections['distributions'].side_effect = ValueError('boom')
+        run_plot(analyse, None, tmp_path, sections=['distributions', 'qc'], all_sections=False, overwrite=False)  # must not raise
+        fake_sections['qc'].assert_called_once()
+
+    # == Define tests for multi-sample output ==
+    def test_multi_sample_writes_subdirectory_per_sample(self, tmp_path, fake_sections):
+        a1, a2 = _make_analyse_csv(tmp_path), _write(tmp_path / 'a2.csv', 'x')
+        sheet = _sheet(tmp_path / 'sheet.tsv', [{'sample_id': 's1', 'path': a1}, {'sample_id': 's2', 'path': a2}])
+        run_plot(sheet, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False)
+        assert fake_sections['qc'].call_count == 2
+        qc_dir = tmp_path / 'evaluator' / 'plot' / 'qc'
+        assert (qc_dir / 's1').is_dir() and (qc_dir / 's2').is_dir()
 
     # == Define tests for --overwrite option ==
-    def test_existing_section_dir_skipped_without_overwrite(self, tmp_path):
+    def test_existing_section_dir_skipped_without_overwrite(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch') as mock_dispatch:
-            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, rscript=None)
-            mock_dispatch.reset_mock()
-            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, rscript=None)
-        mock_dispatch.assert_not_called()
+        run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False)
+        fake_sections['qc'].reset_mock()
+        run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False)
+        fake_sections['qc'].assert_not_called()
 
-    def test_overwrite_reruns_existing_section(self, tmp_path):
+    def test_overwrite_reruns_existing_section(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch') as mock_dispatch:
-            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, rscript=None)
-            mock_dispatch.reset_mock()
-            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=True, rscript=None)
-        mock_dispatch.assert_called_once()
+        run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False)
+        fake_sections['qc'].reset_mock()
+        run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=True)
+        fake_sections['qc'].assert_called_once()
 
-    # == Define tests for _write_index ==
-    def test_index_md_lists_completed_sections(self, tmp_path):
+    # == Define tests for _write_index and params ==
+    def test_index_md_lists_completed_sections(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch'):
-            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, rscript=None)
-        index = (tmp_path / 'evaluator' / 'plot' / 'index.md').read_text()
-        assert 'qc/' in index
+        run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False)
+        assert 'qc/' in (tmp_path / 'evaluator' / 'plot' / 'index.md').read_text()
 
-    def test_params_toml_written(self, tmp_path):
+    def test_params_toml_written(self, tmp_path, fake_sections):
         analyse = _make_analyse_csv(tmp_path)
-        with patch('evaluator.commands.plot.plot.resolve_rscript', return_value='Rscript'), \
-             patch('evaluator.commands.plot.plot.dispatch'):
-            run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False, rscript=None)
+        run_plot(analyse, None, tmp_path, sections=['qc'], all_sections=False, overwrite=False)
         params = tomllib.loads((tmp_path / 'evaluator' / 'plot' / 'params.toml').read_text())
-        assert params['fill_ratio_flag_threshold'] == 0.05
+        assert params['fill_ratio_flag_threshold'] == 0.05 and params['theme'] == 'Okabe-Ito'
+
+    def test_agreement_pairs_add_the_section(self, tmp_path, fake_sections):
+        analyse = _make_analyse_csv(tmp_path)
+        model = _write(tmp_path / 'model.json', '{}')
+        run_plot(analyse, model, tmp_path, sections=['qc'], all_sections=False, overwrite=False, agreement=[('a', 'b')])
+        fake_sections['agreement'].assert_called_once()
+
+# ====================
+# Define tests for plot/utils/data.py
+# ====================
+class TestPlotUtilsData:
+    def test_aggregate_tomograms_takes_median_and_counts_evs(self):
+        df = pd.DataFrame({
+            'group': ['a'] * 4, 'sample_id': ['s'] * 4, 'tomogram': ['t1', 't1', 't1', 't2'],
+            'x': [1.0, 2.0, 100.0, 5.0],
+        })
+        out = datautil.aggregate_tomograms(df, ['x'])
+        assert out.set_index('tomogram')['x'].to_dict() == {'t1': 2.0, 't2': 5.0}
+        assert out.set_index('tomogram')['n_evs'].to_dict() == {'t1': 3, 't2': 1}
+
+    def test_tomogram_note_states_tomogram_n(self):
+        tomo = pd.DataFrame({'sample_id': ['s1', 's2', 's2'], 'tomogram': ['a', 'b', 'c']})
+        note = datautil.tomogram_note(tomo)
+        assert 'n = 3 tomogram(s)' in note and '2 sample(s)' in note
+
+    def test_attach_fitted_diameter_masks_unreliable(self):
+        analyse = pd.DataFrame({'tomogram': ['t.mrc'] * 3, 'label': [1, 2, 3]})
+        model = pd.DataFrame({
+            'source_file': ['/x/t.mrc', '/x/t.mrc'], 'label_id': [1, 2], 'model_diameter_nm': [100.0, 50.0],
+            'reliability.is_reliable': [True, False],
+        })
+        out = datautil.attach_fitted_diameter(analyse, model)
+        assert out['model_diameter_nm'].tolist()[0] == 100.0
+        assert out['model_diameter_nm'].isna().tolist() == [False, True, True]  # unreliable fit and unmatched row both NaN
+
+    def test_attach_fitted_diameter_keeps_row_count_with_duplicate_model_rows(self):
+        analyse = pd.DataFrame({'tomogram': ['t.mrc'], 'label': [1]})
+        model = pd.DataFrame({'source_file': ['/x/t.mrc', '/y/t.mrc'], 'label_id': [1, 1], 'model_diameter_nm': [10.0, 20.0]})
+        assert len(datautil.attach_fitted_diameter(analyse, model)) == 1
+
+    def test_populations_split_by_qc_and_z_clip(self):
+        df = pd.DataFrame({
+            'is_vesicle_like': [True, True, False, True],
+            'touches_z_boundary': [False, True, False, False],
+        })
+        pops = datautil.populations(df)
+        assert {k: len(v) for k, v in pops.items()} == {'all': 4, 'vesicle_like': 3, 'vesicle_like_no_z_clip': 2}
+
+    def test_populations_without_qc_column_is_all_only(self):
+        assert list(datautil.populations(pd.DataFrame({'x': [1, 2]}))) == ['all']
+
+    def _csv(self, tmp_path, rows):
+        header = 'tomogram,label,equiv_diameter_nm,major_axis_diameter,minor_axis_diameter,aspect_ratio,eccentricity,membrane_volume,lumen_volume,surface_area,is_enclosed,closure_fill_ratio,is_vesicle_like,qc_flags\n'
+        body = ''.join(f'tomo1.mrc,{i},80,90,70,1.2,0.5,5,3,2,True,0.4,{vl},{flags}\n' for i, (vl, flags) in enumerate(rows))
+        return _write(tmp_path / 'a.csv', header + body)
+
+    def test_flagged_rows_dropped_by_default(self, tmp_path):
+        path = self._csv(tmp_path, [(True, ''), (False, 'sphere_rmse'), (False, 'sphere_rmse|x')])
+        assert len(datautil.load_analyse(path)) == 1
+
+    def test_include_flagged_keeps_everything(self, tmp_path):
+        path = self._csv(tmp_path, [(True, ''), (False, 'sphere_rmse')])
+        assert len(datautil.load_analyse(path, include_flagged=True)) == 2
+
+    def test_missing_vesicle_like_column_is_not_filtered(self, tmp_path):
+        path = _make_analyse_csv(tmp_path)
+        assert len(datautil.load_analyse(path)) == 1
+
+    def test_missing_required_column_raises(self, tmp_path):
+        path = _write(tmp_path / 'a.csv', 'tomogram,label\ntomo1.mrc,1\n')
+        with pytest.raises(ValueError, match='missing required'):
+            datautil.load_analyse(path)
+
+    def test_drop_reasons_counted_per_flag(self, tmp_path, capsys):
+        from evaluator.utils.settings import logger
+        messages = []
+        sink = logger.add(lambda m: messages.append(str(m)), level='INFO')
+        try:
+            path = self._csv(tmp_path, [(True, ''), (False, '"sphere_rmse,open_shell"'), (False, 'sphere_rmse')])
+            datautil.load_analyse(path)
+        finally:
+            logger.remove(sink)
+        assert any('sphere_rmse=2' in m and 'open_shell=1' in m for m in messages)
+
+    def test_join_matches_on_basename_and_label_and_counts_unmatched(self):
+        analyse = pd.DataFrame({'tomogram': ['t.mrc', 't.mrc', 't.mrc'], 'label': [1, 2, 3]})
+        model = pd.DataFrame({'source_file': ['/x/t.mrc', '/x/t.mrc'], 'label_id': [1, 9], 'radius': [10.0, 5.0]})
+        joined, a_only, m_only = datautil.join_analyse_model(analyse, model)
+        assert list(joined['label']) == [1] and (a_only, m_only) == (2, 1)
+
+    def test_pooling_note_states_true_n(self):
+        df = pd.DataFrame({'tomogram': ['a', 'a', 'b']})
+        note = datautil.pooling_note(df, n_samples=2)
+        assert 'n = 3 EVs' in note and '2 tomogram(s)' in note and '2 sample(s)' in note
+
+# ====================
+# Define tests for plot/utils/export.py
+# ====================
+def _kaleido_ok() -> bool:
+    try:
+        exportutil.check_kaleido()
+        return True
+    except RuntimeError:
+        return False
+
+class TestPlotUtilsExport:
+    def test_vectorise_replaces_scattergl(self):
+        fig = go.Figure(go.Scattergl(x=[1, 2], y=[1, 2], mode='markers'))
+        assert fig.data[0].type == 'scattergl'
+        assert exportutil._vectorise(fig).data[0].type == 'scatter'
+
+    def test_write_xlsx_first_sheet_active(self, tmp_path):
+        from openpyxl import load_workbook
+        path = tmp_path / 't.xlsx'
+        exportutil.write_xlsx(path, {'main': pd.DataFrame({'a': [1, 2]}), 'notes': pd.DataFrame({'note': ['x']})})
+        wb = load_workbook(path)
+        assert wb.sheetnames == ['main', 'notes'] and wb.active.title == 'main'
+
+    @pytest.mark.skipif(not _kaleido_ok(), reason='kaleido/Chrome unavailable')
+    def test_write_figure_svg(self, tmp_path):
+        path = tmp_path / 'f.svg'
+        exportutil.write_figure(go.Figure(go.Scatter(x=[1, 2], y=[1, 2])), path)
+        assert path.read_text().lstrip().startswith(('<svg', '<?xml'))
+
+# -- Define group test tests --------
+class TestGroupTests:
+    def _tomo(self, a, b, c=None):
+        rows = [('a', v) for v in a] + [('b', v) for v in b] + [('c', v) for v in (c or [])]
+        return pd.DataFrame({'group': [g for g, _ in rows], 'x': [v for _, v in rows]})
+    def test_two_groups_use_mann_whitney(self):
+        res = sectionutil._group_tests(self._tomo([1, 2, 3, 4], [10, 11, 12, 13]), ['x'])
+        assert res.loc[0, 'test'] == 'mann-whitney' and res.loc[0, 'p_value'] < 0.05
+        assert res.loc[0, 'n_tomograms_a'] == 4
+    def test_three_groups_use_kruskal(self):
+        res = sectionutil._group_tests(self._tomo([1, 2, 3], [4, 5, 6], [7, 8, 9]), ['x'])
+        assert res.loc[0, 'test'] == 'kruskal-wallis'
+    def test_identical_values_do_not_raise(self):
+        # mann-whitney returns p = 1 here; kruskal raises ValueError, which is caught and recorded as NaN
+        two = sectionutil._group_tests(self._tomo([1, 1, 1], [1, 1, 1]), ['x'])
+        three = sectionutil._group_tests(self._tomo([1, 1, 1], [1, 1, 1], [1, 1, 1]), ['x'])
+        assert two.loc[0, 'p_value'] == 1.0 and pd.isna(three.loc[0, 'p_value'])
+
+# -- Define tomogram-level stats test --------
+class TestTomogramLevelStats:
+    def test_pair_stats_on_tomogram_medians_counts_tomograms(self):
+        df = pd.DataFrame({
+            'tomogram': ['t1'] * 3 + ['t2'] * 3 + ['t3'] * 3,
+            'x': [1, 2, 3, 4, 5, 6, 7, 8, 9], 'y': [2, 4, 6, 8, 10, 12, 14, 16, 18],
+        })
+        tomo = datautil.aggregate_tomograms(df, ['x', 'y'], keys=('tomogram',))
+        row = sectionutil._pair_stats(tomo, 'x', 'y')
+        assert row['n'] == 3 and row['r2'] == pytest.approx(1.0)
+        assert sectionutil._pair_stats(df, 'x', 'y')['n'] == 9

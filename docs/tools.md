@@ -36,7 +36,7 @@ Benchmarks missing-wedge correction/fitting accuracy across a range of synthetic
 Defaults are defined in `evaluator.commands.tools.benchmark_missing_wedge.defaults`.
 
 ### `evaluator tools benchmark geometric-proxy`
-Benchmarks the `estimateCentroidRadius` geometric proxy (naive vs isotropy-aware bounding box) across partial spherical caps and equatorial bands.
+Benchmarks the `estimateCentroidRadius` geometric proxy (naive vs isotropy-aware bounding box) and an independent `diagonal/2 baseline` method across partial spherical caps and equatorial bands.
 
 | Option | Description |
 |---|---|

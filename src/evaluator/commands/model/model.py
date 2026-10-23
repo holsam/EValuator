@@ -35,7 +35,7 @@ def model_batch(input_path, output_dir, max_workers=None, **overrides) -> None:
     '''
     mrc_files = batchutil.resolve_mrc_inputs(input_path)
     config, _ = confutil.load_config(output_dir)
-    max_workers = max_workers if max_workers is not None else config.label.max_workers
+    max_workers = max_workers if max_workers is not None else config.model.max_workers
     worker = partial(model_evs, output_dir=output_dir, **overrides)
     batchutil.run_batch(mrc_files, worker=worker, desc="Labelled files processed", max_workers=max_workers)
 
@@ -56,6 +56,9 @@ def model_evs(
     labelled_data, voxel_size_nm = mrcutil.readMRCFile(input_file)
     labels = np.unique(labelled_data)
     labels = labels[labels != 0]
+    # Check if only one non-zero label found and warn if so
+    if len(labels) == 1 and len(np.unique(labelled_data)) == 2:
+        lg.warning(f"{input_file.name}: only one non-zero label found. Ensure this is a labelled tomogram (i.e. run through evaluator label) otherwise all segmentations will be fitted as a single object.")
     records: list[dict] = []
     # Fit each labelled vesicle
     lg.info("model | Fitting {} labelled components...", len(labels))
@@ -101,5 +104,5 @@ def model_evs(
         voxel_size_nm=voxel_size_nm,
     )
     mrc_out_file = out_dir / f"{input_file.stem}_model_fitted.mrc"
-    mrcutil.writeMRCFile(fitted_volume.astype(np.uint16), voxel_size_nm, mrc_out_file)
+    mrcutil.writeMRCFile(fitted_volume.astype(np.uint16), voxel_size_nm, mrc_out_file, label=mrcutil.FITTED_MRC_LABEL)
     lg.debug(f"model | Wrote fitted MRC file")

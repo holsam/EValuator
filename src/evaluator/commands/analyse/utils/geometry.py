@@ -74,26 +74,32 @@ def arcCoverage(coords: numpy.ndarray, max_fit_points: int = _QC_MAX_FIT_POINTS)
 # =========================
 def deriveAxes(intertia_tensor, voxel_size_nm=None):
     '''
-    Derive semi-axes (a ≥ b ≥ c) of the best-fit ellipsoid from inertia tensor eigenvalues. eigvalsh returns eigenvalues in ascending order (I_a ≤ I_b ≤ I_c).
+    Derive semi-axes (a ≥ b ≥ c) of the best-fit ellipsoid from inertia tensor eigenvalues.
+    eigvalsh returns eigenvalues in ascending order (I_a ≤ I_b ≤ I_c).
+    For ellipsoid with principal moments I_a=(m/5)(b^2+c^2), use inversion a^2 ∝ (I_b + I_c - I_a) instead of 1/sqrt(I_a).
     '''
     eigvals = numpy.linalg.eigvalsh(intertia_tensor)
     eigvals = numpy.clip(eigvals, 0, None)
-    with numpy.errstate(divide="ignore", invalid="ignore"):
-        inv_sqrt = numpy.where(eigvals > 0, 1.0 / numpy.sqrt(eigvals), 0.0)
-    return inv_sqrt
+    ia, ib, ic = eigvals
+    # index 0 pairs with the smallest eigenvalue (ia) -> longest axis; index 2 pairs with ic -> shortest axis
+    sq_lengths = numpy.clip([ib + ic - ia, ia + ic - ib, ia + ib - ic], 0, None)
+    return numpy.sqrt(sq_lengths)
 
 # =========================
 # DEFINE FUNCTION: measureAxes
 # =========================
 def measureAxes(component, equiv_diameter_nm):
     '''
-    Measure major and minor axes by approximating the EV as an ellipsoid. Semi-axes are derived from inertia tensor eigenvalues and scaled to real-world size using the equivalent diameter.
+    Measure major and minor axes by approximating the EV as an ellipsoid.
+    Relative semi-axes are derived from inertia tensor eigenvalues and rescaled so geometric mean matches the calculated equivalent diameter.
+    Degenerate components collapse to 0 and return NaN.
     '''
-    inv_sqrt_axes = deriveAxes(intertia_tensor=component.inertia_tensor)
-    geomean_inv_sqrt = (inv_sqrt_axes[0] * inv_sqrt_axes[1] * inv_sqrt_axes[2]) ** (1 / 3)
-    if geomean_inv_sqrt > 0:
-        axis_scale = (equiv_diameter_nm / 2.0) / geomean_inv_sqrt
-    principal_semiaxis_a, principal_semiaxis_b, principal_semiaxis_c = inv_sqrt_axes * axis_scale
+    axis_lengths = deriveAxes(intertia_tensor=component.inertia_tensor)
+    geomean = (axis_lengths[0] * axis_lengths[1] * axis_lengths[2]) ** (1 / 3)
+    if not (geomean > 0) or not numpy.isfinite(geomean):
+        return numpy.nan, numpy.nan
+    axis_scale = (equiv_diameter_nm / 2.0) / geomean
+    principal_semiaxis_a, principal_semiaxis_b, principal_semiaxis_c = axis_lengths * axis_scale
     major_axis = 2 * principal_semiaxis_a
     minor_axis = 2 * principal_semiaxis_c
     return major_axis, minor_axis

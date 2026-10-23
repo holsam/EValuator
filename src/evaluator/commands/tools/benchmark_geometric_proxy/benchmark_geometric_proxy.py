@@ -63,6 +63,9 @@ def calculate_benchmark(
             t0 = time.perf_counter()
             new_centre, new_radius = estimateCentroidRadius(points)
             new_time = time.perf_counter() - t0
+            t0 = time.perf_counter()
+            diag_centre, diag_radius = methods.naive_diagonal_radius(points)
+            diag_time = time.perf_counter() - t0
             rows.append({
                 'cloud_type': cloud_type,
                 'completeness_deg': completeness_deg,
@@ -74,6 +77,9 @@ def calculate_benchmark(
                 'new_radius_nm': new_radius,
                 'new_centre_error_nm': float(np.linalg.norm(new_centre - true_centre)),
                 'new_time_s': new_time,
+                'diag_radius_nm': diag_radius,
+                'diag_centre_error_nm': float(np.linalg.norm(diag_centre - true_centre)),
+                'diag_time_s': diag_time,
             })
             point_index += 1
             console.progress_bar(point_index, total_points)
